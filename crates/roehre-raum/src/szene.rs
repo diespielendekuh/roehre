@@ -191,11 +191,15 @@ fn fernseher(n: &mut Netz) {
     n.quader(&Trafo::bei([-hb + w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.008, Furnier, 2.5);
     n.quader(&Trafo::bei([hb - w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.008, Furnier, 2.5);
     // Rückwand und Innenraum (dunkel)
-    n.quader(&Trafo::bei([0.0, mitte[1], ht - 0.01]), [hb - w, hh - w, 0.01], 0.0, KunststoffSchwarz, 4.0);
+    // Rückwand und Front ragen je eine halbe Wandstärke in den Holzmantel hinein: Stoßen sie nur
+    // an, bleiben zwischen den gerundeten Kanten feine Spalten, durch die die Lampe hinter dem
+    // Fernseher pixelweise hindurchblitzte (Spur heller Punkte an der rechten Kante, „ganz nah“).
+    let ein = w / 2.0;
+    n.quader(&Trafo::bei([0.0, mitte[1], ht - 0.01]), [hb - w + ein, hh - w + ein, 0.01], 0.0, KunststoffSchwarz, 4.0);
     n.quader(&Trafo::bei([BILD_MITTE[0], BILD_MITTE[1], -0.12]), [BILD_HALB[0] + 0.03, BILD_HALB[1] + 0.03, 0.01], 0.0, Gummi, 4.0);
     let front_z = -ht + 0.006;
     // Schwarze Front: Rahmen um die Bildöffnung und Block für das Bedienfeld
-    let (ix0, ix1, iy0, iy1) = (-hb + w, hb - w, mitte[1] - hh + w, mitte[1] + hh - w);
+    let (ix0, ix1, iy0, iy1) = (-hb + w - ein, hb - w + ein, mitte[1] - hh + w - ein, mitte[1] + hh - w + ein);
     let (ox0, ox1) = (BILD_MITTE[0] - BILD_HALB[0] - 0.012, BILD_MITTE[0] + BILD_HALB[0] + 0.012);
     let (oy0, oy1) = (BILD_MITTE[1] - BILD_HALB[1] - 0.012, BILD_MITTE[1] + BILD_HALB[1] + 0.012);
     let tafel = |n: &mut Netz, x0: f32, x1: f32, y0: f32, y1: f32| {

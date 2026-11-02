@@ -2,6 +2,22 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum: Rohpixel und Vignette schaltbar, Gehäusekante ruhig
+- Neue Optionen `raum.rohpixel` (an/aus, Standard an) und `raum.vignette` (0 … 1, Standard 1).
+  Mit Korn 0 und Glühen 0 liegt über dem Raum nur noch die Tiefenunschärfe; die Farbstimmung
+  (leicht entsättigt) bleibt.
+- Spur heller Punkte an der rechten Gehäusekante („ganz nah“): Ursache waren feine Spalten
+  zwischen Front, Rückwand und Holzmantel; durch sie blitzten Lampe und Wand dahinter
+  pixelweise hindurch. Gefunden durch Abschalten: Lampe aus → weg, Schatten aus → stärker,
+  Relief flach → unverändert. Front und Rückwand ragen jetzt in den Mantel hinein.
+  Erst vermutete Ursachen (Schattenakne, Streiflicht, Relief des Furniers) geprüft und verworfen.
+- Ruhigere Glanzlichter: Relief immer aus der geglätteten Höhe (die gerasterte springt an jeder
+  Texelgrenze), Relief bei starker Verkleinerung ausgeblendet, Glanzbreite aus der Streuung der
+  Normale (Toksvig), Exponent höchstens 512. Gemessen (Pixel > 0,25 heller als ihre Umgebung,
+  1080p): „ganz nah“ auf Gehäuse und Rahmen 766 → 516, „nah“ 1013 → 560 (ohne Rohpixel 297),
+  „seitlich“ 854 → 649.
+- Prüfstand `raum`: Schalter `--ohne-rohpixel`, `--ohne-korn`, `--nur-unschaerfe`.
+
 ## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum nach Rückmeldung (Kamera, Rekorder, Tisch)
 - Neue Kamerastufe „Ganz nah“ (`raum.naehe` = 1): Bildschirm samt schmalem Rahmen füllt 84 %
   der Höhe, oben und unten nur Gehäuse. Festwerte jetzt weit 0 / mittel 0,5 / nah 0,75 /

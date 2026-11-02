@@ -872,6 +872,30 @@ static KATALOG: &[OptionBeschreibung] = &[
         wirkt_wenn: None,
     },
     OptionBeschreibung {
+        schluessel: "raum.rohpixel",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Rohpixel-Texturen", "Raw-pixel textures"),
+        beschreibung: Texte::de_en(
+            "An: Die Texturen des Raums zeigen aus der Nähe ihre einzelnen Pixel, wie zur PS2-Zeit. Aus: Die Texturen werden geglättet, Holz, Gehäuse und Wände wirken ruhiger.",
+            "On: the room's textures show their individual pixels up close, as in the PS2 era. Off: textures are smoothed, wood, cabinet and walls look calmer.",
+        ),
+        art: OptionsArt::Schalter { standard: true },
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.vignette",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Vignette", "Vignette"),
+        beschreibung: Texte::de_en(
+            "Dunkelt die Ecken des Bilds ab wie bei einer Kamera. 0 = aus. Zusammen mit Filmkorn 0 und Glühen 0 liegt über dem Raum nur noch die Tiefenunschärfe.",
+            "Darkens the corners of the picture as with a camera. 0 = off. Together with film grain 0 and glow 0, only the depth of field remains over the room.",
+        ),
+        art: zahl(0.0, 1.0, 0.05, 1.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
         schluessel: "raum.unschaerfe",
         gruppe: Gruppe::Raum,
         name: Texte::de_en("Tiefenunschärfe", "Depth of field"),

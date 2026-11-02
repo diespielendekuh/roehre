@@ -23,7 +23,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (71 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Einstellungsmodell (73 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
 | Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
 | Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
 | GPL-freie Variante (crt-beans, MIT): Option `allgemein.lizenz`, Voreinstellungen `mit-rgb` und `mit-composite`, automatischer Rückfall ohne GPL-Ordner, eigener Helligkeitspass | fertig, Prüflauf (Referenzen, Moiré, Helligkeit) bestanden; Grenzen siehe Abschnitt 5 | `roehre-kette` (`plane_beans`), `shader/eigen/beans/` |

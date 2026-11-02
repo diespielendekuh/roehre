@@ -61,6 +61,9 @@ fn main() {
             groesse(&opt("-g").unwrap_or("1920x1080".into())),
             Path::new(&opt("-o").unwrap_or("raum".into())),
             opt("--wandbild").map(std::path::PathBuf::from),
+            args.iter().any(|x| x == "--ohne-rohpixel"),
+            args.iter().any(|x| x == "--ohne-korn") || args.iter().any(|x| x == "--nur-unschaerfe"),
+            args.iter().any(|x| x == "--nur-unschaerfe"),
         ),
         "bewegung" => bewegung_messen(
             opt("-n").and_then(|n| n.parse().ok()).unwrap_or(4.0),
@@ -705,7 +708,7 @@ fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
 }
 
 /// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.
-fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>) -> Ergebnis {
+fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>, ohne_rohpixel: bool, ohne_korn: bool, nur_unschaerfe: bool) -> Ergebnis {
     use roehre_raum::{Ansicht, Raum};
     std::fs::create_dir_all(ordner)?;
     let gpu = Gpu::neu();
@@ -758,7 +761,16 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         ("tischkante", tischkante),
         ("ganznah", ganznah),
     ];
-    for (name, a) in ansichten {
+    for (name, mut a) in ansichten {
+        a.rohpixel = !ohne_rohpixel;
+        if ohne_korn {
+            a.korn = 0.0;
+        }
+        if nur_unschaerfe {
+            // über dem Raum liegt dann nur noch die Tiefenunschärfe
+            a.vignette = 0.0;
+            a.gluehen = 0.0;
+        }
         let t = Instant::now();
         let ziel = gpu.ziel(g.0, g.1);
         let mut enc = gpu.device.create_command_encoder(&Default::default());

@@ -25,6 +25,8 @@ struct Szene {
     nachbild: vec4<f32>,
     // Abstand der Schärfeebene (m), Stärke der Tiefenunschärfe, Stärke des Glühens, frei
     fokus: vec4<f32>,
+    // Rohpixel (1 = an), Stärke der Vignette, frei, frei
+    raumbild: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> szene: Szene;
@@ -86,6 +88,7 @@ fn haupt_ecke(e: Ecke) -> Zwischen {
     return Zwischen(szene.ansicht * vec4<f32>(p, 1.0), p, e.normale, e.uv, e.material);
 }
 
+// `n` ist die Normale der Fläche ohne Relief (das Relief würde den Versatz verrauschen).
 fn schatten(welt: vec3<f32>, n: vec3<f32>) -> f32 {
     let p = szene.licht * vec4<f32>(welt + n * 0.01, 1.0);
     let ndc = p.xyz / p.w;
@@ -154,16 +157,25 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let fresnel = 0.04 + 0.96 * pow(1.0 - cos_t, 5.0);
         c = bild * mix(0.55, 1.0, rand_dunkel) + umgebung(reflect(blick, n), e.welt) * fresnel + vec3<f32>(0.003, 0.0035, 0.004);
     } else {
-        // Rohpixel: die Koordinate rastet auf die Texelmitte ein (aus der Nähe sieht man die
-        // Pixel der 256er-Texturen wie auf einer PS2), die Ableitungen bleiben die echten, damit
-        // Mip-Stufe und anisotrope Filterung in der Ferne unverändert arbeiten.
+        // Rohpixel (Option raum.rohpixel): die Koordinate rastet auf die Texelmitte ein (aus der
+        // Nähe sieht man die Pixel der 256er-Texturen wie auf einer PS2), die Ableitungen bleiben
+        // die echten, damit Mip-Stufe und anisotrope Filterung in der Ferne gleich arbeiten.
+        // Ohne Rohpixel wird bilinear geglättet.
         let tg = vec2<f32>(textureDimensions(farben));
-        let uv_roh = (floor(e.uv * tg) + 0.5) / tg;
+        let uv_roh = select(e.uv, (floor(e.uv * tg) + 0.5) / tg, szene.raumbild.x > 0.5);
         let duv_x = dpdx(e.uv);
         let duv_y = dpdy(e.uv);
         let farbe = textureSampleGrad(farben, kachel, uv_roh, e.material, duv_x, duv_y);
         if (farbe.a < 0.5) { discard; }
         let eig = textureSampleGrad(eigenschaften, kachel, uv_roh, e.material, duv_x, duv_y);
+        // Das Relief kommt immer aus der geglätteten Höhe: aus der gerasterten springt die
+        // Ableitung an jeder Texelgrenze, die Normale kippt kurz, und ein scharfes Glanzlicht
+        // blitzt dort als einzelner heller Punkt auf (an Gehäuse und Rahmen des Fernsehers).
+        let hoehe = textureSampleGrad(eigenschaften, kachel, e.uv, e.material, duv_x, duv_y).r;
+        // Wie viele Texel fallen auf ein Pixel? Im flachen Blickwinkel viele: dann kann kein Pixel
+        // das Relief auflösen, es erzeugte nur ein flimmerndes Punktmuster und wird ausgeblendet.
+        let texel_je_pixel = max(length(duv_x * tg), length(duv_y * tg));
+        let relief_anteil = clamp(1.5 / max(texel_je_pixel, 1e-4) - 0.25, 0.0, 1.0);
         // Schmutz und Verschattung in den Raumkanten (Boden/Wand, Wand/Decke, Wand/Wand). Der
         // Abstand zu der Fläche, auf der der Punkt selbst liegt, zählt nicht mit.
         let gross = 1000.0;
@@ -174,24 +186,30 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
             * mix(0.6, 1.0, smoothstep(0.0, 0.4, ab_y.y));
         let kante = mix(0.5, 1.0, ecke);
         let albedo = farbe.rgb * mix(0.75, 1.0, ecke);
-        let rauheit = eig.g;
+        let rauheit_textur = eig.g;
         let metall = eig.b;
 
+        let n_flaeche = n;
         // Relief ohne Tangenten (Ableitungen der Höhe in Bildschirmrichtung)
         let dpx = dpdx(e.welt);
         let dpy = dpdy(e.welt);
-        let dhx = dpdx(eig.r);
-        let dhy = dpdy(eig.r);
+        let dhx = dpdx(hoehe);
+        let dhy = dpdy(hoehe);
         let r1 = cross(dpy, n);
         let r2 = cross(n, dpx);
         let det = dot(dpx, r1);
         // Relieftiefe in Metern (Höhe 0 … 1 der Eigenschaftstextur)
-        let tiefe = select(0.0015, 0.0004, e.material == M_BLATT);
+        let tiefe = select(0.0015, 0.0004, e.material == M_BLATT) * relief_anteil;
         let grad = sign(det) * (dhx * r1 + dhy * r2) * tiefe;
         let nb = abs(det) * n - grad;
         if (abs(det) > 1e-12) { n = normalize(nb); }
 
-        let glanz = exp2(10.0 * (1.0 - rauheit) + 1.0);
+        // Glanz gegen Flimmern: dreht sich die fertige Normale schneller, als ein Pixel auflösen
+        // kann (gerundete Kanten, kleine Teile, Relief), wird das Glanzlicht breiter (Toksvig).
+        let streuung = dot(dpdx(n), dpdx(n)) + dot(dpdy(n), dpdy(n));
+        let rauheit = clamp(sqrt(rauheit_textur * rauheit_textur + min(2.0 * streuung, 0.35)), 0.0, 1.0);
+        // Exponent höchstens 512: noch schärfer bleibt auf 1–2 Pixel beschränkt und flimmert
+        let glanz = exp2(min(10.0 * (1.0 - rauheit) + 1.0, 9.0));
         let f0 = mix(vec3<f32>(0.04), albedo, metall);
         let diffus = albedo * (1.0 - metall);
 
@@ -200,7 +218,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let dl = length(zur_lampe);
         let l = zur_lampe / dl;
         let schirm = mix(0.3, 1.0, smoothstep(0.25, 0.65, abs(l.y)));
-        let ll = lampe_farbe() * schirm / (dl * dl) * schatten(e.welt, n);
+        let ll = lampe_farbe() * schirm / (dl * dl) * schatten(e.welt, n_flaeche);
         let h = normalize(l - blick);
         c = diffus * ll * max(dot(n, l), 0.0) + f0 * ll * pow(max(dot(n, h), 0.0), glanz) * (glanz + 2.0) / 8.0 * max(dot(n, l), 0.0);
 
@@ -347,9 +365,9 @@ fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
     let grau = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
     c = mix(vec3<f32>(grau), c, 0.88);
     c += vec3<f32>(-0.004, 0.003, 0.002) * (1.0 - smoothstep(0.0, 0.25, grau));
-    // Vignette
+    // Vignette (Option raum.vignette, 0 = aus)
     let d = e.uv - 0.5;
-    c *= 1.0 - 0.55 * dot(d, d) * 1.6;
+    c *= 1.0 - 0.55 * dot(d, d) * 1.6 * nach_szene.raumbild.y;
     // Filmkorn, im Dunkeln stärker, ändert sich je Bild
     let k = zufall(e.pos.xy + vec2<f32>(fract(nach_szene.auge.w * 7.0) * 1000.0, 0.0)) - 0.5;
     c += k * nach_szene.nachbild.y * (0.02 + 0.06 * (1.0 - smoothstep(0.0, 0.3, grau)));

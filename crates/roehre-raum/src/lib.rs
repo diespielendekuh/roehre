@@ -50,6 +50,10 @@ pub struct Ansicht {
     pub unschaerfe: f32,
     /// Glühen heller Stellen 0 … 1
     pub gluehen: f32,
+    /// Texturen als Rohpixel (aus = bilinear geglättet)
+    pub rohpixel: bool,
+    /// Stärke der Vignette 0 … 1 (0 = aus)
+    pub vignette: f32,
 }
 
 /// Kamera des Raums, wie sie die Optionen der Gruppe `raum` beschreiben (W-005).
@@ -201,6 +205,8 @@ impl Ansicht {
             belichtung: 2.6,
             unschaerfe: 0.3,
             gluehen: 0.5,
+            rohpixel: true,
+            vignette: 1.0,
         }
     }
 
@@ -212,6 +218,8 @@ impl Ansicht {
         a.korn = e.zahl("raum.korn") as f32;
         a.unschaerfe = e.zahl("raum.unschaerfe") as f32;
         a.gluehen = e.zahl("raum.gluehen") as f32;
+        a.rohpixel = e.schalter("raum.rohpixel");
+        a.vignette = e.zahl("raum.vignette") as f32;
         a
     }
 
@@ -417,7 +425,7 @@ impl Raum {
         let index_bytes: Vec<u8> = netz.indizes.iter().flat_map(|i| i.to_le_bytes()).collect();
         let ecken = bytes(&ecken_bytes, wgpu::BufferUsages::VERTEX);
         let indizes = bytes(&index_bytes, wgpu::BufferUsages::INDEX);
-        let uniform = bytes(&[0u8; 224], wgpu::BufferUsages::UNIFORM);
+        let uniform = bytes(&[0u8; 240], wgpu::BufferUsages::UNIFORM);
         let material_puffer = bytes(&[0u8; 32], wgpu::BufferUsages::UNIFORM);
 
         // Abtaster
@@ -688,6 +696,7 @@ impl Raum {
         w.extend([a.nebel, a.korn, if self.srgb { 1.0 } else { 0.0 }, a.belichtung]);
         let fokus = geometrie::sub(szene::BILD_MITTE, a.auge);
         w.extend([geometrie::dot(fokus, fokus).sqrt(), a.unschaerfe, a.gluehen, 0.0]);
+        w.extend([if a.rohpixel { 1.0 } else { 0.0 }, a.vignette, 0.0, 0.0]);
         let bytes: Vec<u8> = w.iter().flat_map(|f| f.to_le_bytes()).collect();
         queue.write_buffer(&self.uniform, 0, &bytes);
         let mut mw = *material;
