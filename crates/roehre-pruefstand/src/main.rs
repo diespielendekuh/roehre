@@ -45,6 +45,7 @@ fn main() {
         "testbilder" => testbilder(Path::new(&opt("-o").unwrap_or("testbilder".into()))),
         "umschalten" => umschalten(),
         "moire" => moire_messen(opt("-v")),
+        "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!("Befehle: foto, bogen, testbilder, umschalten (Einzelheiten in der Quelltext-Doku)");
             Ok(())
@@ -245,7 +246,9 @@ fn moire_messen(nur: Option<String>) -> Ergebnis {
                 let voll = rendere(&gpu, &mut roehre, &bild, g, 2)?;
                 let r = roehre.flaeche(&eingang_von(&bild), g);
                 let (zeilen, spalten) = moire::profile(&voll, r.x, r.y, r.breite, r.hoehe);
-                let pz = r.hoehe as f64 / h as f64;
+                // Sichtbare Zeilen: Overscan schneidet oben und unten ab
+                let (_, osy) = roehre_kette::overscan_pixel(roehre.einstellungen(), (b, h));
+                let pz = r.hoehe as f64 / (h as f64 - osy as f64);
                 let pt = roehre.letzter_plan().and_then(|p| p.maske).map(|m| m.pixel_je_triade).unwrap_or(3.0);
                 println!(
                     "| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |",
@@ -260,6 +263,99 @@ fn moire_messen(nur: Option<String>) -> Ergebnis {
                 );
             }
         }
+    }
+    Ok(())
+}
+
+/// Halbgenaue Gleitkommazahl (IEEE 754 binary16) → f32.
+fn f16(bits: u16) -> f32 {
+    let vz = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+    let exp = ((bits >> 10) & 0x1f) as i32;
+    let man = (bits & 0x3ff) as f32;
+    vz * match exp {
+        0 => man * 2f32.powi(-24),
+        31 => f32::INFINITY,
+        e => (1.0 + man / 1024.0) * 2f32.powi(e - 15),
+    }
+}
+
+/// PQ (SMPTE ST 2084) → nit.
+fn pq_zu_nit(e: f64) -> f64 {
+    let (m1, m2) = (2610.0 / 16384.0, 2523.0 / 4096.0 * 128.0);
+    let (c1, c2, c3) = (3424.0 / 4096.0, 2413.0 / 4096.0 * 32.0, 2392.0 / 4096.0 * 32.0);
+    let p = e.powf(1.0 / m2);
+    10000.0 * ((p - c1).max(0.0) / (c2 - c3 * p)).powf(1.0 / m1)
+}
+
+/// HDR-Messung: Leuchtdichten des Farbbalkens in scRGB und HDR10, je Voreinstellung.
+fn hdr_messen(g: (u32, u32)) -> Ergebnis {
+    use roehre_wgpu::Ausgabe;
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::farbbalken(320, 240);
+    let eingang = gpu.eingang(&bild);
+    println!("| Voreinstellung | Transmission Weiß | 75-%-Weiß (scRGB) | 75-%-Weiß (HDR10) | 100-%-Weiß | hellster Punkt |");
+    println!("|---|---:|---:|---:|---:|---:|");
+    for v in roehre_modell::voreinstellungen() {
+        let e = Einstellungen::voreinstellung(v.schluessel)?;
+        let mut werte = Vec::new();
+        let mut transmission = 0.0;
+        for ausgabe in [Ausgabe::scrgb(), Ausgabe::hdr10()] {
+            let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e.clone(), ausgabe)?;
+            let ziel = gpu.ziel_im_format(g.0, g.1, ausgabe.format);
+            let ansicht = ziel.create_view(&Default::default());
+            // Erstes Bild stößt die Eichung an, danach mit Messwert zeichnen
+            for runde in 0..4 {
+                let mut enc = gpu.device.create_command_encoder(&Default::default());
+                roehre.zeichne(&mut enc, &eingang, &eingang_von(&bild), &ansicht, g)?;
+                gpu.queue.submit([enc.finish()]);
+                if runde == 0 {
+                    gpu.warte();
+                    roehre.warte_auf_eichung();
+                }
+            }
+            transmission = roehre.transmission();
+            if std::env::var_os("ROEHRE_PLAN").is_some() {
+                eprintln!("{:?}", roehre.letzter_plan());
+            }
+            let r = roehre.flaeche(&eingang_von(&bild), g);
+            let roh = gpu.lies_roh(&ziel, if ausgabe.format == wgpu::TextureFormat::Rgba16Float { 8 } else { 4 });
+            // Nit je Pixel (Leuchtdichte nach BT.709 bzw. BT.2020)
+            let nit = |x: u32, y: u32| -> f64 {
+                let i = (y * g.0 + x) as usize;
+                if ausgabe.format == wgpu::TextureFormat::Rgba16Float {
+                    let k = |j: usize| f16(u16::from_le_bytes([roh[i * 8 + 2 * j], roh[i * 8 + 2 * j + 1]])) as f64 * 80.0;
+                    0.2126 * k(0) + 0.7152 * k(1) + 0.0722 * k(2)
+                } else {
+                    let w = u32::from_le_bytes([roh[i * 4], roh[i * 4 + 1], roh[i * 4 + 2], roh[i * 4 + 3]]);
+                    let k = |j: u32| pq_zu_nit(((w >> (10 * j)) & 0x3ff) as f64 / 1023.0);
+                    0.2627 * k(0) + 0.6780 * k(1) + 0.0593 * k(2)
+                }
+            };
+            let mittel = |fx0: f64, fx1: f64, fy0: f64, fy1: f64| -> f64 {
+                let (x0, x1) = (r.x + (r.breite as f64 * fx0) as u32, r.x + (r.breite as f64 * fx1) as u32);
+                let (y0, y1) = (r.y + (r.hoehe as f64 * fy0) as u32, r.y + (r.hoehe as f64 * fy1) as u32);
+                let mut s = 0.0;
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        s += nit(x, y);
+                    }
+                }
+                s / ((x1 - x0) * (y1 - y0)) as f64
+            };
+            let weiss75 = mittel(0.25 / 7.0, 0.75 / 7.0, 0.2, 0.45);
+            let weiss100 = mittel(0.02, 0.1, 0.78, 0.95);
+            let mut hellster: f64 = 0.0;
+            for y in r.y..r.y + r.hoehe {
+                for x in r.x..r.x + r.breite {
+                    hellster = hellster.max(nit(x, y));
+                }
+            }
+            werte.push((weiss75, weiss100, hellster));
+        }
+        println!(
+            "| {} | {:.3} | {:.0} nit | {:.0} nit | {:.0} nit | {:.0} nit |",
+            v.schluessel, transmission, werte[0].0, werte[1].0, werte[0].1, werte[0].2
+        );
     }
     Ok(())
 }

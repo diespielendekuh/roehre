@@ -122,6 +122,10 @@ pub struct Kontext {
     pub eingang: (u32, u32),
     /// Größe der Röhrenfläche auf dem Bildschirm in Ausgabepixeln.
     pub flaeche: (u32, u32),
+    /// HDR-Ausgabe: Die Röhre läuft ohne Anheben heller Bildteile und ohne Nachverstärkung
+    /// (nichts wird an der Grenze 1,0 abgeschnitten), die Maske ist kräftiger; die
+    /// Helligkeit stellt der Zusammensetz-Pass nach der Eichung ein.
+    pub hdr: bool,
 }
 
 /// Ergebnis der Übersetzung.
@@ -172,6 +176,15 @@ pub fn waehle_maske(flaechen_breite: u32, wunsch_triaden: f64) -> MaskenWahl {
         }
     }
     beste.expect("Musterliste ist nicht leer").1
+}
+
+/// Abgeschnittene Eingangspixel durch Overscan, beide Seiten zusammen (waagerecht, senkrecht).
+pub fn overscan_pixel(e: &Einstellungen, eingang: (u32, u32)) -> (f32, f32) {
+    if !e.schalter("allgemein.roehre") {
+        return (0.0, 0.0);
+    }
+    let os = 2.0 * e.zahl("geometrie.overscan") as f32 / 100.0;
+    ((os * eingang.0 as f32).round(), (os * eingang.1 as f32).round())
 }
 
 /// Übersetzt Einstellungen in Kette und Parameter.
@@ -254,11 +267,20 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
         let wahl = waehle_maske(k.flaeche.0, e.zahl("maske.triaden"));
         p.push(("shadowMask", wahl.muster as f32));
         p.push(("masksize", wahl.groesse as f32));
-        p.push(("maskstr", z("maske.staerke")));
+        // HDR: Die Maske darf kräftiger sein, weil die Helligkeit nicht mehr an der Grenze
+        // 1,0 hängt (Eichung im Zusammensetz-Pass). Gemessen (roehre-pruefstand hdr,
+        // scart-rgb, Weiß 200 nit): Leuchtstreifen 300 → 600 nit, 75-%-Weiß 119 nit
+        // (sauberes Bild 106 nit).
+        let hdr_faktor = if k.hdr { 1.55 } else { 1.0 };
+        p.push(("maskstr", (z("maske.staerke") * hdr_faktor).min(1.0)));
         p.push(("mcut", z("maske.staerke_dunkel")));
         p.push(("mask_layout", if e.auswahl("maske.subpixel") == "bgr" { 1.0 } else { 0.0 }));
         let (slot_hell, slot_dunkel, versatz) = match typ {
-            "schlitzmaske" => ((z("maske.staerke") * 1.5).min(1.0), (z("maske.staerke_dunkel") * 0.4).min(1.0), 0.0),
+            "schlitzmaske" => (
+                (z("maske.staerke") * if k.hdr { 2.2 } else { 1.5 }).min(1.0),
+                (z("maske.staerke_dunkel") * 0.4).min(1.0),
+                0.0,
+            ),
             "lochmaske" => (0.0, 0.0, 1.0),
             _ => (0.0, 0.0, 0.0),
         };
@@ -303,15 +325,24 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     p.push(("csize", z("geometrie.ecken")));
     p.push(("bsize1", z("geometrie.randweich")));
     p.push(("vigstr", z("geometrie.vignette")));
-    // guest misst Overscan in Pixeln des Eingangsbilds.
-    let os = z("geometrie.overscan") / 100.0;
-    p.push(("overscanX", (os * k.eingang.0 as f32).round()));
-    p.push(("overscanY", (os * k.eingang.1 as f32).round()));
+    // guest misst Overscan in Pixeln des Eingangsbilds, und zwar insgesamt (beide Seiten
+    // zusammen: Faktor (Größe − overscan) / Größe); das Modell nennt Prozent je Seite.
+    let (osx, osy) = overscan_pixel(e, k.eingang);
+    p.push(("overscanX", osx));
+    p.push(("overscanY", osy));
 
     // --- Helligkeit
-    p.push(("brightboost", z("helligkeit.ausgleich_dunkel")));
-    p.push(("brightboost1", z("helligkeit.ausgleich_hell")));
-    p.push(("post_br", z("helligkeit.nachher")));
+    if k.hdr {
+        // Dunkle Bildteile weiter anheben (formt die Mitteltöne), helle nicht: Sie würden an
+        // der Grenze 1,0 abgeschnitten, und die Gesamthelligkeit stellt die Eichung ein.
+        p.push(("brightboost", z("helligkeit.ausgleich_dunkel")));
+        p.push(("brightboost1", 1.0));
+        p.push(("post_br", 1.0));
+    } else {
+        p.push(("brightboost", z("helligkeit.ausgleich_dunkel")));
+        p.push(("brightboost1", z("helligkeit.ausgleich_hell")));
+        p.push(("post_br", z("helligkeit.nachher")));
+    }
     p.push(("gamma_out", z("helligkeit.gamma_ausgang")));
 
     // Entwicklerhilfe zum Abstimmen: ROEHRE_ROHPARAMETER="name=wert,name=wert" setzt
@@ -365,7 +396,7 @@ mod tests {
 
     #[test]
     fn kettenwahl() {
-        let k = Kontext { eingang: (256, 224), flaeche: (1440, 1080) };
+        let k = Kontext { eingang: (256, 224), flaeche: (1440, 1080), hdr: false };
         let mut e = Einstellungen::voreinstellung("wohnzimmer-90er-composite").unwrap();
         assert_eq!(plane(&e, &k).kette, Kette::GuestNtsc);
         e.setze("signal.norm", roehre_modell::Wert::Auswahl("pal".into()));

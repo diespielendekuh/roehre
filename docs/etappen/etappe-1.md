@@ -1,5 +1,10 @@
 # Etappe 1: Fundament
 
+> **Nachtrag aus Etappe 2:** Die Voreinstellungen `scart-rgb` und `wohnzimmer-90er-composite` waren
+> in dieser Etappe durch ein Bearbeitungsskript beschädigt (Abschnitte Maske, Leuchtstoff, Licht
+> und Geometrie fehlten, es galten Standardwerte). Fotos und Helligkeitswerte unten zeigen
+> daher nicht die beabsichtigten Voreinstellungen. Richtige Werte und Fotos: [Etappe 2](etappe-2.md).
+
 Stand: 2026-11-02
 
 ## Was gebaut wurde

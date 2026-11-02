@@ -30,11 +30,20 @@
 //! Shaderkette nötig (z. B. RGB → Composite), wird sie auf einem eigenen Thread gebaut; bis
 //! sie fertig ist, läuft die bisherige Kette mit den neuen Werten weiter.
 //!
+//! ## HDR
+//!
+//! Mit [`Ausgabe::scrgb`] (Rgba16Float, linear, 1,0 = 80 nit) oder [`Ausgabe::hdr10`]
+//! (Rgb10a2Unorm, BT.2020 mit PQ) läuft die Röhre ohne Anheben; eine Helligkeitseichung
+//! ([`eichung`]) misst, wie viel Licht Maske und Zeilen übrig lassen, und der
+//! Zusammensetz-Pass skaliert so, dass Weiß im Mittel `helligkeit.hdr_weiss` erreicht. Die
+//! Leuchtstreifen der Maske werden dabei heller als Weiß, bis `helligkeit.hdr_spitze`.
+//!
 //! ## Shader-Ordner
 //!
 //! Die Shader liegen als Dateien im Ordner `shader/` (GPL-Shader werden bewusst nicht ins
 //! Programm eingebettet). Der Ordner wird mit dem Spiel ausgeliefert.
 
+pub mod eichung;
 pub mod flaeche;
 
 use std::path::PathBuf;
@@ -60,6 +69,45 @@ pub enum Fehler {
     Bauthread,
 }
 
+/// Farbraum der Ausgabe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ausgaberaum {
+    /// SDR: Werte der Röhre wie für einen gewöhnlichen Bildschirm.
+    Sdr,
+    /// scRGB: linear, BT.709-Grundfarben, 1,0 = 80 nit (Windows-HDR, Rgba16Float).
+    ScRgb,
+    /// HDR10: BT.2020-Grundfarben mit PQ-Kodierung (Rgb10a2Unorm).
+    Hdr10,
+}
+
+/// Format und Farbraum der Ziele, in die [`Roehre::zeichne`] schreibt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ausgabe {
+    pub format: wgpu::TextureFormat,
+    pub raum: Ausgaberaum,
+}
+
+impl Ausgabe {
+    pub fn sdr(format: wgpu::TextureFormat) -> Self {
+        Self { format, raum: Ausgaberaum::Sdr }
+    }
+    pub fn scrgb() -> Self {
+        Self { format: wgpu::TextureFormat::Rgba16Float, raum: Ausgaberaum::ScRgb }
+    }
+    pub fn hdr10() -> Self {
+        Self { format: wgpu::TextureFormat::Rgb10a2Unorm, raum: Ausgaberaum::Hdr10 }
+    }
+    pub fn ist_hdr(&self) -> bool {
+        self.raum != Ausgaberaum::Sdr
+    }
+}
+
+impl From<wgpu::TextureFormat> for Ausgabe {
+    fn from(format: wgpu::TextureFormat) -> Self {
+        Self::sdr(format)
+    }
+}
+
 /// Fähigkeiten, die das Gerät für alle Shaderketten haben sollte. Das Spiel fordert sie beim
 /// Anlegen des `wgpu::Device` an, soweit der Adapter sie bietet.
 pub fn empfohlene_features() -> wgpu::Features {
@@ -69,7 +117,7 @@ pub fn empfohlene_features() -> wgpu::Features {
         | wgpu::Features::PIPELINE_CACHE
 }
 
-const ZWISCHENFORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+pub(crate) const ZWISCHENFORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Eine Zwischentextur mit Ansicht und Größe.
 struct Zwischen {
@@ -129,20 +177,24 @@ pub struct Roehre {
     bild: usize,
     /// Hintergrundfarbe außerhalb der Röhrenfläche (linear).
     pub hintergrund: [f32; 3],
+    ausgabe: Ausgabe,
+    eichung: eichung::Eichung,
     letzter_plan: Option<roehre_kette::Plan>,
 }
 
 impl Roehre {
     /// Legt die Röhre an und baut die erste Shaderkette (blockierend).
     ///
-    /// `ziel_format` ist das Format der Ziele, in die [`Roehre::zeichne`] später schreibt.
+    /// `ausgabe` nennt Format und Farbraum der Ziele, in die [`Roehre::zeichne`] später
+    /// schreibt; ein bloßes `wgpu::TextureFormat` heißt SDR.
     pub fn neu(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         shader_ordner: impl Into<PathBuf>,
         einstellungen: Einstellungen,
-        ziel_format: wgpu::TextureFormat,
+        ausgabe: impl Into<Ausgabe>,
     ) -> Result<Self, Fehler> {
+        let ausgabe = ausgabe.into();
         let shader_ordner = shader_ordner.into();
         let kette = kette_fuer(&einstellungen);
         let filter = baue(device, queue, &shader_ordner, kette)?;
@@ -162,7 +214,9 @@ impl Roehre {
             aktiv: (kette, filter),
             ausstehend: None,
             zwischen: None,
-            setzer: Zusammensetzer::neu(device, ziel_format),
+            setzer: Zusammensetzer::neu(device, ausgabe.format),
+            ausgabe,
+            eichung: eichung::Eichung::neu(),
             bild: 0,
             hintergrund: [0.0; 3],
             letzter_plan: None,
@@ -234,6 +288,16 @@ impl Roehre {
         flaeche::berechne(&self.einstellungen, &wirksam, ziel_groesse)
     }
 
+    /// Zuletzt gemessene Transmission einer weißen Fläche (nur bei HDR-Ausgabe gemessen).
+    pub fn transmission(&self) -> f64 {
+        self.eichung.transmission
+    }
+
+    /// Wartet auf eine laufende Helligkeitseichung (für Werkzeuge und Tests).
+    pub fn warte_auf_eichung(&mut self) {
+        self.eichung.warte(&self.device);
+    }
+
     /// Plan des zuletzt gezeichneten Bildes (Kette, Parameter, gewählte Maske).
     pub fn letzter_plan(&self) -> Option<&roehre_kette::Plan> {
         self.letzter_plan.as_ref()
@@ -270,8 +334,22 @@ impl Roehre {
         let zwischen = self.zwischen.as_ref().expect("eben gesichert");
 
         // Parameter setzen (Regler wirken sofort, auch während eine neue Kette gebaut wird)
-        let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe) };
+        let hdr = self.ausgabe.ist_hdr();
+        let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe), hdr };
         let plan = roehre_kette::plane(&self.einstellungen, &kontext);
+        let roehre_an = self.einstellungen.schalter("allgemein.roehre");
+        if hdr && roehre_an {
+            self.eichung.abholen(&self.device);
+            self.eichung.bei_bedarf_messen(
+                &self.device,
+                &self.queue,
+                &self.shader_ordner,
+                &plan,
+                (wirksam.breite, wirksam.hoehe),
+                (r.breite, r.hoehe),
+                self.einstellungen.zahl("helligkeit.gamma_ausgang"),
+            )?;
+        }
         {
             let parameter = self.aktiv.1.parameters();
             for (name, wert) in &plan.parameter {
@@ -284,18 +362,27 @@ impl Roehre {
         self.aktiv.1.frame(roehren_eingang, &zwischen.viewport(), encoder, self.bild, Some(&optionen))?;
         self.bild = self.bild.wrapping_add(1);
 
-        self.setzer.setze(&self.device, &self.queue, encoder, &zwischen.ansicht, ziel, r, self.hintergrund);
+        let weiss = self.einstellungen.zahl("helligkeit.hdr_weiss");
+        let hdr_daten = if roehre_an {
+            // Röhrenwert 1,0 so hell, dass eine weiße Fläche im Mittel `weiss` erreicht
+            [self.einstellungen.zahl("helligkeit.gamma_ausgang") as f32, (weiss / self.eichung.transmission) as f32]
+        } else {
+            // Ohne Röhre: sRGB-ähnlich mit Gamma 2,2, Weiß = `weiss`
+            [2.2, weiss as f32]
+        };
+        let hdr_daten = [hdr_daten[0], hdr_daten[1], self.einstellungen.zahl("helligkeit.hdr_spitze") as f32, weiss as f32];
+        self.setzer.setze(&self.device, &self.queue, encoder, &zwischen.ansicht, ziel, r, self.hintergrund, self.ausgabe.raum, hdr_daten);
         Ok(r)
     }
 }
 
 fn kette_fuer(e: &Einstellungen) -> Kette {
     // Die Kettenwahl hängt nicht von den Größen ab.
-    let k = roehre_kette::Kontext { eingang: (1, 1), flaeche: (1, 1) };
+    let k = roehre_kette::Kontext { eingang: (1, 1), flaeche: (1, 1), hdr: false };
     roehre_kette::plane(e, &k).kette
 }
 
-fn baue(device: &wgpu::Device, queue: &wgpu::Queue, ordner: &std::path::Path, kette: Kette) -> Result<FilterChain, Fehler> {
+pub(crate) fn baue(device: &wgpu::Device, queue: &wgpu::Queue, ordner: &std::path::Path, kette: Kette) -> Result<FilterChain, Fehler> {
     let preset = kette.lade(ordner)?;
     let optionen = FilterChainOptions { force_no_mipmaps: false, enable_cache: true, adapter_info: None };
     Ok(FilterChain::load_from_preset(preset, device, queue, Some(&optionen))?)
@@ -379,8 +466,16 @@ impl Zusammensetzer {
         ziel: &wgpu::TextureView,
         r: Rechteck,
         hintergrund: [f32; 3],
+        raum: Ausgaberaum,
+        hdr: [f32; 4],
     ) {
-        let daten: [f32; 8] = [
+        let art = match raum {
+            Ausgaberaum::Sdr if self.srgb => 1.0,
+            Ausgaberaum::Sdr => 0.0,
+            Ausgaberaum::ScRgb => 2.0,
+            Ausgaberaum::Hdr10 => 3.0,
+        };
+        let daten: [f32; 12] = [
             r.x as f32,
             r.y as f32,
             r.breite as f32,
@@ -388,7 +483,11 @@ impl Zusammensetzer {
             hintergrund[0],
             hintergrund[1],
             hintergrund[2],
-            if self.srgb { 1.0 } else { 0.0 },
+            art,
+            hdr[0],
+            hdr[1],
+            hdr[2],
+            hdr[3],
         ];
         let bytes: Vec<u8> = daten.iter().flat_map(|f| f.to_le_bytes()).collect();
         let puffer = self.puffer.get_or_insert_with(|| {

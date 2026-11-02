@@ -56,13 +56,17 @@ impl Gpu {
     }
 
     pub fn ziel(&self, breite: u32, hoehe: u32) -> wgpu::Texture {
+        self.ziel_im_format(breite, hoehe, ZIELFORMAT)
+    }
+
+    pub fn ziel_im_format(&self, breite: u32, hoehe: u32, format: wgpu::TextureFormat) -> wgpu::Texture {
         self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Ziel"),
             size: wgpu::Extent3d { width: breite, height: hoehe, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: ZIELFORMAT,
+            format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         })
@@ -71,7 +75,13 @@ impl Gpu {
     /// Liest eine Zieltextur als RGBA-Bild zurück.
     pub fn lies(&self, t: &wgpu::Texture) -> image::RgbaImage {
         let (b, h) = (t.width(), t.height());
-        let zeile = (4 * b).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        image::RgbaImage::from_raw(b, h, self.lies_roh(t, 4)).expect("Größe passt")
+    }
+
+    /// Liest eine Textur roh zurück (`bpp` Byte je Pixel), ohne Zeilenfüllung.
+    pub fn lies_roh(&self, t: &wgpu::Texture, bpp: u32) -> Vec<u8> {
+        let (b, h) = (t.width(), t.height());
+        let zeile = (bpp * b).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
         let puffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Rücklesen"),
             size: (zeile * h) as u64,
@@ -91,14 +101,14 @@ impl Gpu {
         puffer.slice(..).map_async(wgpu::MapMode::Read, |_| {});
         self.device.poll(wgpu::PollType::wait_indefinitely()).expect("GPU-Warten");
         let daten = puffer.slice(..).get_mapped_range().expect("Puffer abgebildet");
-        let mut px = Vec::with_capacity((4 * b * h) as usize);
+        let mut px = Vec::with_capacity((bpp * b * h) as usize);
         for y in 0..h {
             let a = (y * zeile) as usize;
-            px.extend_from_slice(&daten[a..a + (4 * b) as usize]);
+            px.extend_from_slice(&daten[a..a + (bpp * b) as usize]);
         }
         drop(daten);
         puffer.unmap();
-        image::RgbaImage::from_raw(b, h, px).expect("Größe passt")
+        px
     }
 
     pub fn warte(&self) {

@@ -9,12 +9,41 @@ beschreibung = "Typischer Fernseher am gelben Cinch-Kabel: Farbsäume, Regenboge
 lizenz = "gpl"
 
 [signal]
-farbsaum = 0.7
 art = "composite"
 norm = "ntsc"
 artefakte = 0.8
+farbsaum = 0.7
+
+[strahl]
+form_dunkel = 1.3
+form_hell = 0.8
+aufblaehen = 0.9
+schaerfe = 3.0
+
+[maske]
+typ = "schlitzmaske"
+staerke = 0.35
+staerke_dunkel = 1.1
+triaden = 380
+
+[leuchtstoff]
+profil = "p22"
+nachgluehen = 0.2
+
+[licht]
+glow = 0.1
+bloom = 0.15
+halation = 0.1
+
+[geometrie]
+woelbung_x = 0.03
+woelbung_y = 0.04
+ecken = 0.04
+randweich = 0.25
+vignette = 0.15
+overscan = 3.0
 
 [helligkeit]
-nachher = 1.2
-ausgleich_hell = 1.6
 ausgleich_dunkel = 1.7
+ausgleich_hell = 1.6
+nachher = 1.14

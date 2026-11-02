@@ -86,4 +86,22 @@ mod tests {
             assert!(!v.beschreibung().is_empty(), "{} ohne Beschreibung", v.schluessel);
         }
     }
+
+    /// Jede Röhren-Voreinstellung nennt alle Hauptgruppen ausdrücklich. Anlass: In Etappe 1
+    /// hat ein Bearbeitungsskript die Abschnitte [maske], [leuchtstoff], [licht] und
+    /// [geometrie] still gelöscht; die Voreinstellung lud trotzdem ohne Hinweis, nur eben
+    /// mit Standardwerten.
+    #[test]
+    fn roehren_voreinstellungen_nennen_alle_hauptgruppen() {
+        for v in voreinstellungen() {
+            let t: toml::Table = toml::from_str(v.toml).unwrap();
+            let roehre_aus = t.get("allgemein").and_then(|a| a.get("roehre")).and_then(|r| r.as_bool()) == Some(false);
+            if roehre_aus || t.contains_key("basis") {
+                continue;
+            }
+            for gruppe in ["signal", "strahl", "maske", "leuchtstoff", "licht", "geometrie", "helligkeit"] {
+                assert!(t.contains_key(gruppe), "{} ohne [{gruppe}]", v.schluessel);
+            }
+        }
+    }
 }

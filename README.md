@@ -5,7 +5,7 @@ Signal (RGB, S-Video, Composite mit NTSC/PAL), Strahl, Maske, Leuchtstoff, Licht
 HDR, Strahlsimulation für Monitore ab 120 Hz und auf Wunsch ein prozedural erzeugtes Gehäuse.
 Rust-API für wgpu, C-API für Vulkan und D3D12.
 
-**Stand:** Etappe 1 (Fundament) fertig. Plan: [docs/PLAN.md](docs/PLAN.md), Bericht: [docs/etappen/etappe-1.md](docs/etappen/etappe-1.md).
+**Stand:** Etappe 2 (Eingangsstufe, Moiré-Messung, HDR) fertig. Plan: [docs/PLAN.md](docs/PLAN.md), Berichte: [docs/etappen/](docs/etappen/).
 
 Fremde Arbeiten, auf denen `roehre` aufbaut, und ihre Lizenzen: [THIRD_PARTY.md](THIRD_PARTY.md).
 

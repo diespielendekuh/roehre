@@ -1335,6 +1335,7 @@ version = "0.1.0"
 dependencies = [
  "image",
  "pollster",
+ "roehre-kette",
  "roehre-modell",
  "roehre-testbilder",
  "roehre-wgpu",
