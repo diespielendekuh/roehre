@@ -2,6 +2,19 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 6, Teil 4 (3D-Raum nach Rückmeldung)
+- Rückmeldung des Anwenders umgesetzt: Gummibaum als Ficus elastica (drei Triebe, große
+  gefaltete Blätter mit Stiel, durchscheinend im Gegenlicht, rote Triebhülle), Stehlampe in
+  die Zimmerecke, Pflanze neben den Tisch; Wildeiche für Tisch und Parkett (Äste, Risse,
+  Farbspiel, matt geölt); schlanke Fernbedienung mit Tasten als Textur; schmale dunkle
+  Fußleisten; Goldrahmen mit Profil und Passepartout; neblige Nacht vor dem Fenster;
+  Schmutz und Verschattung in den Raumkanten.
+- Texturen jetzt 256² und als Rohpixel (Koordinate rastet auf die Texelmitte, Mip und
+  Anisotropie bleiben), wie vom Anwender gewünscht.
+- Neu: `Raum::wandbild_setzen` (eigenes Bild im Rahmen). Prüfstand `raum --wandbild <png>`,
+  Vorschau liest `ROEHRE_WANDBILD` oder `lokal/wandbild.png` (`lokal/` ist nicht im Repository).
+- Ungeprüft: Wirkung und Leistung auf echter GPU.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Korrektur Mission: Impossible
 - Hinweis der KI des Mission:-Impossible-Projekts (über den Anwender): Integrationsnotiz war
   veraltet. Jetzt: Repository MissionImpossibleDecomp, Port in C++ mit RT64 (D3D12/Vulkan),

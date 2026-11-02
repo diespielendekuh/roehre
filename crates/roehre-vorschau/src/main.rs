@@ -121,6 +121,13 @@ impl Vorschau {
         let roehre_a = Roehre::neu(&device, &queue, shader_ordner(), e_a.clone(), FORMAT)?;
         let roehre_b = Roehre::neu(&device, &queue, shader_ordner(), e_b.clone(), FORMAT)?;
         let raum = roehre_raum::Raum::neu(&device, &queue, &shader_ordner(), FORMAT)?;
+        // Eigenes Wandbild: Umgebungsvariable ROEHRE_WANDBILD oder lokal/wandbild.png (nicht im
+        // Repository, siehe .gitignore)
+        let wandbild = std::env::var_os("ROEHRE_WANDBILD").map(std::path::PathBuf::from).unwrap_or_else(|| "lokal/wandbild.png".into());
+        if let Ok(b) = image::open(&wandbild) {
+            let b = b.to_rgba8();
+            raum.wandbild_setzen(&queue, b.as_raw(), b.width(), b.height());
+        }
         let flaeche = FlaechenZiel::neu(&device, 1440, 1080);
         let mut v = Self {
             device,

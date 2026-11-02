@@ -19,7 +19,7 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-004: 3D-Vorführraum mit einem berechneten Röhrenfernseher
 - **Von:** Anwender, 2026-11-02 (Frage nach einer 3D-Szene mit Bildschirmgerät)
-- **Status:** geplant für Etappe 6 (Vorschau-Programm)
+- **Status:** in Arbeit (Etappe 6): `crates/roehre-raum`, in der Vorschau unter „3D-Raum“
 - **Was fehlt:** Eine 3D-Szene mit einem selbst erzeugten Fernseher (gewölbtes Glas als
   Kugelkappe, Gehäuse als Körper), Kamera frei beweglich, Bild über den Flächen-Modus.
 - **Warum:** Prüfstein und Vorlage für das „TV-Erlebnis“ im Mission:-Impossible-Port

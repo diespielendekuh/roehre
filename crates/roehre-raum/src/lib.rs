@@ -62,7 +62,7 @@ impl Ansicht {
             blickwinkel: 38.0,
             zeit,
             bildschirm: 1.0,
-            lampe: 1.6,
+            lampe: 2.6,
             flackern: 0.4,
             nebel: 0.10,
             korn: 0.35,
@@ -127,6 +127,7 @@ pub struct Raum {
     anzahl: u32,
     uniform: wgpu::Buffer,
     material_puffer: wgpu::Buffer,
+    farben_textur: wgpu::Texture,
     farben: wgpu::TextureView,
     eigenschaften: wgpu::TextureView,
     kachel: wgpu::Sampler,
@@ -181,7 +182,7 @@ fn halbieren(daten: &[u8], g: u32, srgb: bool) -> Vec<u8> {
     aus
 }
 
-fn texturfeld(device: &wgpu::Device, queue: &wgpu::Queue, ebenen: &[Vec<u8>], format: wgpu::TextureFormat, srgb: bool) -> wgpu::TextureView {
+fn texturfeld(device: &wgpu::Device, queue: &wgpu::Queue, ebenen: &[Vec<u8>], format: wgpu::TextureFormat, srgb: bool) -> (wgpu::Texture, wgpu::TextureView) {
     let g = texturen::GROESSE;
     let stufen = 32 - g.leading_zeros();
     let t = device.create_texture(&wgpu::TextureDescriptor {
@@ -195,27 +196,28 @@ fn texturfeld(device: &wgpu::Device, queue: &wgpu::Queue, ebenen: &[Vec<u8>], fo
         view_formats: &[],
     });
     for (ebene, daten) in ebenen.iter().enumerate() {
-        let mut stufe = daten.clone();
-        let mut groesse = g;
-        for s in 0..stufen {
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &t,
-                    mip_level: s,
-                    origin: wgpu::Origin3d { x: 0, y: 0, z: ebene as u32 },
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &stufe,
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * groesse), rows_per_image: None },
-                wgpu::Extent3d { width: groesse, height: groesse, depth_or_array_layers: 1 },
-            );
-            if groesse > 1 {
-                stufe = halbieren(&stufe, groesse, srgb);
-                groesse /= 2;
-            }
+        ebene_schreiben(queue, &t, ebene as u32, daten, srgb);
+    }
+    let sicht = t.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
+    (t, sicht)
+}
+
+/// Schreibt eine Ebene samt aller Mip-Stufen.
+fn ebene_schreiben(queue: &wgpu::Queue, t: &wgpu::Texture, ebene: u32, daten: &[u8], srgb: bool) {
+    let mut stufe = daten.to_vec();
+    let mut groesse = texturen::GROESSE;
+    for s in 0..t.mip_level_count() {
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo { texture: t, mip_level: s, origin: wgpu::Origin3d { x: 0, y: 0, z: ebene }, aspect: wgpu::TextureAspect::All },
+            &stufe,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * groesse), rows_per_image: None },
+            wgpu::Extent3d { width: groesse, height: groesse, depth_or_array_layers: 1 },
+        );
+        if groesse > 1 {
+            stufe = halbieren(&stufe, groesse, srgb);
+            groesse /= 2;
         }
     }
-    t.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() })
 }
 
 fn eintrag(binding: u32, ty: wgpu::BindingType, sicht: wgpu::ShaderStages) -> wgpu::BindGroupLayoutEntry {
@@ -234,8 +236,8 @@ impl Raum {
         let ebenen = texturen::erzeugen();
         let farben: Vec<Vec<u8>> = ebenen.iter().map(|e| e.0.clone()).collect();
         let eig: Vec<Vec<u8>> = ebenen.into_iter().map(|e| e.1).collect();
-        let farben = texturfeld(device, queue, &farben, wgpu::TextureFormat::Rgba8UnormSrgb, true);
-        let eigenschaften = texturfeld(device, queue, &eig, wgpu::TextureFormat::Rgba8Unorm, false);
+        let (farben_textur, farben) = texturfeld(device, queue, &farben, wgpu::TextureFormat::Rgba8UnormSrgb, true);
+        let (_, eigenschaften) = texturfeld(device, queue, &eig, wgpu::TextureFormat::Rgba8Unorm, false);
 
         // Geometrie
         let netz = szene::bauen();
@@ -388,6 +390,7 @@ impl Raum {
             anzahl: netz.indizes.len() as u32,
             uniform,
             material_puffer,
+            farben_textur,
             farben,
             eigenschaften,
             kachel,
@@ -406,6 +409,38 @@ impl Raum {
     }
 
     /// Zahl der Dreiecke der Szene.
+    /// Ersetzt das Bild im Rahmen an der Wand durch ein eigenes (RGBA8, sRGB, Zeile für
+    /// Zeile). Es wird mittig quadratisch zugeschnitten und auf die Texturgröße gebracht
+    /// (Flächenmittel), danach wirkt es wie jede andere Raumtextur in Rohpixeln.
+    pub fn wandbild_setzen(&self, queue: &wgpu::Queue, rgba: &[u8], breite: u32, hoehe: u32) {
+        let g = texturen::GROESSE;
+        let seite = breite.min(hoehe).max(1);
+        let (x0, y0) = ((breite - seite) / 2, (hoehe - seite) / 2);
+        let mut daten = Vec::with_capacity((g * g * 4) as usize);
+        for y in 0..g {
+            for x in 0..g {
+                let (ax, ex) = (x0 + x * seite / g, x0 + ((x + 1) * seite / g).max(x * seite / g + 1));
+                let (ay, ey) = (y0 + y * seite / g, y0 + ((y + 1) * seite / g).max(y * seite / g + 1));
+                let mut summe = [0.0f32; 3];
+                let mut zahl = 0.0;
+                for sy in ay..ey.min(hoehe) {
+                    for sx in ax..ex.min(breite) {
+                        let i = ((sy * breite + sx) * 4) as usize;
+                        for k in 0..3 {
+                            summe[k] += zu_linear(rgba[i + k]);
+                        }
+                        zahl += 1.0;
+                    }
+                }
+                for k in 0..3 {
+                    daten.push(zu_srgb(summe[k] / f32::max(zahl, 1.0)));
+                }
+                daten.push(255);
+            }
+        }
+        ebene_schreiben(queue, &self.farben_textur, texturen::Material::Wandbild as u32, &daten, true);
+    }
+
     pub fn dreiecke(&self) -> u32 {
         self.anzahl / 3
     }

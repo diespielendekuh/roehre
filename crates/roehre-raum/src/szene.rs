@@ -6,15 +6,17 @@
 //! Maße in Metern. Der Fernseher steht auf dem Tisch nahe dem Ursprung, sein Bildschirm zeigt
 //! nach −z (zur Kamera).
 
-use crate::geometrie::{add, Netz, Trafo, V3};
+use crate::geometrie::{add, cross, mul, norm, sub, Netz, Trafo, V3};
 use crate::texturen::Material::*;
 
 pub const TISCH_HOEHE: f32 = 0.70;
 /// Mitte des Bildschirms (Weltkoordinaten) und halbe Größe der Bildröhre.
 pub const BILD_MITTE: V3 = [-0.06, TISCH_HOEHE + 0.035 + 0.245, -0.215];
 pub const BILD_HALB: [f32; 2] = [0.20, 0.15];
-/// Lage der Glühbirne der Stehlampe (Lichtquelle).
-pub const LAMPE: V3 = [1.25, 1.42, 0.55];
+/// Lage des Pflanztopfs: rechts neben dem Tisch, im Licht der Lampe.
+pub const PFLANZE: V3 = [1.12, 0.0, 0.08];
+/// Lage der Glühbirne der Stehlampe (Lichtquelle), in der hinteren rechten Zimmerecke.
+pub const LAMPE: V3 = [1.95, 1.48, 0.70];
 
 /// Baut die ganze Szene.
 pub fn bauen() -> Netz {
@@ -54,10 +56,10 @@ fn zimmer(n: &mut Netz) {
     n.flaeche(&seite_r, [(hinten - vorn) / 2.0, decke / 2.0], Tapete, [0.0, 0.0, (hinten - vorn) / 1.2, decke / 1.2]);
     let d = Trafo::bei([0.0, decke, (hinten + vorn) / 2.0]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2));
     n.flaeche(&d, [(rechts - links) / 2.0, (hinten - vorn) / 2.0], Decke, [0.0, 0.0, 3.0, 3.0]);
-    // Fußleisten
-    n.quader(&Trafo::bei([0.0, 0.05, hinten - 0.01]), [(rechts - links) / 2.0, 0.05, 0.012], 0.004, Lack, 2.0);
-    n.quader(&Trafo::bei([links + 0.01, 0.05, (hinten + vorn) / 2.0]), [0.012, 0.05, (hinten - vorn) / 2.0], 0.004, Lack, 2.0);
-    n.quader(&Trafo::bei([rechts - 0.01, 0.05, (hinten + vorn) / 2.0]), [0.012, 0.05, (hinten - vorn) / 2.0], 0.004, Lack, 2.0);
+    // Fußleisten: schmal, dunkel gebeizt, oben abgerundet
+    n.quader(&Trafo::bei([0.0, 0.035, hinten - 0.008]), [(rechts - links) / 2.0, 0.035, 0.008], 0.003, Furnier, 2.0);
+    n.quader(&Trafo::bei([links + 0.008, 0.035, (hinten + vorn) / 2.0]), [0.008, 0.035, (hinten - vorn) / 2.0], 0.003, Furnier, 2.0);
+    n.quader(&Trafo::bei([rechts - 0.008, 0.035, (hinten + vorn) / 2.0]), [0.008, 0.035, (hinten - vorn) / 2.0], 0.003, Furnier, 2.0);
 
     // Fenster: Nacht dahinter, Rahmen mit Sprossen, Fensterbank
     let nacht = Trafo::bei([(fx0 + fx1) / 2.0, (fy0 + fy1) / 2.0, hinten + 0.12]);
@@ -97,11 +99,50 @@ fn zimmer(n: &mut Netz) {
     n.rohr(&[[fx0 + 0.08, 0.75, hinten - 0.09], [fx1 - 0.15, 0.75, hinten - 0.09]], 0.012, 8, Lack);
     n.rohr(&[[fx1 - 0.1, 0.55, hinten - 0.09], [fx1 - 0.1, 0.0, hinten - 0.09]], 0.01, 8, Chrom);
 
-    // Bild an der Wand rechts, mit Rahmen
-    let bild = [0.95, 1.55, hinten - 0.02];
-    n.quader(&Trafo::bei(bild), [0.36, 0.27, 0.018], 0.006, RahmenHolz, 4.0);
-    let leinwand = Trafo::bei(add(bild, [0.0, 0.0, -0.019])).nach(&Trafo::dreh_y(0.0));
-    n.flaeche(&leinwand, [0.31, 0.22], Wandbild, [0.0, 0.0, 1.0, 1.0]);
+    // Bild an der Wand rechts vom Fernseher: alter Goldrahmen, Passepartout, Foto
+    bilderrahmen(n, [0.55, 1.62, hinten], [0.27, 0.27], 0.065);
+
+}
+
+/// Goldrahmen mit geschwungenem Profil (Kehle, Wulst, Perlstab), auf Gehrung; innen ein
+/// Passepartout und das Wandbild (zur Laufzeit austauschbar, `Raum::wandbild_setzen`).
+fn bilderrahmen(n: &mut Netz, mitte: V3, aussen: [f32; 2], b: f32) {
+    let pi = std::f32::consts::PI;
+    // Profiltiefe über die Breite (0 außen an der Wand, 1 innen am Passepartout)
+    let tiefe = move |q: f32| -> f32 {
+        let wulst = (q * pi).sin().max(0.0).powf(0.6) * (1.0 - 0.4 * q);
+        let kehle = -0.004 * ((q - 0.45) * 14.0).cos().max(0.0) * (1.0 - ((q - 0.45) * 4.0).abs()).max(0.0);
+        let stufe = 0.003 * (1.0 - (q - 0.85).abs() * 12.0).max(0.0);
+        0.006 * q + 0.032 * wulst + kehle + stufe
+    };
+    for k in 0..4 {
+        let (entlang, innen, l0, e0) = match k {
+            0 => ([1.0f32, 0.0], [0.0f32, -1.0], aussen[0], aussen[1]),
+            1 => ([-1.0, 0.0], [0.0, 1.0], aussen[0], aussen[1]),
+            2 => ([0.0, -1.0], [1.0, 0.0], aussen[1], aussen[0]),
+            _ => ([0.0, 1.0], [-1.0, 0.0], aussen[1], aussen[0]),
+        };
+        let lage = move |s: f32, q: f32| -> V3 {
+            let o = q * b;
+            let l = (2.0 * s - 1.0) * (l0 - o);
+            let e = e0 - o;
+            [mitte[0] + entlang[0] * l - innen[0] * e, mitte[1] + entlang[1] * l - innen[1] * e, mitte[2] - tiefe(q)]
+        };
+        n.gitter(&Trafo::bei([0.0; 3]), (2, 24), Goldrahmen, 0.0, |s, q| {
+            let eps = 1e-3;
+            let du = sub(lage((s + eps).min(1.0), q), lage((s - eps).max(0.0), q));
+            let dq = sub(lage(s, (q + eps).min(1.0)), lage(s, (q - eps).max(0.0)));
+            let mut nn = norm(cross(du, dq));
+            if nn[2] > 0.0 {
+                nn = mul(nn, -1.0);
+            }
+            (lage(s, q), nn, [s * l0 * 6.0, q])
+        });
+    }
+    let innen = [aussen[0] - b, aussen[1] - b];
+    n.flaeche(&Trafo::bei(add(mitte, [0.0, 0.0, -0.006])), innen, Passepartout, [0.0, 0.0, 1.0, 1.0]);
+    let foto = [innen[0] - 0.045, innen[1] - 0.045];
+    n.flaeche(&Trafo::bei(add(mitte, [0.0, 0.0, -0.0075])), foto, Wandbild, [0.0, 0.0, 1.0, 1.0]);
 }
 
 fn tisch(n: &mut Netz) {
@@ -261,39 +302,103 @@ fn kleinkram(n: &mut Netz) {
         [tasse[0] + 0.04 + 0.025 * w.cos(), tasse[1] + 0.05 + 0.028 * w.sin(), tasse[2]]
     }).collect();
     n.rohr(&henkel, 0.006, 8, Keramik);
-    // Fernbedienung mit Tastenfeld
-    let fb = Trafo::bei([0.22, TISCH_HOEHE + 0.009, -0.36]).nach(&Trafo::dreh_y(-0.5));
-    n.quader(&fb, [0.025, 0.008, 0.085], 0.006, KunststoffSchwarz, 8.0);
-    for i in 0..12 {
-        n.quader(&fb.nach(&Trafo::bei([-0.01 + (i % 3) as f32 * 0.01, 0.008, -0.05 + (i / 3) as f32 * 0.016])), [0.0035, 0.0015, 0.004], 0.001, Gummi, 8.0);
-    }
-    n.quader(&fb.nach(&Trafo::bei([0.0, 0.008, 0.06])), [0.012, 0.0015, 0.006], 0.001, LedRot, 8.0);
+    // Fernbedienung: flaches, schlankes Gehäuse, Tasten als Textur auf der Oberseite
+    let fb = Trafo::bei([0.22, TISCH_HOEHE + 0.007, -0.34]).nach(&Trafo::dreh_y(-0.45));
+    n.quader(&fb, [0.022, 0.007, 0.092], 0.005, KunststoffSchwarz, 8.0);
+    let oben = fb.nach(&Trafo::bei([0.0, 0.0072, 0.0])).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
+    n.flaeche(&oben, [0.019, 0.088], Fernbedienung, [0.0, 0.0, 1.0, 1.0]);
     // Zeitschrift
     let z = Trafo::bei([-0.62, TISCH_HOEHE + 0.003, -0.32]).nach(&Trafo::dreh_y(0.25)).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
     n.flaeche(&z, [0.105, 0.14], Zeitschrift, [0.0, 0.0, 1.0, 1.0]);
 }
 
+/// Gummibaum (Ficus elastica): drei Triebe verschiedener Höhe aus einem Topf, große ovale
+/// Blätter an kurzen Stielen, längs der Mittelrippe gefaltet und nach außen überhängend; an
+/// jeder Triebspitze die rote Hülle des nächsten Blatts.
 fn gummibaum(n: &mut Netz) {
-    let topf = [0.98, 0.0, 0.42];
-    n.drehkoerper(&Trafo::bei(topf), &[(0.0, 0.0), (0.13, 0.0), (0.16, 0.02), (0.19, 0.32), (0.205, 0.33), (0.205, 0.36), (0.18, 0.36), (0.17, 0.33)], 28, Terrakotta, 3.0);
-    n.drehkoerper(&Trafo::bei([topf[0], 0.32, topf[2]]), &[(0.17, 0.0), (0.0, 0.01)], 20, Erde, 2.0);
-    // Stamm, leicht geschwungen
-    let stamm: Vec<V3> = (0..=10).map(|i| {
-        let s = i as f32 / 10.0;
-        [topf[0] + 0.04 * (s * 3.0).sin(), 0.32 + s * 1.05, topf[2] - 0.03 * s]
-    }).collect();
-    n.rohr(&stamm, 0.014, 8, RahmenHolz);
-    // Blätter spiralig am Stamm (Goldener Winkel), unten größer, nach außen geneigt
-    for i in 0..26 {
-        let s = 0.1 + i as f32 / 26.0 * 0.9;
-        let k = (s * 10.0) as usize;
-        let ansatz = stamm[k.min(10)];
-        let winkel = i as f32 * 2.4;
-        let groesse = 1.25 - 0.5 * s;
-        let t = Trafo::bei(ansatz).nach(&Trafo::dreh_y(winkel)).nach(&Trafo::dreh_x(-1.0 + 0.4 * s));
-        n.rohr(&[ansatz, t.punkt([0.0, 0.04, 0.0])], 0.004, 5, Blatt);
-        n.blatt(&t.nach(&Trafo::bei([0.0, 0.035, 0.0])), 0.3 * groesse, 0.12 * groesse, -0.05 * groesse, Blatt);
+    let topf = PFLANZE;
+    n.drehkoerper(&Trafo::bei(topf), &[(0.0, 0.0), (0.12, 0.0), (0.15, 0.02), (0.18, 0.30), (0.195, 0.31), (0.195, 0.34), (0.17, 0.34), (0.16, 0.31)], 28, Terrakotta, 3.0);
+    n.drehkoerper(&Trafo::bei([topf[0], 0.30, topf[2]]), &[(0.16, 0.0), (0.0, 0.012)], 20, Erde, 2.0);
+    // Untersetzer
+    n.drehkoerper(&Trafo::bei(topf), &[(0.0, 0.0), (0.2, 0.0), (0.21, 0.018), (0.19, 0.018), (0.0, 0.005)], 28, Terrakotta, 3.0);
+    let triebe: [([f32; 2], f32, [f32; 2], usize, f32); 3] = [
+        ([0.0, 0.0], 1.15, [-0.06, -0.05], 15, 0.0),
+        ([0.05, 0.04], 0.85, [0.18, 0.07], 12, 1.3),
+        ([-0.05, 0.03], 0.62, [-0.14, 0.12], 9, 2.6),
+    ];
+    for (fuss, hoehe, neigung, blaetter, dreh) in triebe {
+        let stamm: Vec<V3> = (0..=12)
+            .map(|i| {
+                let s = i as f32 / 12.0;
+                let w = s.powf(1.5);
+                [topf[0] + fuss[0] + neigung[0] * w, 0.30 + s * hoehe, topf[2] + fuss[1] + neigung[1] * w]
+            })
+            .collect();
+        // nach oben dünner werdend: drei Abschnitte
+        n.rohr(&stamm[0..5], 0.0085, 8, Rinde);
+        n.rohr(&stamm[4..9], 0.0065, 8, Rinde);
+        n.rohr(&stamm[8..13], 0.0048, 8, Rinde);
+        for i in 0..blaetter {
+            let t = 0.18 + 0.8 * i as f32 / blaetter as f32;
+            let k = t * 12.0;
+            let (a, b) = (stamm[k.floor() as usize], stamm[(k.floor() as usize + 1).min(12)]);
+            let ansatz = add(a, mul(sub(b, a), k.fract()));
+            let alter = 1.0 - t; // unten alt, groß und hängend; oben jung, kleiner und aufrecht
+            let winkel = dreh + i as f32 * 2.4;
+            let laenge = 0.24 + 0.16 * alter;
+            let rollen = ((i as f32 * 12.9898 + dreh * 78.233).sin() * 43758.545).fract() - 0.5;
+            ficusblatt(n, ansatz, winkel, laenge, laenge * 0.5, 0.9 - 0.8 * alter, -0.1 - 0.8 * alter, rollen * 1.2);
+        }
+        // Rote Hülle an der Spitze
+        let spitze = stamm[12];
+        n.drehkoerper(&Trafo::bei(spitze), &[(0.0, 0.0), (0.006, 0.0), (0.006, 0.03), (0.003, 0.06), (0.0, 0.07)], 8, Triebhuelle, 1.0);
     }
+}
+
+/// Ein Gummibaumblatt: Stiel vom Ansatz schräg nach oben, dann die Blattspreite, deren
+/// Neigung von `neig_anfang` zur Spitze hin auf `neig_ende` (Bogenmaß) abfällt; gefaltet
+/// längs der Mittelrippe und um sie um `rollen` gedreht (so zeigen nicht alle Blätter die
+/// Kante zum Betrachter).
+fn ficusblatt(n: &mut Netz, ansatz: V3, winkel: f32, laenge: f32, breite: f32, neig_anfang: f32, neig_ende: f32, rollen: f32) {
+    let aus = [winkel.cos(), 0.0, winkel.sin()];
+    let seite = [-winkel.sin(), 0.0, winkel.cos()];
+    let oben = [0.0, 1.0, 0.0];
+    let stiel_neig = 0.9f32;
+    let stiel_ende = add(ansatz, add(mul(aus, 0.05 * stiel_neig.cos()), mul(oben, 0.05 * stiel_neig.sin())));
+    n.rohr(&[ansatz, add(ansatz, mul(add(aus, oben), 0.012)), stiel_ende], 0.0028, 5, Rinde);
+    // Mittelrippe als Polylinie
+    const SCHRITTE: usize = 16;
+    let mut mitte = vec![stiel_ende];
+    let mut lot = Vec::new();
+    for j in 0..=SCHRITTE {
+        let t = j as f32 / SCHRITTE as f32;
+        let e = neig_anfang + (neig_ende - neig_anfang) * t * t;
+        let richtung = add(mul(aus, e.cos()), mul(oben, e.sin()));
+        lot.push(add(mul(aus, -e.sin()), mul(oben, e.cos())));
+        if j < SCHRITTE {
+            let p = add(mitte[j], mul(richtung, laenge / SCHRITTE as f32));
+            mitte.push(p);
+        }
+    }
+    let falte = 0.32f32;
+    let lage = |u: f32, t: f32| -> V3 {
+        let k = (t * SCHRITTE as f32).min(SCHRITTE as f32 - 1e-3);
+        let (i, f) = (k.floor() as usize, k.fract());
+        let m = add(mitte[i], mul(sub(mitte[i + 1], mitte[i]), f));
+        let l0 = norm(add(lot[i], mul(sub(lot[i + 1], lot[i]), f)));
+        let r = rollen * (0.4 + 0.6 * t);
+        let quer = add(mul(seite, r.cos()), mul(l0, r.sin()));
+        let l = sub(mul(l0, r.cos()), mul(seite, r.sin()));
+        let x = (u - 0.5) * breite;
+        let welle = 0.004 * (t * 9.0 + u * 3.0).sin() * (x.abs() / breite) * 2.0;
+        add(m, add(mul(quer, x * falte.cos()), mul(l, x.abs() * falte.sin() + welle)))
+    };
+    n.gitter(&Trafo::bei([0.0; 3]), (8, SCHRITTE as u32), Blatt, 0.0, |u, t| {
+        let eps = 1e-3;
+        let du = sub(lage((u + eps).min(1.0), t), lage((u - eps).max(0.0), t));
+        let dt = sub(lage(u, (t + eps).min(1.0)), lage(u, (t - eps).max(0.0)));
+        (lage(u, t), norm(cross(du, dt)), [u, t])
+    });
 }
 
 /// Steckdose an der Rückwand, Strom- und Antennenkabel vom Fernseher dorthin.

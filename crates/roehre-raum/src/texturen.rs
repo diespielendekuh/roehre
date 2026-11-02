@@ -9,7 +9,9 @@
 
 use crate::rauschen::{fbm, wert, zufall};
 
-pub const GROESSE: u32 = 512;
+/// Kantenlänge der Materialtexturen. 256 wie zur PS2-Zeit; der Raum zeigt sie ohne
+/// Vergrößerungsfilter, so dass aus der Nähe die Rohpixel sichtbar sind.
+pub const GROESSE: u32 = 256;
 
 /// Die Materialien; die Nummer ist die Ebene im Texturfeld.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,9 +45,14 @@ pub enum Material {
     Glas,
     /// Die Bildröhre (Bild kommt aus dem Flächen-Modus, nicht aus dem Texturfeld)
     Bildroehre,
+    Goldrahmen,
+    Passepartout,
+    Fernbedienung,
+    Triebhuelle,
+    Rinde,
 }
 
-pub const ANZAHL: u32 = Material::Bildroehre as u32 + 1;
+pub const ANZAHL: u32 = Material::Rinde as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -53,7 +60,8 @@ pub const ALLE: [Material; ANZAHL as usize] = {
     [
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
-        LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre,
+        LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
+        Triebhuelle, Rinde,
     ]
 };
 
@@ -77,6 +85,44 @@ fn maserung(u: f32, v: f32, dichte: f32, saat: u32) -> (f32, f32) {
     let ring = ((v * dichte + verzug) * std::f32::consts::TAU).sin() * 0.5 + 0.5;
     let poren = wert(u * 300.0, v * 40.0, 300, saat + 2);
     (ring.powf(2.5), poren)
+}
+
+/// Wildeiche (geölt): Maserung entlang u, Äste mit Ringen, Trockenrisse, Farbspiel zwischen
+/// hellem Honig und grauem Braun. `saat` wählt das Brett. Liefert Farbe (linear), Höhe,
+/// Rauheit.
+fn wildeiche(u: f32, v: f32, saat: u32, dichte: f32) -> ([f32; 3], f32, f32) {
+    // Äste: bis zu zwei je Brett, verzerren die Maserung ringförmig
+    let mut ast_verzug = 0.0;
+    let mut ast_kern: f32 = 0.0;
+    let mut ast_ring = 0.0;
+    for k in 0..2 {
+        if zufall(saat as i32 * 7 + k, 301) < 0.55 {
+            continue;
+        }
+        let (cx, cy) = (zufall(saat as i32 * 13 + k, 302), zufall(saat as i32 * 17 + k, 303));
+        let (dx, dy) = ((u - cx) * 2.5, (v - cy) * 9.0);
+        let d = (dx * dx + dy * dy).sqrt();
+        let r = 0.035 + 0.03 * zufall(saat as i32 * 19 + k, 304);
+        ast_verzug += 0.6 * (-d / (r * 3.0)).exp() * (dy * 20.0).signum() * 0.0 + 1.5 * (-d / (r * 2.5)).exp();
+        ast_kern = ast_kern.max(1.0 - glatt(r * 0.6, r, d));
+        ast_ring += ((d * 160.0).sin() * 0.5 + 0.5) * (1.0 - glatt(r, r * 3.0, d));
+    }
+    let verzug = fbm(u * 0.5, v, 2, 4, saat) * 3.0 + fbm(u, v * 2.0, 4, 3, saat + 1) * 0.8 + ast_verzug;
+    let ring = ((v * dichte + verzug) * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+    let fein = wert(u * 160.0, v * 60.0, 160, saat + 2);
+    let poren = glatt(0.7, 0.95, wert(u * 220.0, v * 24.0, 220, saat + 3));
+    // Trockenrisse: schmale dunkle Linien entlang der Maserung
+    let riss = glatt(0.985, 0.998, wert(u * 2.0, (v + verzug * 0.02) * 90.0, 2, saat + 4)) * glatt(0.4, 0.8, fbm(u, v, 3, 3, saat + 5));
+    let farbspiel = fbm(u * 0.7, v * 0.7, 2, 3, saat + 6);
+    let hell = mische([0.40, 0.25, 0.12], [0.30, 0.22, 0.14], farbspiel);       // Honig ↔ graues Braun
+    let dunkel = [0.17, 0.10, 0.05];
+    let mut c = mische(hell, dunkel, 0.18 + 0.45 * ring.powf(1.6));
+    c = mal(c, 0.88 + 0.18 * fein - 0.22 * poren);
+    c = mische(c, [0.11, 0.06, 0.03], ast_ring * 0.55);
+    c = mische(c, [0.05, 0.028, 0.014], ast_kern);
+    c = mische(c, [0.03, 0.018, 0.01], riss);
+    let hoehe = 0.55 + 0.15 * ring - 0.25 * poren - 0.5 * riss - 0.2 * ast_kern;
+    (c, hoehe, 0.62 + 0.15 * poren)
 }
 
 /// Farbe (linear, Alpha) und Eigenschaften (Höhe, Rauheit, Metall, Leuchten) bei (u, v).
@@ -109,33 +155,37 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([g, g * 0.95, g * 0.9, 1.0], [webart, 0.95, 0.0, 0.0])
         }
         Tapete => {
-            // 80er-Tapete: blasses Ocker-Grün, senkrechte Streifen, ein ruhiges Rankenmuster,
-            // vergilbt und fleckig
+            // 80er-Tapete: blasses Ocker-Grün, feine Streifen, ruhiges Rankenmuster; vergilbt,
+            // mit Wasserrändern von oben und Schmutz zum Boden hin
             let streifen = glatt(0.45, 0.5, ((u * 12.0).fract() - 0.5).abs());
             let (su, sv) = ((u * 6.0).fract() - 0.5, (v * 6.0).fract() - 0.5);
             let blatt = (1.0 - glatt(0.06, 0.1, (su.abs() - 0.18 * (sv * 9.0).cos().abs()).abs()))
                 * glatt(0.45, 0.2, sv.abs());
-            let mut c = mische([0.34, 0.31, 0.22], [0.28, 0.27, 0.19], streifen);
-            c = mische(c, [0.27, 0.25, 0.17], blatt * 0.45);
-            let flecken = glatt(0.55, 0.8, fbm(u, v, 3, 5, 41));
-            c = mal(c, 1.0 - 0.25 * flecken - 0.08 * staub);
-            let faser = wert(u * 256.0, v * 256.0, 256, 42);
+            let mut c = mische([0.30, 0.27, 0.19], [0.25, 0.23, 0.16], streifen);
+            c = mische(c, [0.22, 0.20, 0.13], blatt * 0.45);
+            let flecken = glatt(0.5, 0.85, fbm(u, v, 3, 5, 41));
+            let wasser = glatt(0.55, 0.6, fbm(u * 0.5, v * 0.5, 2, 5, 43)) - glatt(0.6, 0.63, fbm(u * 0.5, v * 0.5, 2, 5, 43));
+            c = mal(c, 1.0 - 0.18 * flecken - 0.1 * staub);
+            c = mische(c, [0.16, 0.12, 0.06], wasser.max(0.0) * 0.45);
+            let faser = wert(u * 128.0, v * 128.0, 128, 42);
+            c = mal(c, 0.94 + 0.08 * faser);
             ([c[0], c[1], c[2], 1.0], [0.5 + 0.15 * faser + 0.2 * blatt, 0.85, 0.0, 0.0])
         }
         Dielen => {
-            // Vier Dielen je Kachel, jede mit eigenem Ton, Fugen, Maserung, Abnutzung
+            // Wildeiche-Dielen: acht schmale Bretter je Kachel, versetzte Stöße, gefaste Fugen
             let reihe = (v * 8.0).floor();
             let lokal_v = (v * 8.0).fract();
             let versatz = zufall(reihe as i32, 51);
-            let stoss = ((u + versatz) * 2.0).fract();
-            let (ring, poren) = maserung(u * 2.0 + versatz, lokal_v * 0.125 + reihe * 0.125, 40.0, 52 + reihe as u32);
-            let ton = 0.75 + 0.4 * zufall(reihe as i32 * 13 + (u + versatz).floor() as i32, 53);
-            let mut c = mal(mische([0.14, 0.085, 0.045], [0.10, 0.06, 0.03], 0.3 + 0.4 * ring), ton);
-            let fuge = (1.0 - glatt(0.0, 0.025, lokal_v.min(1.0 - lokal_v))).max(1.0 - glatt(0.0, 0.006, stoss.min(1.0 - stoss)));
-            c = mal(c, 1.0 - 0.75 * fuge);
-            let abnutzung = glatt(0.5, 0.75, fbm(u, v, 2, 4, 54));
-            c = mische(c, [0.20, 0.13, 0.08], abnutzung * 0.3);
-            ([c[0], c[1], c[2], 1.0], [0.6 - 0.5 * fuge + 0.1 * ring - 0.1 * poren, 0.55 + 0.25 * abnutzung, 0.0, 0.0])
+            let stoss_u = (u + versatz) * 1.5;
+            let brett = reihe as i32 * 31 + stoss_u.floor() as i32;
+            let (mut c, h, rauh) = wildeiche(stoss_u.fract(), lokal_v * 0.125 + reihe * 0.125, 500 + brett as u32, 26.0);
+            c = mal(c, 0.82 + 0.3 * zufall(brett, 53));
+            let stoss = stoss_u.fract();
+            let fuge = (1.0 - glatt(0.0, 0.04, lokal_v.min(1.0 - lokal_v))).max(1.0 - glatt(0.0, 0.008, stoss.min(1.0 - stoss)));
+            c = mal(c, 1.0 - 0.8 * fuge);
+            let abnutzung = glatt(0.55, 0.8, fbm(u, v, 2, 4, 54));
+            c = mische(c, [0.20, 0.14, 0.09], abnutzung * 0.25);
+            ([c[0], c[1], c[2], 1.0], [h * (1.0 - fuge) , rauh - 0.1 * abnutzung, 0.0, 0.0])
         }
         Teppich => {
             // Orientteppich: Rand mit Borten, Mittelfeld mit Raute, Wollflor
@@ -159,11 +209,12 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], 1.0], [flor, 1.0, 0.0, 0.0])
         }
         Tischholz => {
-            let (ring, poren) = maserung(u, v, 26.0, 71);
-            let c = mal(mische([0.22, 0.14, 0.075], [0.15, 0.09, 0.045], 0.3 + 0.5 * ring), 0.9 + 0.2 * fbm(u, v, 4, 3, 72) - 0.1 * poren);
-            let kratzer = glatt(0.985, 1.0, wert(u * 3.0, v * 120.0, 3, 73));
-            let c = mische(c, [0.16, 0.10, 0.06], kratzer * 0.5);
-            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * ring - 0.2 * poren - 0.3 * kratzer, 0.35 + 0.2 * kratzer, 0.0, 0.0])
+            // Tischplatte aus verleimten Wildeiche-Brettern (vier je Kachel)
+            let brett = (u * 4.0).floor();
+            let (c, h, rauh) = wildeiche(v, (u * 4.0).fract() * 0.25 + brett * 0.25, 700 + brett as u32, 18.0);
+            let fuge = 1.0 - glatt(0.0, 0.01, (u * 4.0).fract().min(1.0 - (u * 4.0).fract()));
+            let c = mal(c, (0.9 + 0.2 * zufall(brett as i32, 71)) * (1.0 - 0.5 * fuge));
+            ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, 0.0])
         }
         Terrakotta => {
             let n = fbm(u, v, 8, 4, 81);
@@ -178,17 +229,26 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], 1.0], [n, 1.0, 0.0, 0.0])
         }
         Blatt => {
-            // Gummibaumblatt: länglich, spitz, dunkelgrün glänzend, helle Mittelrippe
-            let breite = (std::f32::consts::PI * v).sin().powf(0.7) * 0.47 * (1.0 - 0.3 * v);
+            // Gummibaum (Ficus elastica): großes, längliches Oval mit kurzer Spitze, ledrig
+            // glänzend dunkelgrün, heller Mittelnerv, sehr feine parallele Seitennerven,
+            // schmaler heller Rand, einzelne Flecken
+            let ellipse = (1.0 - (2.0 * v - 1.0).powi(2)).max(0.0).sqrt();
+            let spitze = 1.0 - glatt(0.88, 1.0, v) * 0.85;
+            let breite = 0.48 * ellipse * spitze * (1.0 - 0.12 * v);
             let x = u - 0.5;
             let alpha = if x.abs() < breite { 1.0 } else { 0.0 };
-            let rippe = 1.0 - glatt(0.004, 0.012, x.abs());
-            let seiten = ((x.abs() * 30.0 - v * 18.0) * std::f32::consts::TAU / 6.0).cos().abs().powf(12.0) * (1.0 - rippe);
-            let rand = glatt(0.85, 1.0, x.abs() / breite.max(1e-3));
-            let mut c = mische([0.012, 0.045, 0.018], [0.03, 0.08, 0.035], fbm(u, v, 4, 3, 101));
-            c = mische(c, [0.10, 0.13, 0.06], rippe * 0.8 + seiten * 0.15);
-            c = mische(c, [0.04, 0.04, 0.012], rand * 0.6);
-            ([c[0], c[1], c[2], alpha], [0.5 + 0.3 * rippe, 0.22, 0.0, 0.0])
+            let rand_abst = (breite - x.abs()) / breite.max(1e-3);
+            let nerv_breite = 0.012 * (1.0 - 0.8 * v) + 0.002;
+            let rippe = 1.0 - glatt(nerv_breite * 0.5, nerv_breite, x.abs());
+            let seiten = glatt(0.9, 1.0, ((x.abs() * 1.6 + v) * 28.0).fract()) * (1.0 - rippe) * glatt(0.0, 0.2, rand_abst);
+            let farbe_n = fbm(u, v, 4, 4, 101);
+            let mut c = mische([0.010, 0.032, 0.013], [0.022, 0.062, 0.026], farbe_n * 0.8 + 0.2 * v);
+            c = mische(c, [0.016, 0.045, 0.018], seiten * 0.6);
+            c = mische(c, [0.11, 0.12, 0.05], rippe * 0.85);
+            c = mische(c, [0.05, 0.06, 0.025], (1.0 - glatt(0.0, 0.05, rand_abst)) * 0.7);
+            let fleck = glatt(0.78, 0.82, wert(u * 12.0, v * 12.0, 12, 102)) * glatt(0.1, 0.3, rand_abst);
+            c = mische(c, [0.04, 0.05, 0.02], fleck * 0.25);
+            ([c[0], c[1], c[2], alpha], [0.5 + 0.3 * rippe - 0.1 * seiten, 0.2 + 0.2 * fleck, 0.0, 0.0])
         }
         Kassette => {
             // Atlas aus vier Videokassetten-Rücken: schwarzes Gehäuse, Etikett mit
@@ -255,19 +315,33 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([g, g, g, 1.0], [0.5, 0.65, 0.0, 0.0])
         }
         Nacht => {
-            // Blick aus dem Fenster: Nachthimmel, Häuser mit einzelnen Lichtern, Laterne, Dunst
-            let mut c = mische([0.003, 0.005, 0.012], [0.02, 0.018, 0.022], glatt(0.0, 0.7, v));
-            let dach = 0.55 + 0.08 * ((u * 6.0).floor() * 1.7).sin().abs();
+            // Neblige Nacht: Dunst, der zur Laterne hin orange aufleuchtet, schemenhafte Häuser
+            // und ein kahler Baum, wenige verschwommene Fenster, Schlieren auf der Scheibe
+            let laterne_d = ((u - 0.68).powi(2) + (v - 0.48).powi(2) * 1.4).sqrt();
+            let dunst = [0.012, 0.013, 0.015];
+            let hof = (-laterne_d * 7.0).exp() * 0.12;
+            let mut c = [dunst[0] + hof, dunst[1] + hof * 0.6, dunst[2] + hof * 0.25];
+            // Häuser: Silhouette mit unruhiger Oberkante, nur wenig dunkler als der Nebel
+            let dach = 0.52 + 0.1 * ((u * 5.0).floor() * 2.3).sin().abs() + 0.02 * fbm(u * 4.0, v, 8, 3, 193);
             if v > dach {
-                c = [0.004, 0.004, 0.006];
-                let (fx, fy) = ((u * 40.0).floor() as i32, ((v - dach) * 40.0).floor() as i32);
-                if zufall(fx * 97 + fy, 191) > 0.88 && ((u * 40.0).fract() - 0.5).abs() < 0.3 && (((v - dach) * 40.0).fract() - 0.5).abs() < 0.3 {
-                    c = mal([1.0, 0.7, 0.35], 0.4 + 0.6 * zufall(fx + fy * 31, 192));
+                c = mal(c, 0.55);
+                let (fx, fy) = ((u * 24.0).floor() as i32, ((v - dach) * 24.0).floor() as i32);
+                if zufall(fx * 97 + fy, 191) > 0.95 {
+                    let (lx, ly) = (((u * 24.0).fract() - 0.5).abs(), (((v - dach) * 24.0).fract() - 0.5).abs());
+                    let fenster = (1.0 - glatt(0.1, 0.45, lx.max(ly))) * 0.12 * (0.5 + zufall(fx * 31 + fy, 196));
+                    c = [c[0] + fenster * 0.5, c[1] + fenster * 0.33, c[2] + fenster * 0.15];
                 }
             }
-            let laterne = (-((u - 0.72).powi(2) + (v - 0.62).powi(2)) * 900.0).exp();
-            let hof = (-((u - 0.72).powi(2) + (v - 0.62).powi(2)) * 40.0).exp() * 0.08;
-            c = [c[0] + laterne * 1.0 + hof, c[1] + laterne * 0.6 + hof * 0.6, c[2] + laterne * 0.25 + hof * 0.3];
+            // Kahler Baum links: Äste aus Rauschen
+            let baum = glatt(0.58, 0.62, fbm(u * 3.0, v * 2.0, 6, 5, 194)) * glatt(0.45, 0.2, u) * glatt(0.1, 0.4, v);
+            c = mal(c, 1.0 - 0.6 * baum);
+            // Laterne: kleiner Kopf, Lichtkegel im Nebel
+            let kopf = (-laterne_d * 120.0).exp();
+            let kegel = glatt(0.08, 0.0, (u - 0.68).abs() - (v - 0.48).max(0.0) * 0.25) * glatt(0.48, 0.6, v) * (1.0 - glatt(0.6, 1.0, v)) * 0.04;
+            c = [c[0] + kopf * 0.9 + kegel, c[1] + kopf * 0.55 + kegel * 0.6, c[2] + kopf * 0.2 + kegel * 0.2];
+            // Schlieren und Tropfen auf der Scheibe
+            let schliere = glatt(0.7, 0.9, wert(u * 40.0, v * 3.0, 40, 195)) * 0.25;
+            c = mal(c, 1.0 + schliere);
             ([c[0], c[1], c[2], 1.0], [0.5, 0.0, 0.0, 1.0])
         }
         Gluehbirne => ([1.0, 0.75, 0.45, 1.0], [0.5, 0.1, 0.0, 1.0]),
@@ -297,6 +371,66 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], 1.0], [0.5, 0.35, 0.0, 0.0])
         }
         Glas => ([0.02, 0.025, 0.025, 1.0], [0.5, 0.05, 0.0, 0.0]),
+        Goldrahmen => {
+            // alter vergoldeter Rahmen: Perlstab und Kehlen quer zum Profil (v), Patina in
+            // den Vertiefungen, abgeriebene Kanten
+            let profil = v;
+            let perlen = ((u * 60.0).fract() - 0.5).abs() * 2.0;
+            let perlstab = if (0.55..0.7).contains(&profil) { 1.0 - perlen } else { 0.0 };
+            let kehle = ((profil * 5.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5).powf(3.0);
+            let patina = glatt(0.4, 0.8, fbm(u, v, 6, 4, 231)) * (1.0 - kehle);
+            let mut c = mische([0.32, 0.22, 0.07], [0.20, 0.13, 0.04], fbm(u * 2.0, v, 8, 3, 232));
+            c = mische(c, [0.04, 0.035, 0.02], patina * 0.7);
+            c = mal(c, 0.7 + 0.5 * perlstab);
+            ([c[0], c[1], c[2], 1.0], [0.3 + 0.5 * kehle + 0.3 * perlstab, 0.4 + 0.35 * patina, 0.6 - 0.45 * patina, 0.0])
+        }
+        Passepartout => {
+            let faser = wert(u * 128.0, v * 128.0, 128, 241);
+            let c = mal([0.42, 0.38, 0.30], 0.92 + 0.1 * faser - 0.12 * staub);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.1 * faser, 0.9, 0.0, 0.0])
+        }
+        Fernbedienung => {
+            // Oberseite einer schlanken Fernbedienung: Netztaste, Zifferntasten, Farbtasten,
+            // Programm- und Lautstärkewippen; Aufdrucke als kurze Balken (keine Schrift)
+            let mut c = [0.022, 0.022, 0.024];
+            let mut h = 0.4;
+            let mut rauh = 0.35;
+            let taste = |cx: f32, cy: f32, hx: f32, hy: f32| -> f32 {
+                let d = ((u - cx).abs() - hx).max((v - cy).abs() - hy);
+                1.0 - glatt(-0.004, 0.004, d)
+            };
+            let mut tasten = 0.0f32;
+            let netz = taste(0.75, 0.08, 0.09, 0.025);
+            c = mische(c, [0.35, 0.03, 0.02], netz);
+            for i in 0..12 {
+                let (cx, cy) = (0.25 + (i % 3) as f32 * 0.25, 0.2 + (i / 3) as f32 * 0.075);
+                tasten = tasten.max(taste(cx, cy, 0.09, 0.025));
+            }
+            for (i, f) in [[0.35, 0.03, 0.02], [0.03, 0.25, 0.04], [0.35, 0.3, 0.02], [0.03, 0.06, 0.35]].iter().enumerate() {
+                let t = taste(0.14 + i as f32 * 0.24, 0.52, 0.09, 0.018);
+                c = mische(c, *f, t);
+                tasten = tasten.max(t * 0.5);
+            }
+            for cx in [0.3f32, 0.7] {
+                tasten = tasten.max(taste(cx, 0.7, 0.12, 0.08));
+            }
+            c = mische(c, [0.08, 0.08, 0.085], tasten);
+            let aufdruck = glatt(0.6, 0.62, wert(u * 30.0, v * 50.0, 30, 251)) * (1.0 - tasten) * glatt(0.1, 0.15, v);
+            c = mische(c, [0.4, 0.4, 0.4], aufdruck * 0.5);
+            h += 0.4 * tasten + 0.4 * netz;
+            rauh += 0.3 * tasten;
+            ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, 0.0])
+        }
+        Triebhuelle => {
+            let c = mische([0.28, 0.05, 0.04], [0.12, 0.06, 0.03], v + 0.2 * fbm(u, v, 4, 2, 261));
+            ([c[0], c[1], c[2], 1.0], [0.5, 0.35, 0.0, 0.0])
+        }
+        Rinde => {
+            let n = fbm(u, v, 8, 3, 271);
+            let lentizellen = glatt(0.8, 0.85, wert(u * 30.0, v * 60.0, 30, 272));
+            let c = mische(mal([0.05, 0.05, 0.028], 0.8 + 0.4 * n), [0.12, 0.1, 0.06], lentizellen * 0.6);
+            ([c[0], c[1], c[2], 1.0], [n, 0.6, 0.0, 0.0])
+        }
         Bildroehre => ([0.0, 0.0, 0.0, 1.0], [0.5, 0.05, 0.0, 0.0]),
     }
 }

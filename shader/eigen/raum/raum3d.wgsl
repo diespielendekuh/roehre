@@ -151,10 +151,24 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let fresnel = 0.04 + 0.96 * pow(1.0 - cos_t, 5.0);
         c = bild * mix(0.55, 1.0, rand_dunkel) + umgebung(reflect(blick, n), e.welt) * fresnel + vec3<f32>(0.003, 0.0035, 0.004);
     } else {
-        let farbe = textureSample(farben, kachel, e.uv, e.material);
+        // Rohpixel: die Koordinate rastet auf die Texelmitte ein (aus der Nähe sieht man die
+        // Pixel der 256er-Texturen wie auf einer PS2), die Ableitungen bleiben die echten, damit
+        // Mip-Stufe und anisotrope Filterung in der Ferne unverändert arbeiten.
+        let tg = vec2<f32>(textureDimensions(farben));
+        let uv_roh = (floor(e.uv * tg) + 0.5) / tg;
+        let duv_x = dpdx(e.uv);
+        let duv_y = dpdy(e.uv);
+        let farbe = textureSampleGrad(farben, kachel, uv_roh, e.material, duv_x, duv_y);
         if (farbe.a < 0.5) { discard; }
-        let eig = textureSample(eigenschaften, kachel, e.uv, e.material);
-        let albedo = farbe.rgb;
+        let eig = textureSampleGrad(eigenschaften, kachel, uv_roh, e.material, duv_x, duv_y);
+        // Schmutz und Verschattung in den Raumkanten (Boden/Wand, Wand/Decke, Wand/Wand)
+        let ab_wand = min(min(e.welt.x + 2.4, 2.4 - e.welt.x), 1.05 - e.welt.z);
+        let ab_boden = e.welt.y;
+        let ab_decke = 2.6 - e.welt.y;
+        let ecke = smoothstep(0.0, 0.45, ab_wand) * mix(0.55, 1.0, smoothstep(0.0, 0.35, ab_boden))
+            * mix(0.6, 1.0, smoothstep(0.0, 0.4, ab_decke));
+        let kante = mix(0.5, 1.0, ecke);
+        let albedo = farbe.rgb * mix(0.75, 1.0, ecke);
         let rauheit = eig.g;
         let metall = eig.b;
 
@@ -185,6 +199,11 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let h = normalize(l - blick);
         c = diffus * ll * max(dot(n, l), 0.0) + f0 * ll * pow(max(dot(n, h), 0.0), glanz) * (glanz + 2.0) / 8.0 * max(dot(n, l), 0.0);
 
+        // Blätter im Gegenlicht: ein Teil des Lampenlichts scheint gelbgrün hindurch
+        if (e.material == M_BLATT) {
+            c += albedo * ll * max(-dot(n, l), 0.0) * vec3<f32>(0.9, 1.4, 0.4);
+        }
+
         // Bildschirm als Flächenlicht nach vorn (−z)
         let zum_bild = szene.bild_mitte.xyz - vec3<f32>(0.0, 0.0, 0.03) - e.welt;
         let db = length(zum_bild);
@@ -197,7 +216,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         c += diffus * bl * max(dot(n, lb), 0.0) * 8.0 + f0 * bl * pow(max(dot(n, hb), 0.0), glanz) * 0.5 * nach_vorn;
 
         // Umgebung und Spiegelung
-        c += diffus * umgebungslicht(n);
+        c += diffus * umgebungslicht(n) * kante;
         let spiegel_staerke = (1.0 - rauheit) * (1.0 - rauheit);
         c += f0 * umgebung(reflect(blick, n), e.welt) * spiegel_staerke * 1.5;
 

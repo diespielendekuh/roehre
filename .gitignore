@@ -1,3 +1,4 @@
 target/
 /referenz-lokal/
 *.tmp
+/lokal/

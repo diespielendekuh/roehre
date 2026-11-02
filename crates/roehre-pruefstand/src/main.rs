@@ -55,6 +55,7 @@ fn main() {
             &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
             groesse(&opt("-g").unwrap_or("1920x1080".into())),
             Path::new(&opt("-o").unwrap_or("raum".into())),
+            opt("--wandbild").map(std::path::PathBuf::from),
         ),
         "bewegung" => bewegung_messen(
             opt("-n").and_then(|n| n.parse().ok()).unwrap_or(4.0),
@@ -631,7 +632,7 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
 }
 
 /// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.
-fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
+fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>) -> Ergebnis {
     use roehre_raum::{Ansicht, Raum};
     std::fs::create_dir_all(ordner)?;
     let gpu = Gpu::neu();
@@ -642,6 +643,10 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
     let t = Instant::now();
     let mut raum = Raum::neu(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT)?;
     eprintln!("Raum aufgebaut: {} Dreiecke, {:.1} s", raum.dreiecke(), t.elapsed().as_secs_f64());
+    if let Some(pfad) = wandbild {
+        let b = image::open(&pfad)?.to_rgba8();
+        raum.wandbild_setzen(&gpu.queue, b.as_raw(), b.width(), b.height());
+    }
     let mut werte = None;
     for _ in 0..3 {
         let mut enc = gpu.device.create_command_encoder(&Default::default());
@@ -655,12 +660,20 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
     let mut detail = Ansicht::sitzplatz(0.0, 1.0, 0.0);
     detail.auge = [0.55, 1.15, -0.75];
     detail.ziel = [0.12, 0.92, -0.1];
+    let mut pflanze = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    pflanze.auge = [0.6, 1.3, -1.0];
+    pflanze.ziel = [1.15, 1.05, 0.1];
+    let mut wand = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    wand.auge = [0.3, 1.45, -0.6];
+    wand.ziel = [0.6, 1.5, 1.05];
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
         ("mittel", Ansicht::sitzplatz(2.0, 0.5, 1.0)),
         ("ueberblick", Ansicht::sitzplatz(1.0, 0.0, 0.0)),
         ("seitlich", seitlich),
         ("detail", detail),
+        ("pflanze", pflanze),
+        ("wand", wand),
     ];
     for (name, a) in ansichten {
         let t = Instant::now();
