@@ -217,6 +217,34 @@ int32_t roehre_vulkan_bild(const RoehreAustausch *a, int32_t welches, RoehreVulk
  *  handle_art: VkExternalSemaphoreHandleTypeFlagBits (darf NULL sein). */
 int32_t roehre_vulkan_semaphore(const RoehreAustausch *a, int32_t welches, int64_t *handle, uint32_t *handle_art);
 
+/* --- D3D12 (nur Windows) ---
+ * Am Gerät des Spiels muss nichts geändert werden. roehre legt auf dem Adapter mit der LUID aus
+ * geraet_kennung ein eigenes Gerät an, dazu zwei geteilte Ressourcen (D3D12_HEAP_FLAG_SHARED)
+ * und einen geteilten Zaun (D3D12_FENCE_FLAG_SHARED).
+ * Öffnen: ID3D12Device::OpenSharedHandle(handle, IID_PPV_ARGS(&ressource bzw. &zaun)), danach
+ * CloseHandle(handle). Je Bild:
+ *   roehre_d3d12_zaunwerte(a, &bereit, &fertig);
+ *   ... Kopie nach EINGANG, EINGANG in PIXEL_SHADER_RESOURCE|NON_PIXEL_SHADER_RESOURCE ...
+ *   ExecuteCommandLists(...); queue->Signal(zaun, bereit);
+ *   roehre_austausch_zeichnen(a, modus, zeit);
+ *   queue->Wait(zaun, fertig); ... ZIEL lesen/kopieren, danach wieder im Lesezustand lassen ...
+ * Die Ressourcen stehen nach dem Anlegen im Zustand COMMON.
+ */
+typedef struct RoehreD3D12Bild {
+    void *handle;          /**< NT-Handle (HANDLE), neu je Aufruf; nach dem Öffnen schließen */
+    uint32_t dxgi_format;  /**< DXGI_FORMAT */
+    uint32_t breite, hoehe;
+} RoehreD3D12Bild;
+
+/** Legt den Austausch an (geraet_kennung: LUID des Adapters in den ersten 8 Byte). */
+RoehreAustausch *roehre_d3d12_erstellen(const RoehreAustauschParameter *p);
+/** welches: 0 = EINGANG, 1 = ZIEL. */
+int32_t roehre_d3d12_bild(const RoehreAustausch *a, int32_t welches, RoehreD3D12Bild *aus);
+/** Der geteilte Zaun (neues NT-Handle). */
+int32_t roehre_d3d12_zaun(const RoehreAustausch *a, void **handle);
+/** Zaunwerte für den nächsten roehre_austausch_zeichnen (k-ter Aufruf: bereit 2k−1, fertig 2k). */
+int32_t roehre_d3d12_zaunwerte(const RoehreAustausch *a, uint64_t *bereit, uint64_t *fertig);
+
 #ifdef __cplusplus
 }
 #endif

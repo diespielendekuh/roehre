@@ -15,6 +15,8 @@
 
 mod arbeitsplatz;
 mod austausch;
+#[cfg(windows)]
+mod d3d12;
 mod einstellungen;
 mod fehler;
 mod katalog;
