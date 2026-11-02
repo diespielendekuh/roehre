@@ -344,6 +344,8 @@ fn gummibaum(n: &mut Netz) {
     n.drehkoerper(&Trafo::bei([topf[0], 0.30, topf[2]]), &[(0.16, 0.0), (0.0, 0.012)], 20, Erde, 2.0);
     // Untersetzer
     n.drehkoerper(&Trafo::bei(topf), &[(0.0, 0.0), (0.2, 0.0), (0.21, 0.018), (0.19, 0.018), (0.0, 0.005)], 28, Terrakotta, 3.0);
+    // (Fuß, Höhe, Neigung, Zahl der Blätter, Drehung)
+    #[allow(clippy::type_complexity)]
     let triebe: [([f32; 2], f32, [f32; 2], usize, f32); 3] = [
         ([0.0, 0.0], 1.15, [-0.06, -0.05], 15, 0.0),
         ([0.05, 0.04], 0.85, [0.18, 0.07], 12, 1.3),
@@ -382,6 +384,7 @@ fn gummibaum(n: &mut Netz) {
 /// Neigung von `neig_anfang` zur Spitze hin auf `neig_ende` (Bogenmaß) abfällt; gefaltet
 /// längs der Mittelrippe und um sie um `rollen` gedreht (so zeigen nicht alle Blätter die
 /// Kante zum Betrachter).
+#[allow(clippy::too_many_arguments)]
 fn ficusblatt(n: &mut Netz, ansatz: V3, winkel: f32, laenge: f32, breite: f32, neig_anfang: f32, neig_ende: f32, rollen: f32) {
     let aus = [winkel.cos(), 0.0, winkel.sin()];
     let seite = [-winkel.sin(), 0.0, winkel.cos()];

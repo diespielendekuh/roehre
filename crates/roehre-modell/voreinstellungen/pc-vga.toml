@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "PC-Röhrenmonitor (VGA)"
 beschreibung = "PC-Monitor der 90er: verdoppelte, sehr feine Zeilen, feine Lochmaske, scharf, kaum Überstrahlen, fast flach."
+name_en = "PC CRT monitor (VGA)"
+beschreibung_en = "PC monitor of the 90s: doubled, very fine lines, fine shadow mask, sharp, hardly any bloom, almost flat."
 lizenz = "gpl"
 
 [signal]

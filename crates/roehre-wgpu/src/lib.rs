@@ -43,6 +43,10 @@
 //! Die Shader liegen als Dateien im Ordner `shader/` (GPL-Shader werden bewusst nicht ins
 //! Programm eingebettet). Der Ordner wird mit dem Spiel ausgeliefert.
 
+// `Fehler` trägt den Fehler von librashader unverpackt (gut 160 Byte). Fehler entstehen nur
+// beim Laden und Umschalten, nicht je Bild; die Größe kostet daher nichts Messbares.
+#![allow(clippy::result_large_err)]
+
 pub mod bildschirmflaeche;
 pub mod gehaeuse;
 pub mod eichung;
@@ -484,7 +488,7 @@ impl Roehre {
         ];
         // LCD-Schutz nach der Vorlage: bei geraden ganzzahligen Verhältnissen wandert die
         // Strahlphase um 0,001 Teilbilder je Spielbild (nach 1000 Bildern ein Teilbild weiter).
-        let gerade = n.fract() == 0.0 && (n as u32) % 2 == 0;
+        let gerade = n.fract() == 0.0 && (n as u32).is_multiple_of(2);
         let phase = if bewegung && gerade && e.schalter("bewegung.lcd_schutz") {
             ((self.zyklen as f64 * 0.001) % 1.0) as f32
         } else {

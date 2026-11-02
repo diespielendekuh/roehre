@@ -42,6 +42,22 @@ impl Voreinstellung {
         self.meta("beschreibung")
     }
 
+    /// Anzeigename und Beschreibung in der gewünschten Sprache (Englisch aus `name_en` /
+    /// `beschreibung_en`, ersatzweise Deutsch).
+    pub fn name_in(&self, sprache: crate::Sprache) -> String {
+        match sprache {
+            crate::Sprache::Englisch if !self.meta("name_en").is_empty() => self.meta("name_en"),
+            _ => self.name(),
+        }
+    }
+
+    pub fn beschreibung_in(&self, sprache: crate::Sprache) -> String {
+        match sprache {
+            crate::Sprache::Englisch if !self.meta("beschreibung_en").is_empty() => self.meta("beschreibung_en"),
+            _ => self.beschreibung(),
+        }
+    }
+
     pub fn lizenz(&self) -> Lizenzmerkmal {
         match self.meta("lizenz").as_str() {
             "permissiv" => Lizenzmerkmal::Permissiv,
@@ -91,6 +107,7 @@ mod tests {
             assert!(hinweise.is_empty(), "{}: {hinweise:?}", v.schluessel);
             assert!(!v.name().is_empty(), "{} ohne Namen", v.schluessel);
             assert!(!v.beschreibung().is_empty(), "{} ohne Beschreibung", v.schluessel);
+            assert!(!v.meta("name_en").is_empty() && !v.meta("beschreibung_en").is_empty(), "{} ohne englischen Text", v.schluessel);
         }
     }
 

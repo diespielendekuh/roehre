@@ -8,6 +8,8 @@ basis = "wohnzimmer-90er-composite"
 [meta]
 name = "Wohnzimmer-Fernseher 90er (PAL)"
 beschreibung = "Europäischer Fernseher am Cinch-Kabel mit PAL: ruhigere Kanten als NTSC, weiche Farben, gewölbtes Glas."
+name_en = "Living-room TV 90s (PAL)"
+beschreibung_en = "European TV on the RCA cable with PAL: calmer edges than NTSC, soft colours, curved glass."
 lizenz = "gpl"
 
 [signal]

@@ -7,6 +7,8 @@ version = 1
 [meta]
 name = "Breitbild-Röhre (16:9, 2000er)"
 beschreibung = "Später Flachbild-Röhrenfernseher mit 16:9-Glas: 4:3-Bild mittig mit schwarzem Rand auf der Röhre, feine Streifenmaske, flaches Glas."
+name_en = "Widescreen CRT (16:9, 2000s)"
+beschreibung_en = "Late flat CRT TV with 16:9 glass: 4:3 picture centred with black borders on the tube, fine aperture grille, flat glass."
 lizenz = "gpl"
 
 [signal]

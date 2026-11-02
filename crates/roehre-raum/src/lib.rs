@@ -588,8 +588,8 @@ impl Raum {
                         zahl += 1.0;
                     }
                 }
-                for k in 0..3 {
-                    daten.push(zu_srgb(summe[k] / f32::max(zahl, 1.0)));
+                for s in summe {
+                    daten.push(zu_srgb(s / f32::max(zahl, 1.0)));
                 }
                 daten.push(255);
             }

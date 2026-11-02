@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "Wohnzimmer-Fernseher 90er (Composite)"
 beschreibung = "Typischer Fernseher am gelben Cinch-Kabel: Farbsäume, Regenbogen an feinen Mustern, weiche Zeilen, gewölbtes Glas."
+name_en = "Living-room TV 90s (composite)"
+beschreibung_en = "Typical TV on the yellow RCA cable: colour fringes, rainbows on fine patterns, soft lines, curved glass."
 lizenz = "gpl"
 
 [signal]

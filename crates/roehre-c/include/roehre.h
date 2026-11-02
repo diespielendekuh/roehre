@@ -52,7 +52,7 @@ void roehre_text_freigeben(char *text);
  *            | "schalter", "standard"
  *            | "auswahl",  "standard", "werte": [ {"schluessel","name"} ]
  *   }, ... ],
- *   "voreinstellungen": [ { "schluessel": "scart-rgb", "name", "beschreibung", "lizenz": "gpl" | "permissiv" } ]
+ *   "voreinstellungen": [ { "schluessel": "scart-rgb", "name": {"de","en"}, "beschreibung": {"de","en"}, "lizenz": "gpl" | "permissiv" } ]
  * }
  *
  * "festwerte" sind benannte Stufen einer stufenlosen Option (z. B. Nähe: weit/mittel/nah);

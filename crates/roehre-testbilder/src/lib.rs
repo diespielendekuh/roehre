@@ -167,9 +167,8 @@ pub fn kreuzgitter(breite: u32, hoehe: u32) -> Bild {
     let w = [235, 235, 235];
     for y in 0..hoehe as i32 {
         for x in 0..breite as i32 {
-            if x % 16 == 0 || y % 16 == 0 || x == breite as i32 - 1 || y == hoehe as i32 - 1 {
-                bild.setze(x, y, w);
-            } else if x % 16 == 8 && y % 16 == 8 {
+            let gitter = x % 16 == 0 || y % 16 == 0 || x == breite as i32 - 1 || y == hoehe as i32 - 1;
+            if gitter || (x % 16 == 8 && y % 16 == 8) {
                 bild.setze(x, y, w);
             }
         }

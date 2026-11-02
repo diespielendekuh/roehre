@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "Profi-Monitor BVM"
 beschreibung = "Broadcast-Referenzmonitor: sehr feine Maske, harte schmale Zeilen mit tiefen Lücken, kein Glühen, flaches Glas."
+name_en = "Professional monitor BVM"
+beschreibung_en = "Broadcast reference monitor: very fine mask, hard narrow scanlines with deep gaps, no glow, flat glass."
 lizenz = "gpl"
 
 [signal]

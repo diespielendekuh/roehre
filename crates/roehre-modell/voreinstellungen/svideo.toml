@@ -7,6 +7,8 @@ version = 1
 [meta]
 name = "Fernseher mit S-Video"
 beschreibung = "Fernseher am S-Video-Eingang: klarer als Composite, ohne Regenbogen, Farbe leicht weich. Streifenmaske, senkrecht flaches Glas."
+name_en = "TV with S-Video"
+beschreibung_en = "TV on the S-Video input: clearer than composite, no rainbows, colour slightly soft. Aperture grille, vertically flat glass."
 lizenz = "gpl"
 
 [signal]

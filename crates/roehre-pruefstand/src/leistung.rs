@@ -119,6 +119,7 @@ fn mit(mut e: Einstellungen, aenderungen: &[(&str, Wert)]) -> Einstellungen {
 }
 
 /// Misst die Röhre allein (flach) mit diesen Einstellungen.
+#[allow(clippy::too_many_arguments)]
 fn filter(gpu: &Gpu, messer: &Messer, shader: &Path, e: &Einstellungen, ausgabe: Ausgabe, g: (u32, u32), bilder: usize, takt: Option<f32>) -> Result<Kennzahl, Box<dyn std::error::Error>> {
     let format = ausgabe.format;
     let mut r = Roehre::neu(&gpu.device, &gpu.queue, shader, e.clone(), ausgabe)?;
@@ -129,7 +130,7 @@ fn filter(gpu: &Gpu, messer: &Messer, shader: &Path, e: &Einstellungen, ausgabe:
     let mut fehler = None;
     let k = messer.miss(gpu, bilder, |enc| {
         let takt = match takt {
-            Some(n) => Takt { neues_spielbild: nr % n as u32 == 0, teilbilder_je_spielbild: n },
+            Some(n) => Takt { neues_spielbild: nr.is_multiple_of(n as u32), teilbilder_je_spielbild: n },
             None => Takt::EIN_BILD,
         };
         nr += 1;

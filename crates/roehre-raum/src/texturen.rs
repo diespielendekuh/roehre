@@ -470,7 +470,7 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             // Select und Start: zwei schräge Gummiknöpfe
             for sx in [-0.009f32, 0.009] {
                 let (px, py) = (x - sx, y - 0.006);
-                let (a, b) = ((px + py) * 0.7071, (py - px) * 0.7071);
+                let (a, b) = ((px + py) * std::f32::consts::FRAC_1_SQRT_2, (py - px) * std::f32::consts::FRAC_1_SQRT_2);
                 let pille = ((a.abs() - 0.0045).max(0.0).powi(2) + b.powi(2)).sqrt() - 0.0016;
                 let an = 1.0 - glatt(-0.0002, 0.0002, pille);
                 c = mische(c, [0.20, 0.20, 0.21], an);

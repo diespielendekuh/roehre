@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "Arcade-Automat"
 beschreibung = "Monitor eines Spielautomaten: grobe Lochmaske, sehr hell mit kräftigem Überstrahlen und Lichthof, stark gewölbtes Glas."
+name_en = "Arcade cabinet"
+beschreibung_en = "Monitor of an arcade cabinet: coarse shadow mask, very bright with strong bloom and halo, strongly curved glass."
 lizenz = "gpl"
 
 [signal]

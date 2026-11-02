@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "Fernseher mit Scart (RGB)"
 beschreibung = "Europäischer Fernseher der 90er am Scart-Eingang mit RGB: klares Bild, Schlitzmaske, leicht gewölbtes Glas."
+name_en = "TV with SCART (RGB)"
+beschreibung_en = "European TV of the 90s on the SCART input with RGB: clear picture, slot mask, slightly curved glass."
 lizenz = "gpl"
 
 [signal]

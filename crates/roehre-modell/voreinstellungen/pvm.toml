@@ -6,6 +6,8 @@ version = 1
 [meta]
 name = "Profi-Monitor PVM"
 beschreibung = "Studiomonitor am RGB-Eingang: feine Streifenmaske, scharfe und deutlich getrennte Zeilen, kaum Überstrahlen, fast flaches Glas."
+name_en = "Professional monitor PVM"
+beschreibung_en = "Studio monitor on RGB input: fine aperture grille, sharp and clearly separated lines, hardly any bloom, almost flat glass."
 lizenz = "gpl"
 
 [signal]

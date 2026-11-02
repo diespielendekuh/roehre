@@ -4,6 +4,8 @@ version = 1
 [meta]
 name = "Sauber/aus"
 beschreibung = "Keine Röhre: Das Bild wird nur scharf, unverzerrt und im richtigen Seitenverhältnis eingepasst."
+name_en = "Clean/off"
+beschreibung_en = "No CRT: the picture is only scaled sharply, without distortion and in the right aspect ratio."
 lizenz = "permissiv"
 
 [allgemein]

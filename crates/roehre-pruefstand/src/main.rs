@@ -305,7 +305,10 @@ fn moire_messen(nur: Option<String>) -> Result<Vec<String>, Box<dyn std::error::
                 let (sz, sm) = (moire::schwebung(&zeilen, pz), moire::schwebung(&spalten, pt));
                 println!("| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |", schluessel, name, g.0, g.1, pz, sz, pt, sm);
                 let grenze = if g.1 >= 1080 { MOIRE_GRENZE.0 } else { MOIRE_GRENZE.1 };
-                if !(sz <= grenze) || !(sm <= MOIRE_GRENZE.2) {
+                // bewusst verneint: ein NaN-Messwert soll als Verstoß zählen
+                #[allow(clippy::neg_cmp_op_on_partial_ord)]
+                let verstoss = !(sz <= grenze) || !(sm <= MOIRE_GRENZE.2);
+                if verstoss {
                     verstoesse.push(format!("Moiré {schluessel} {name} {}×{}: Zeilen {sz:.2} %, Maske {sm:.2} %", g.0, g.1));
                 }
             }

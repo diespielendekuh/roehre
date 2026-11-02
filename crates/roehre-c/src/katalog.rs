@@ -52,8 +52,8 @@ fn bauen() -> Value {
         .map(|v| {
             json!({
                 "schluessel": v.schluessel,
-                "name": v.name(),
-                "beschreibung": v.beschreibung(),
+                "name": { "de": v.name(), "en": v.name_in(roehre_modell::Sprache::Englisch) },
+                "beschreibung": { "de": v.beschreibung(), "en": v.beschreibung_in(roehre_modell::Sprache::Englisch) },
                 "lizenz": match v.lizenz() { Lizenzmerkmal::Permissiv => "permissiv", Lizenzmerkmal::Gpl => "gpl" },
             })
         })
