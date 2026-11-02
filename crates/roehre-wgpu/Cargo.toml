@@ -1,0 +1,20 @@
+[package]
+name = "roehre-wgpu"
+description = "Röhrensimulation für wgpu: Rust-Schnittstelle von roehre."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roehre-modell.workspace = true
+roehre-kette.workspace = true
+librashader = { workspace = true, features = ["presets", "runtime-wgpu"] }
+wgpu = { workspace = true, features = ["wgsl"] }
+thiserror.workspace = true
+
+[features]
+default = ["vulkan", "dx12", "metal"]
+vulkan = ["wgpu/vulkan"]
+dx12 = ["wgpu/dx12"]
+metal = ["wgpu/metal"]

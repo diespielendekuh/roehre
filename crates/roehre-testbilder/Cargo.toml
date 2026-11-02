@@ -1,0 +1,10 @@
+[package]
+name = "roehre-testbilder"
+description = "Prozedural erzeugte Testbilder für roehre (keine fremden Inhalte)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+image.workspace = true

@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/roehre-modell",
+    "crates/roehre-kette",
+    "crates/roehre-wgpu",
+    "crates/roehre-testbilder",
+    "crates/roehre-pruefstand",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.87"
+repository = "https://github.com/diespielendekuh/roehre"
+
+[workspace.dependencies]
+roehre-modell = { path = "crates/roehre-modell" }
+roehre-kette = { path = "crates/roehre-kette" }
+roehre-wgpu = { path = "crates/roehre-wgpu" }
+roehre-testbilder = { path = "crates/roehre-testbilder" }
+librashader = { version = "0.12.1", default-features = false }
+wgpu = { version = "30", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+thiserror = "2"
+image = { version = "0.25", default-features = false, features = ["png"] }
+pollster = "0.4"

@@ -1,0 +1,15 @@
+[package]
+name = "roehre-pruefstand"
+description = "Prüfstand von roehre: rendert ohne Fenster, erzeugt Fotos, Referenzbilder und Messwerte."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roehre-modell.workspace = true
+roehre-wgpu.workspace = true
+roehre-testbilder.workspace = true
+wgpu.workspace = true
+image.workspace = true
+pollster.workspace = true

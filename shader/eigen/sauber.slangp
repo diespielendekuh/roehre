@@ -1,0 +1,7 @@
+# roehre – Kette „Sauber/aus“: nur scharf-bilineares Einpassen.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+shaders = 1
+shader0 = scharf-bilinear.slang
+filter_linear0 = true
+scale_type0 = viewport
+scale0 = 1.0

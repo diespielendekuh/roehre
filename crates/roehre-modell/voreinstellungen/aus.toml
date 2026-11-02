@@ -1,0 +1,10 @@
+# Voreinstellung „Sauber/aus“
+version = 1
+
+[meta]
+name = "Sauber/aus"
+beschreibung = "Keine Röhre: Das Bild wird nur scharf, unverzerrt und im richtigen Seitenverhältnis eingepasst."
+lizenz = "permissiv"
+
+[allgemein]
+roehre = false

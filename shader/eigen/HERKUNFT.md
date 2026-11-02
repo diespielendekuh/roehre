@@ -1,0 +1,10 @@
+# Eigene Shader von roehre
+
+Alle Dateien in diesem Ordner sind eigene Arbeit von roehre und stehen unter
+**MIT OR Apache-2.0** (siehe `LICENSE-MIT` und `LICENSE-APACHE` im Hauptordner).
+
+| Datei | Zweck |
+|---|---|
+| `durchreichen.slang` | Reicht das Bild unverändert weiter (ersetzt `stock.slang` in Cathode-Retro-Presets) |
+| `scharf-bilinear.slang` | Pixelgenaues, gleichmäßiges Vergrößern ohne Unschärfe |
+| `sauber.slangp` | Kette der Voreinstellung „Sauber/aus“ |

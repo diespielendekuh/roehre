@@ -1,0 +1,20 @@
+# Voreinstellung „Wohnzimmer-Fernseher 90er (Composite)“
+# Ein typischer Fernseher, angeschlossen über das gelbe Cinch-Kabel:
+# Farbsäume, Regenbogen an feinen Mustern, weichere Zeilen, mehr Licht im Glas.
+version = 1
+
+[meta]
+name = "Wohnzimmer-Fernseher 90er (Composite)"
+beschreibung = "Typischer Fernseher am gelben Cinch-Kabel: Farbsäume, Regenbogen an feinen Mustern, weiche Zeilen, gewölbtes Glas."
+lizenz = "gpl"
+
+[signal]
+farbsaum = 0.7
+art = "composite"
+norm = "ntsc"
+artefakte = 0.8
+
+[helligkeit]
+nachher = 1.2
+ausgleich_hell = 1.6
+ausgleich_dunkel = 1.7

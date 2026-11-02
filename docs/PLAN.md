@@ -1,6 +1,6 @@
 # roehre: Recherche und Plan (Etappe 0)
 
-Stand: 2026-11-02 · Status: **Vorschlag, wartet auf Freigabe**
+Stand: 2026-11-02 · Status: **freigegeben, Bau läuft** (Entscheidungen in Abschnitt 10)
 
 Dieses Dokument legt fest, was `roehre` von wem übernimmt, unter welcher Lizenz, wie die
 Bibliothek aufgebaut ist, welche Voreinstellungen es gibt, wie das Gehäuse (Bezel) entsteht
@@ -71,8 +71,8 @@ untere Reihe ein 1:1-Ausschnitt. Folgerungen:
 
 ```
 roehre/
-├─ crates/…            eigener Code          → Lizenz nach Wahl (Vorschlag: MPL-2.0, wie librashader)
-├─ shader/eigen/…      eigene slang-Shader    → dieselbe Lizenz
+├─ crates/…            eigener Code          → MIT OR Apache-2.0 (wie der Terranigma-Port)
+├─ shader/eigen/…      eigene slang-Shader    → MIT OR Apache-2.0
 ├─ shader/fremd/
 │   ├─ gpl/guest-advanced/   GPL-2.0-or-later   LICENSE, HERKUNFT.md (Repo, Commit, Autor, Änderungen)
 │   ├─ gpl/crt-royale/       GPL-2.0-or-later   (nur falls für die Lochmaske nötig)
@@ -305,15 +305,62 @@ selbstkritischen Abnahme (Moiré? zu dunkel? Farben? Ränder? Ruckeln?).
 
 ---
 
-## 10. Offene Fragen an dich
+## 10. Entscheidungen (2026-11-02)
 
-1. **Lizenz des eigenen Codes**: Vorschlag MPL-2.0 (wie librashader). Alternativen: MIT/Apache-2.0
-   oder GPL-3.0.
-2. **wgpu-Version im Terranigma-Port**: librashader 0.12.1 nutzt **wgpu 30**. Weicht der Port
-   davon ab, müssen wir angleichen (Feature je wgpu-Version oder Upgrade im Port).
-3. **Grafik-Unterbau des Mission:-Impossible-Recomp**: RT64 (plume, Vulkan/D3D12)? Wo soll
-   `roehre` eingehängt werden, vor oder nach dem UI-Overlay? Ein Zugang zum Repository würde
-   helfen.
-4. **Messrechner**: Hier gibt es keine GPU. Hast du eine Mittelklasse-GPU, auf der du
-   den Leistungsprüfstand laufen lassen kannst, oder einen GitHub-Runner mit GPU?
-5. **Auslieferung der GPL-Shader**: eingebettet oder als Dateien neben dem Spiel (siehe Abschnitt 2)?
+1. **Lizenz des eigenen Codes: MIT OR Apache-2.0**, dieselbe wie im Terranigma-Port. Damit
+   passt `roehre` ohne Reibung in beide Projekte. (Ursprünglicher Vorschlag war MPL-2.0;
+   die Bindung an librashader bleibt davon unberührt, weil librashader nur als Abhängigkeit
+   eingebunden wird.)
+2. **GPL-Shader werden als eigene Dateien neben dem Spiel ausgeliefert**, nicht ins Programm
+   eingebettet. `roehre` lädt sie zur Laufzeit aus einem Ordner (`shader/`). Die
+   permissiven Shader (MIT) dürfen zusätzlich eingebettet werden, damit „Sauber/aus“ und die
+   permissiven Varianten auch ohne Shader-Ordner funktionieren.
+3. **wgpu-Version**: siehe Abschnitt 11.1. `roehre` folgt librashader (derzeit wgpu 30); der
+   Terranigma-Port zieht beim Einbau auf egui 0.37 / wgpu 30 nach.
+4. **Leistungsmessung**: auf dem Rechner des Auftraggebers mit dem Prüfstand
+   (`roehre-pruefstand messen`), Ergebnisse in `docs/LEISTUNG.md`.
+
+## 11. Einbau in die Zielprojekte (geprüft am Quelltext)
+
+### 11.1 Terranigma-Port (`diespielendekuh/tenchi-souzou-deutsch-mod-tool`)
+
+- Rust, Workspace mit `terranigma-spiel` als Spielfenster: **winit 0.30, egui 0.31,
+  egui-wgpu 0.31, wgpu 24** (D3D12 unter Windows, Vulkan/GL unter Linux).
+- Das Spielbild (256×224) wird heute **auf der CPU** um den Faktor k vergrößert und als
+  egui-Textur `spielfeld` hochgeladen (`crates/terranigma-spiel/src/portmenue.rs`).
+- Einbau von `roehre`: Das 256×224-Bild wird unvergrößert als wgpu-Textur hochgeladen,
+  `roehre` zeichnet in eine Zieltextur in Fenstergröße, und diese wird über
+  `egui_wgpu::Renderer::register_native_texture` als Bild gemalt (oder direkt in den
+  Swapchain-Frame vor dem egui-Pass). Die CPU-Vergrößerung entfällt.
+- **Versionsfrage**: librashader 0.12 braucht wgpu 30, egui-wgpu 0.36/0.37 ebenfalls wgpu 30.
+  Der Port muss also egui 0.31 → 0.37 und wgpu 24 → 30 anheben. Das ist eine eigene Aufgabe
+  im Port (egui-API-Änderungen), wird in Etappe 7 mit einer Anleitung vorbereitet.
+  Notlösung, falls das nicht geht: der Vulkan-/D3D12-Weg über rohe Handles (`as_hal`), der
+  ohnehin für die C-API gebaut wird.
+
+### 11.2 Mission: Impossible (`diespielendekuh/MissionImpossibleCodes`)
+
+- Derzeit ein **bytegenauer Decomp** (C, KMC GCC 2.7.2, splat), noch kein PC-Port und noch
+  kein Renderer. Geplant ist ein PC-Port mit echten 60 Hz. Ob er RT64, einen eigenen
+  Vulkan/D3D12-Renderer oder wgpu nutzt, ist offen.
+- Folge für `roehre`: Die C-API darf nichts über den Renderer annehmen. Sie bietet
+  Vulkan, D3D12 und (für einen späteren Rust-Teil) wgpu an, jeweils mit „zeichne von
+  Textur A nach Textur B“.
+- **Monitor in einer 3D-Szene**: Geplant ist, das Spielbild auf einen 3D-Monitor in einer
+  Szene zu projizieren und dort ebenfalls die Röhre zu zeigen. Dafür bekommt `roehre` einen
+  eigenen **Flächen-Modus** (Etappe 2/4):
+  1. `roehre` rendert das Röhrenbild **ohne Maske** (Signal, Strahl, Scanlines, Leuchtstoff,
+     Licht) in eine Textur fester Größe, z. B. 1024 oder 2048 Pixel hoch, mit Mipmaps.
+  2. Die **Maske** (und auf Wunsch Glas, Spiegelung) kommt als kleine Shader-Funktion
+     (`roehre_flaeche.wgsl/.glsl/.hlsl`), die das Spiel in das Material seines Monitor-Modells
+     einbaut. Sie rechnet die Maske aus den UV-Koordinaten und ihren Ableitungen
+     (`fwidth`/`ddx`/`ddy`) und blendet sie bandbegrenzt aus, wenn die Maske kleiner als ein
+     Bildschirmpixel wird. So gibt es **in jedem Abstand und Winkel kein Moiré**, und aus der
+     Nähe sieht man die echten Phosphor-Streifen.
+  3. Die Wölbung des Glases liefert dann das 3D-Modell selbst; `roehre` stellt die Formel für
+     eine passende Glasfläche und abgerundete Ecken zur Verfügung.
+
+## 12. Offene Punkte
+
+- Lizenz der Sony-Megatron-Shader beim Autor erfragen (nur falls wir sie doch brauchen).
+- Leistungswerte auf echter GPU (Auftraggeber).

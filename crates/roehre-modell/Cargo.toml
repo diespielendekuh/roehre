@@ -1,0 +1,13 @@
+[package]
+name = "roehre-modell"
+description = "Einstellungsmodell von roehre: Optionen mit Grenzen, Gruppen, Texten, Voreinstellungen, TOML/JSON und Versionierung."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true

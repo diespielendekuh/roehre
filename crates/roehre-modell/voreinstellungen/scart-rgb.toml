@@ -1,0 +1,22 @@
+# Voreinstellung „Fernseher mit Scart (RGB)“
+# Ein guter europäischer Fernseher der 90er am Scart-Eingang mit RGB:
+# klares Bild ohne Signalfehler, Schlitzmaske, leicht gewölbtes Glas.
+version = 1
+
+[meta]
+name = "Fernseher mit Scart (RGB)"
+beschreibung = "Europäischer Fernseher der 90er am Scart-Eingang mit RGB: klares Bild, Schlitzmaske, leicht gewölbtes Glas."
+lizenz = "gpl"
+
+[signal]
+art = "rgb"
+
+[strahl]
+aufblaehen = 0.9
+form_dunkel = 1.45
+form_hell = 0.8
+
+[helligkeit]
+nachher = 1.3
+ausgleich_hell = 1.8
+ausgleich_dunkel = 1.8

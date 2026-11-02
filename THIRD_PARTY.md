@@ -4,19 +4,19 @@ Diese Datei listet jede fremde Arbeit, die `roehre` nutzt oder einbettet, mit He
 Eingebettete Dateien liegen unter `shader/fremd/<lizenz>/<name>/`, jeweils mit `LICENSE` und
 `HERKUNFT.md` (Repository, Commit, Autor, Änderungsliste).
 
-**Stand Etappe 0:** Noch ist nichts eingebettet. Die Tabelle zeigt, was laut Plan übernommen wird.
+**Stand Etappe 1:** Die Shader unten liegen als eigene Dateien im Repository (nicht ins Programm
+eingebettet) und werden mit dem Spiel als Ordner `shader/` ausgeliefert.
 
-## Geplant: eingebettet
+## Übernommen (als Dateien unter `shader/fremd/`)
 
 | Name | Autor | Lizenz | Quelle | Commit | Ordner (geplant) |
 |---|---|---|---|---|---|
 | crt-guest-advanced (inkl. ntsc, pal, hd, fast) | guest(r) | GPL-2.0-or-later | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/gpl/guest-advanced/` |
-| crt-beans | Andrew Duffey | MIT | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/crt-beans/` |
-| Cathode Retro (slang-Portierung) | DeadlyRedCube (Original), libretro (Portierung) | MIT | https://github.com/libretro/slang-shaders, Original https://github.com/DeadlyRedCube/Cathode-Retro | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/cathode-retro/` |
+| crt-beans | Andrew Duffey | MIT (`blue_noise.png`: CC0) | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/crt-beans/` |
+| Cathode Retro (slang-Portierung) | Joshua Jersild / DeadlyRedCube (Original), hunterk (Portierung) | MIT (Stand aus der MIT-Zeit des Originals, siehe HERKUNFT.md; das Original steht seit 2025-12-01 unter BSL-1.0) | https://github.com/libretro/slang-shaders, Original https://github.com/DeadlyRedCube/Cathode-Retro | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/cathode-retro/` |
 | CRT Beam Simulator | Mark Rejhon (Blur Busters), Timothy Lottes | MIT | https://github.com/blurbusters/crt-beam-simulator | `734786a6c48f954af11cb390e38a9e06107ffdd9` | `shader/fremd/mit/crt-beam-simulator/` |
-| HDR10-Hilfsfunktionen (`hdr10.h`) | Microsoft Corporation (Xbox-ATG-Samples) | MIT | https://github.com/libretro/slang-shaders (`hdr/shaders/include/hdr10.h`) | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/ms-hdr10/` |
 
-## Geplant: Abhängigkeit (nicht eingebettet, über Cargo)
+## Abhängigkeiten über Cargo (nicht im Repository)
 
 | Name | Autor | Lizenz | Quelle | Version |
 |---|---|---|---|---|
@@ -37,4 +37,12 @@ Eingebettete Dateien liegen unter `shader/fremd/<lizenz>/<name>/`, jeweils mit `
 |---|---|
 | Sony Megatron (HDR) | Keine Lizenzangabe in den Dateien gefunden |
 | ntsc-adaptive | Keine Lizenzangabe in den Dateien gefunden |
+| `hdr10.h` aus slang-shaders | Nur ein kleiner Teil ist als MIT (Microsoft) gekennzeichnet, der Rest hat keine Lizenzangabe. Die HDR-Formeln schreibt roehre selbst nach SMPTE ST 2084 und ITU-R BT.2087. |
 | blargg-GPU-Portierung in slang-shaders (`ntsc/shaders/blargg`) | Datei sagt selbst „no license given“ |
+
+Weitere Rust-Abhängigkeiten (wgpu, image, serde, toml, thiserror, pollster) sind übliche
+Crates unter MIT und/oder Apache-2.0; die genaue Liste ergibt `cargo tree`.
+
+## Eigene Arbeiten
+
+`crates/` und `shader/eigen/` sind eigene Arbeit von roehre unter MIT OR Apache-2.0.

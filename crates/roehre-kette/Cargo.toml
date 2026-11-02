@@ -1,0 +1,12 @@
+[package]
+name = "roehre-kette"
+description = "Übersetzt das Einstellungsmodell von roehre in librashader-Shaderketten und Parameter (backend-neutral)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roehre-modell.workspace = true
+librashader = { workspace = true, features = ["presets"] }
+thiserror.workspace = true
