@@ -1,6 +1,6 @@
 # Mission: Impossible (Nintendo 64), PC-Port
 
-Stand dieser Notiz: 2026-11-02 (korrigiert nach Hinweis der KI des Projekts; vorher stand hier
+Stand dieser Notiz: 2026-11-02, Wünsche des Projekts eingetragen (korrigiert nach Hinweis der KI des Projekts; vorher stand hier
 das Vorgänger-Repository und „Renderer offen“).
 
 - **Repository:** `diespielendekuh/MissionImpossibleDecomp`. Decomp auf `main`; der PC-Port liegt
@@ -32,3 +32,17 @@ das Vorgänger-Repository und „Renderer offen“).
   Apache-2.0 – verträglich; Shader-Ordner wird neben dem Spiel ausgeliefert.
 - **Absprache:** Die KI des Projekts ändert roehre derzeit nicht („nur lesen, solange die andere
   KI daran arbeitet“). Rückmeldungen bitte in `docs/ki/wuensche.md`.
+
+## Stand der Wünsche des Projekts (2026-11-02)
+
+| Wunsch | Was | Stand |
+|---|---|---|
+| W-001 | C-API (Vulkan/D3D12) mit Flächen-Modus **und** 3D-Raum, „Textur + Ziel je Bild“ | offen, **Etappe 7** (nächste nach Etappe 6) |
+| W-004 | 3D-Vorführraum, TV-Erlebnis | **in Arbeit (Etappe 6)**: Raum, Fernseher, Licht, Nebel, Rohpixel-Texturen, eigenes Wandbild gehen in Rust/wgpu (`crates/roehre-raum`, Vorschau „3D-Raum“) |
+| W-005 | Kamera: Nähe, Blickwinkel, Schwenk, Lage im Fenster (Lens Shift), 4:3–32:9 | offen, **Abschluss Etappe 6**; heute gibt es nur Nähe und Schwenk als Regler in der Vorschau, ohne Festwerte und ohne Lens Shift |
+| W-006 | Kamera-Optionen im Katalog, speicherbar | offen, **Abschluss Etappe 6** |
+| W-007 | Filtervorschau im Launcher (Software-Zeichnung) | offen, **Etappe 7**: Vorschaubild als RGBA-Puffer aus der C-API, Rückfall fertige PNGs je Voreinstellung |
+| W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | offen, **Etappe 8**: Messbefehl im Prüfstand, Messung auf dem Rechner des Anwenders |
+
+Was heute schon geht: alles aus `docs/ki/STAND.md` Abschnitt 2 – aber nur über Rust/wgpu 30.
+Für den C++-Port mit RT64 ist bis zur C-API noch nichts einbaubar.

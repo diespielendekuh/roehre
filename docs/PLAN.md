@@ -299,9 +299,9 @@ selbstkritischen Abnahme (Moiré? zu dunkel? Farben? Ränder? Ruckeln?).
 | 3 | Alle Voreinstellungen abstimmen, leichte und permissive Varianten, Referenzbilder und CI |
 | 4 | Gehäuse: Fernseher, Monitor, Automat, nur Glas; Spiegelung, Umgebungslicht, Hintergrund |
 | 5 | Bewegung: Strahlsimulation und BFI über Subframes, API für 120/240/480 Hz |
-| 6 | Vorschau-Programm |
-| 7 | C-API mit Vulkan und D3D12, Beispielprogramm in C, Einbauanleitungen für Terranigma und Mission: Impossible |
-| 8 | Leistungsmessung auf echter GPU, Feinschliff, englische Texte |
+| 6 | Vorschau-Programm; 3D-Vorführraum mit Kamera (Nähe, Blickwinkel, Schwenk, Lens Shift, 4:3–32:9) und Kamera-Optionen im Katalog (W-004–W-006) |
+| 7 | C-API mit Vulkan und D3D12 (Flächen-Modus und 3D-Raum), Vorschaubild für Launcher (W-007), Beispielprogramm in C, Einbauanleitungen für Terranigma und Mission: Impossible |
+| 8 | Leistungsmessung auf echter GPU (Messbefehl, getrennt Filter/3D-Raum, 1080p/4K, Kosten je Regler; W-008), Feinschliff, englische Texte |
 
 ---
 

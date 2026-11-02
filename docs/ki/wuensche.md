@@ -17,6 +17,73 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ## Einträge
 
+### W-008: Leistung getrennt messen (nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler)
+- **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
+- **Status:** offen (geplant Etappe 8)
+- **Was fehlt:** Messung auf echter Grafikkarte, getrennt für „nur Filter“ und „3D-Raum“, je
+  1080p und 4K, mit dem Ziel stabiler 60 FPS; dazu eine Tabelle, welcher Regler wie viel kostet.
+- **Warum:** Der Port muss stabil 60 FPS halten.
+- **Einordnung (roehre):** Hier im Container gibt es nur eine Software-GPU (lavapipe), deren
+  Zeiten nichts über echte Hardware sagen. roehre liefert in Etappe 8 einen Messbefehl im
+  Prüfstand (`roehre-pruefstand leistung`), der genau diese Tabelle als Datei schreibt; laufen
+  lassen muss ihn der Anwender auf seinem Rechner. Die Zahlen kommen dann in `STAND.md`.
+
+### W-007: Kleine Filtervorschau im Launcher (Launcher zeichnet in Software)
+- **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
+- **Status:** offen (geplant Etappe 7, zusammen mit der C-API)
+- **Was fehlt:** Eine Möglichkeit, im Launcher eine Vorschau der Einstellungen zu zeigen,
+  obwohl der Launcher selbst keine Shader ausführen kann.
+- **Vorschlag (roehre):** Zwei Wege, beide werden gebaut:
+  1. **Vorschau als Bild aus der C-API** (empfohlen): `roehre_vorschau_rgba(einstellungen,
+     bild, breite, hoehe, puffer)` erzeugt ohne Fenster auf der GPU ein Vorschaubild
+     (Testbild oder ein vom Launcher übergebenes Standbild des Spiels, wahlweise im 3D-Raum)
+     und liefert es als RGBA-Puffer in den Arbeitsspeicher. Der Launcher zeigt es als
+     gewöhnliches Bild an; bei einer Regleränderung wird neu angefordert (wenige ms bis
+     ~100 ms, mit Entprellen). Die GPU ist ja vorhanden, nur der Launcher nutzt sie nicht.
+  2. **Fertige Vorschaubilder je Voreinstellung** als Rückfall (z. B. ohne GPU-Zugang beim
+     Start): der Prüfstand rendert sie, der Port liefert sie als PNG mit. Zeigt nur
+     Voreinstellungen, keine einzelnen Regler.
+
+### W-006: Kamera-Optionen im Katalog, speicherbar
+- **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
+- **Status:** offen (geplant Etappe 6, Abschluss)
+- **Was fehlt:** Die Kamera des 3D-Raums (W-005) als gewöhnliche Optionen im Katalog
+  (Schlüssel, deutscher Name, Beschreibung, Grenzen, Standard), speicherbar in TOML/JSON wie
+  die übrigen Einstellungen. Die Oberfläche baut der Launcher selbst.
+- **Vorschlag (roehre):** neue Gruppe `raum` im Katalog (Nähe, Blickwinkel, Schwenk an/aus und
+  Stärke, Lage des Fernsehers, Licht, Flackern, Korn, Tiefenunschärfe). Festwerte als
+  benannte Stufen mit Zahlenwert, damit Menü und stufenloser Regler dieselbe Option nutzen.
+
+### W-005: Kamera im 3D-Raum (Nähe, Blickwinkel, Schwenk, Lage im Fenster, alle Formate)
+- **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
+- **Status:** offen (geplant Etappe 6, Abschluss)
+- **Was fehlt:** frei kombinierbar:
+  - **Nähe** stufenlos mit Festwerten Nah (Fernseher füllt das Fenster weitgehend, oben und
+    unten bleibt Rand, Gerät sichtbar), Mittel (etwas Tisch), Weit (mehr Raum).
+  - **Blickwinkel** stufenlos mit Festwerten von vorn, leicht links, leicht rechts.
+  - **Schwenk** aus (völlig still) oder an (langsam links/rechts, Stärke einstellbar); die
+    Kamera bleibt dabei auf den Fernseher gerichtet, er wandert nicht durchs Bild.
+  - **Lage des Fernsehers im Fenster** stufenlos mit Festwerten Links/Mitte/Rechts bis an den
+    Fensterrand (Platz für eine Webcam beim Streamen), auch in der Nah-Stufe, ohne
+    Abschneiden, ohne Änderung des Blickwinkels und ohne Verzerrung.
+  - **Alle Seitenverhältnisse 4:3 bis 32:9**: Rand und Lage stimmen, der Raum hat keine
+    sichtbaren Enden; bei 4:3 wird der Ausschnitt kleiner.
+- **Warum:** TV-Erlebnis im Port, Streaming mit Webcam neben dem Fernseher.
+- **Einordnung (roehre):**
+  - **Außermittige Projektion (Lens Shift) ist der richtige Weg** für die Lage im Fenster: die
+    Bildebene wird verschoben, die Kamera nicht gedreht. Die Vorderseite des Fernsehers bleibt
+    parallel zur Bildebene und damit unverzerrt; Blickwinkel und Spiegelungen bleiben gleich.
+  - **Nähe wird als Höhe des Geräts im Fenster** festgelegt, nicht als Kameraabstand. Nur so
+    stimmt „oben und unten etwas Rand“ bei jedem Format.
+  - **Grenzfall:** bei 4:3 in der Nah-Stufe füllt das Gerät schon fast die ganze Breite, eine
+    Verschiebung zum Rand ist dort kaum möglich. Damit nichts abgeschnitten wird, gilt: erst
+    einpassen (die Nähe wird bei schmalen Fenstern so weit zurückgenommen, dass das Gerät in
+    der Breite passt), dann verschieben, höchstens bis das Gerät den Rand berührt. Der
+    Streamer bekommt in Nah also nur bei breiten Fenstern viel Platz – das ist geometrisch
+    nicht anders lösbar, ohne das Gerät zu verkleinern.
+  - Der Schwenk kreist um die Mitte des Geräts und hält es per Lens Shift an seiner Stelle.
+  - Für 32:9 wird der Raum seitlich so erweitert, dass in Weit keine Kante sichtbar ist.
+
 ### W-004: 3D-Vorführraum mit einem berechneten Röhrenfernseher
 - **Von:** Anwender, 2026-11-02 (Frage nach einer 3D-Szene mit Bildschirmgerät)
 - **Status:** in Arbeit (Etappe 6): `crates/roehre-raum`, in der Vorschau unter „3D-Raum“
@@ -46,10 +113,14 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-001: C-API mit Vulkan- und D3D12-Weg
 - **Von:** roehre (Planung, für Mission: Impossible), 2026-11-02
-- **Status:** offen (geplant Etappe 7)
+- **Status:** offen (geplant Etappe 7, die nächste Etappe nach dem Abschluss von Etappe 6)
 - **Was fehlt:** Eine C-Schnittstelle (`roehre.h`) für C/C++-Spiele: erstellen mit
   Vulkan-Gerät oder D3D12-Gerät, Einstellungen laden/setzen, Katalog auflisten, zeichnen in
-  eine Zieltextur, Flächen-Modus.
+  eine Zieltextur, Flächen-Modus. **Ergänzt 2026-11-02 (Wunsch des Projekts):** auch der
+  3D-Raum (`roehre-raum`) samt Kamera-Optionen (W-005/W-006) über die C-API; je Bild nur
+  „fertige Textur + Ziel“, alles Weitere erledigt roehre. Für den Engpass bei Mission:
+  Impossible ist die C-API die nächste Etappe; sie wird nicht vor den Abschluss von
+  Etappe 6 gezogen (Entscheid des Anwenders).
 - **Warum:** Der PC-Port von Mission: Impossible ist C++ mit **RT64 (D3D12/Vulkan)** auf
   N64ModernRuntime (`diespielendekuh/MissionImpossibleDecomp`, `port/`). Der Eingriff in RT64
   muss klein bleiben (Projektregel: Upstream jederzeit übernehmbar); ideal ist eine Funktion,
