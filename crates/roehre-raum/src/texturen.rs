@@ -51,9 +51,12 @@ pub enum Material {
     Triebhuelle,
     Rinde,
     Buecher,
+    KonsoleHell,
+    Lila,
+    Steuergeraet,
 }
 
-pub const ANZAHL: u32 = Material::Buecher as u32 + 1;
+pub const ANZAHL: u32 = Material::Steuergeraet as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -62,7 +65,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
-        Triebhuelle, Rinde, Buecher,
+        Triebhuelle, Rinde, Buecher, KonsoleHell, Lila, Steuergeraet,
     ]
 };
 
@@ -425,6 +428,71 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
         Triebhuelle => {
             let c = mische([0.28, 0.05, 0.04], [0.12, 0.06, 0.03], v + 0.2 * fbm(u, v, 4, 2, 261));
             ([c[0], c[1], c[2], 1.0], [0.5, 0.35, 0.0, 0.0])
+        }
+        KonsoleHell => {
+            // hellgrauer, leicht vergilbter Kunststoff der 90er: feine Narbung, Gebrauchsspuren
+            let fein = wert(u * 256.0, v * 256.0, 256, 291);
+            let vergilbt = fbm(u, v, 3, 3, 292);
+            let c = mische([0.50, 0.50, 0.48], [0.50, 0.47, 0.40], vergilbt * 0.6);
+            let c = mal(c, 0.95 + 0.06 * fein - 0.1 * staub);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * fein, 0.55, 0.0, 0.0])
+        }
+        Lila => {
+            // die blasslila Schieber und Tasten
+            let fein = wert(u * 256.0, v * 256.0, 256, 293);
+            let c = mal([0.26, 0.22, 0.40], 0.95 + 0.08 * fein);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * fein, 0.45, 0.0, 0.0])
+        }
+        Steuergeraet => {
+            // Oberseite eines Controllers im Stil der 90er (Hundeknochenform), alles als Textur:
+            // Steuerkreuz links, Select/Start schräg in der Mitte, vier farbige Tasten rechts in
+            // einer lila Mulde. Maße in Metern (147 × 63 mm), u quer, v in die Tiefe.
+            let x = (u - 0.5) * 0.147;
+            let y = (v - 0.5) * 0.063;
+            let kreis = |cx: f32, cy: f32, r: f32| ((x - cx).powi(2) + (y - cy).powi(2)).sqrt() - r;
+            let koerper = kreis(-0.042, 0.0, 0.0315).min(kreis(0.042, 0.0, 0.0315)).min(
+                // Steg in der Mitte mit leicht eingezogener Taille
+                (x.abs() - 0.045).max(y.abs() - (0.025 + 0.004 * (x / 0.045).powi(2))),
+            );
+            let alpha = if koerper < 0.0 { 1.0 } else { 0.0 };
+            let mut c = mal([0.50, 0.50, 0.48], 0.95 + 0.05 * wert(u * 256.0, v * 256.0, 256, 294) - 0.08 * staub);
+            let mut h = 0.5;
+            // Rand: leicht abgerundet (dunkler zur Kante)
+            c = mal(c, 0.8 + 0.2 * glatt(0.0, 0.004, -koerper));
+            // Steuerkreuz in flacher Mulde
+            let mulde = 1.0 - glatt(-0.0005, 0.0005, kreis(-0.042, 0.0, 0.016));
+            c = mische(c, mal(c, 0.88), mulde);
+            let (dx, dy) = (x + 0.042, y);
+            let kreuz = ((dx.abs() - 0.0115).max(dy.abs() - 0.0042)).min((dy.abs() - 0.0115).max(dx.abs() - 0.0042));
+            let kreuz_an = 1.0 - glatt(-0.0003, 0.0003, kreuz);
+            c = mische(c, [0.035, 0.035, 0.038], kreuz_an);
+            h += 0.3 * kreuz_an - 0.1 * mulde;
+            // Select und Start: zwei schräge Gummiknöpfe
+            for sx in [-0.009f32, 0.009] {
+                let (px, py) = (x - sx, y - 0.006);
+                let (a, b) = ((px + py) * 0.7071, (py - px) * 0.7071);
+                let pille = ((a.abs() - 0.0045).max(0.0).powi(2) + b.powi(2)).sqrt() - 0.0016;
+                let an = 1.0 - glatt(-0.0002, 0.0002, pille);
+                c = mische(c, [0.20, 0.20, 0.21], an);
+                h += 0.2 * an;
+            }
+            // Tastenmulde rechts (lila) und vier farbige Tasten: oben blau, links grün, rechts
+            // rot, unten gelb
+            let lila = 1.0 - glatt(-0.0004, 0.0004, kreis(0.042, 0.0, 0.0215));
+            c = mische(c, [0.24, 0.20, 0.36], lila);
+            for (bx, by, farbe) in [
+                (0.0f32, -0.0115f32, [0.06f32, 0.10, 0.45]),
+                (-0.0115, 0.0, [0.06, 0.28, 0.08]),
+                (0.0115, 0.0, [0.55, 0.04, 0.04]),
+                (0.0, 0.0115, [0.62, 0.48, 0.03]),
+            ] {
+                let d = kreis(0.042 + bx, by, 0.0052);
+                let an = 1.0 - glatt(-0.0003, 0.0003, d);
+                let wulst = (1.0 - (d + 0.0052).max(0.0) / 0.0052).max(0.0).sqrt();
+                c = mische(c, mal(farbe, 0.8 + 0.4 * wulst), an);
+                h += 0.4 * an * wulst;
+            }
+            ([c[0], c[1], c[2], alpha], [h, 0.4, 0.0, 0.0])
         }
         Buecher => {
             // Buchrücken: unterschiedlich breite Bücher in gedeckten Farben, verblichen, mit

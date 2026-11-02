@@ -19,7 +19,9 @@ impl Gpu {
                 .await
                 .expect("kein Grafikadapter gefunden (unter Linux ohne GPU: mesa-vulkan-drivers für lavapipe)");
             let info = adapter.get_info();
-            let features = adapter.features() & roehre_wgpu::empfohlene_features();
+            // Zeitstempel für die Leistungsmessung, wenn der Adapter sie kann
+            let features = adapter.features()
+                & (roehre_wgpu::empfohlene_features() | wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS);
             let (device, queue) = adapter
                 .request_device(&wgpu::DeviceDescriptor {
                     label: Some("roehre-pruefstand"),

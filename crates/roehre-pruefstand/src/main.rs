@@ -14,6 +14,7 @@
 //! `-b` den Namen eines Testbilds oder den Pfad eines PNG.
 
 mod gpu;
+mod leistung;
 mod moire;
 mod szene3d;
 
@@ -66,10 +67,22 @@ fn main() {
             Path::new(&opt("-o").unwrap_or("bewegung.png".into())),
         )
         .map(|_| ()),
+        "leistung" => leistung::messen(
+            &shader_ordner(),
+            Path::new(&opt("-o").unwrap_or("leistung.md".into())),
+            opt("-n").and_then(|n| n.parse().ok()).unwrap_or(120),
+            args.iter().any(|a| a == "--nur-1080p"),
+        ),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
-            eprintln!("Befehle: foto, bogen, testbilder, umschalten (Einzelheiten in der Quelltext-Doku)");
+            eprintln!(
+                "roehre-pruefstand <befehl>\n\n\
+                 leistung [-o leistung.md] [-n 120] [--nur-1080p]   Leistung messen (Filter, 3D-Raum, Kosten je Regler)\n\
+                 pruefe [--neu]                                    Referenzbilder, Moiré, Helligkeit, Strahl\n\
+                 foto, bogen, raum, kamera, testbilder            Fotos\n\
+                 moire, helligkeit, hdr, bewegung, umschalten      Einzelmessungen"
+            );
             Ok(())
         }
     };
@@ -86,10 +99,18 @@ fn groesse(s: &str) -> (u32, u32) {
     (b.parse().expect("Breite"), h.parse().expect("Höhe"))
 }
 
+/// Shader-Ordner: `ROEHRE_SHADER`, sonst `shader/` neben dem Programm (ausgelieferte Fassung),
+/// sonst der Ordner im Quellbaum.
 fn shader_ordner() -> PathBuf {
-    std::env::var_os("ROEHRE_SHADER")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shader"))
+    if let Some(p) = std::env::var_os("ROEHRE_SHADER") {
+        return PathBuf::from(p);
+    }
+    if let Some(neben) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("shader"))) {
+        if neben.join("eigen").is_dir() {
+            return neben;
+        }
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shader")
 }
 
 fn lade_einstellungen(v: &str) -> Result<Einstellungen, Box<dyn std::error::Error>> {
@@ -715,6 +736,9 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     let mut wand = Ansicht::sitzplatz(0.0, 1.0, 0.0);
     wand.auge = [0.3, 1.45, -0.6];
     wand.ziel = [0.6, 1.5, 1.05];
+    let mut konsole = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    konsole.auge = [-0.22, 0.98, -0.62];
+    konsole.ziel = [-0.42, 0.72, -0.18];
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
         ("mittel", Ansicht::sitzplatz(2.0, 0.5, 1.0)),
@@ -723,6 +747,7 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         ("detail", detail),
         ("pflanze", pflanze),
         ("wand", wand),
+        ("konsole", konsole),
     ];
     for (name, a) in ansichten {
         let t = Instant::now();
