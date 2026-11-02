@@ -30,7 +30,9 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-007: Kleine Filtervorschau im Launcher (Launcher zeichnet in Software)
 - **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
-- **Status:** offen (geplant Etappe 7, zusammen mit der C-API)
+- **Status:** erledigt (Etappe 7): `roehre_vorschau_erstellen` / `roehre_vorschau_zeichnen`
+  (RGBA in den Arbeitsspeicher, flach oder Raum); Weg 2 (fertige PNGs) nicht gebaut, weil Weg 1
+  ohne Fenster auf jeder Grafikkarte läuft
 - **Was fehlt:** Eine Möglichkeit, im Launcher eine Vorschau der Einstellungen zu zeigen,
   obwohl der Launcher selbst keine Shader ausführen kann.
 - **Vorschlag (roehre):** Zwei Wege, beide werden gebaut:
@@ -115,7 +117,11 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-001: C-API mit Vulkan- und D3D12-Weg
 - **Von:** roehre (Planung, für Mission: Impossible), 2026-11-02
-- **Status:** offen (geplant Etappe 7, die nächste Etappe nach dem Abschluss von Etappe 6)
+- **Status:** gebaut (Etappe 7): `crates/roehre-c`, Austausch über geteilten Grafikspeicher
+  (eigenes Gerät, D3D12 ohne Eingriff am Spielgerät, Vulkan mit zwei Erweiterungen); auf echter
+  Hardware ungeprüft (Etappe 8). Abweichung vom Vorschlag: nicht „Textur des Spiels + Ziel“
+  direkt, weil wgpu fremde Geräte nicht (D3D12) bzw. nur mit passenden Funktionen (Vulkan)
+  übernehmen kann – siehe `crates/roehre-c/LIESMICH.md`
 - **Was fehlt:** Eine C-Schnittstelle (`roehre.h`) für C/C++-Spiele: erstellen mit
   Vulkan-Gerät oder D3D12-Gerät, Einstellungen laden/setzen, Katalog auflisten, zeichnen in
   eine Zieltextur, Flächen-Modus. **Ergänzt 2026-11-02 (Wunsch des Projekts):** auch der

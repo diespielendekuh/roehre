@@ -19,10 +19,10 @@ roehre selbst verbesserst, ohne die anderen Projekte zu beschädigen.
 
 ## 2. Du willst roehre in dein Spiel einbauen
 
-Lies `docs/ki/STAND.md`, Abschnitt „Einbauen“. Kurz: Rust/wgpu über `crates/roehre-wgpu`,
+Lies `docs/ki/STAND.md`, Abschnitt „Einbauen“. Kurz: Rust/wgpu über `crates/roehre-wgpu`, C/C++
+mit Vulkan oder D3D12 über `crates/roehre-c` (`include/roehre.h`),
 Einstellungen und Menütexte über `crates/roehre-modell`, Shader-Ordner `shader/` mit dem
-Spiel ausliefern. Ein C-API für C/C++-Spiele ist geplant, aber **noch nicht gebaut**
-(siehe Wunschliste).
+Spiel ausliefern.
 
 Wenn etwas fehlt oder für dein Spiel nicht passt, hast du zwei Wege:
 

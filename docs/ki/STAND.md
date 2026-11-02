@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 6 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 7 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -39,7 +39,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | Vorschau-Programm mit Fenster (Testbild/PNG/Folge, A/B-Vergleich, Lupe, Bildschirmfoto, alle Optionen) | fertig | `crates/roehre-vorschau` |
 | 3D-Vorführraum (Wohnzimmer der 80er, Röhrenfernseher auf Tisch, späte PS2-Optik, Rohpixel-Texturen 256², eigenes Wandbild, Tiefenunschärfe, Glühen) | fertig in Rust/wgpu; am echten Bildschirm und in der Leistung ungeprüft | `crates/roehre-raum`, `shader/eigen/raum/raum3d.wgsl` |
 | Kamera des Raums (Nähe weit/mittel/nah, Blickwinkel, Schwenk, Lage im Fenster per Lens Shift, 4:3–32:9) als Optionen der Gruppe `raum` mit Festwerten (`festwerte()`) | fertig, mit Prüfläufen (nie abgeschnitten, Anteil, Schwenk hält das Gerät fest) | `Kamera`, `Ansicht::aus_einstellungen`, `roehre-pruefstand kamera` |
-| C-API (Vulkan, D3D12) für C/C++-Spiele, auch für den 3D-Raum; Launcher-Vorschaubild | **fehlt** (Etappe 7, W-001/W-007) | |
+| C-API für C/C++-Spiele (`roehre.h`): Katalog als JSON, Einstellungen, Vorschaubild als RGBA (Launcher), Austausch mit Vulkan- und D3D12-Spielen über geteilten Grafikspeicher, flach und 3D-Raum, Strahlsimulation | gebaut; Vulkan auf lavapipe geprüft (Notweg ohne geteilte Semaphoren), D3D12 nur übersetzt; beides auf echter Hardware ungeprüft | `crates/roehre-c`, `crates/roehre-c/LIESMICH.md` |
 | Leistungsmessung auf echter GPU (Filter / 3D-Raum, 1080p / 4K, Kosten je Regler) | **fehlt** (Etappe 8, W-008) | |
 
 ## 3. Einbauen (Rust, wgpu)
@@ -111,6 +111,15 @@ let datei = roehre.einstellungen().als_toml(true);        // speichern (nur Abwe
 Voreinstellungen: `roehre_wgpu::modell::voreinstellungen()` (Schlüssel, Name, Beschreibung,
 Lizenzmerkmal).
 
+## 3a. Einbauen (C/C++, Vulkan oder D3D12)
+
+`crates/roehre-c/include/roehre.h` und `crates/roehre-c/LIESMICH.md`. Kurz: roehre rechnet auf
+einem eigenen Gerät derselben Grafikkarte; das Spiel kopiert sein Bild in ein geteiltes Bild
+EINGANG, meldet „bereit“, ruft `roehre_austausch_zeichnen` auf, wartet auf „fertig“ und kopiert
+ZIEL in seine Swapchain. D3D12 braucht am Gerät des Spiels keine Änderung, Vulkan zwei
+Erweiterungen. Für Mission: Impossible (RT64) steht die Einstiegsstelle in
+`docs/integration/mission-impossible.md`.
+
 ## 4. Wichtige Optionen (Auszug)
 
 | Schlüssel | Bedeutung |
@@ -142,6 +151,7 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-02 | Etappe 7: neue Kiste `roehre-c` mit `include/roehre.h`. Etappe 6: Gruppe `raum` (10 Optionen), `roehre_modell::festwerte`, `roehre_raum::Kamera`, `Ansicht::aus_einstellungen`; `Ansicht::sitzplatz` bleibt als Kurzform. |
 | 2026-11-02 | Etappe 5: `Roehre::zeichne_im_takt`, `Takt`; Optionen `bewegung.*`. |
 | 2026-11-02 | Etappe 4: Optionen `gehaeuse.*`, `bildformat.roehrenformat`; `Roehre::anordnung`; automatisches Einrasten unter 4 px je Zeile (Bildgröße bei kleinen Fenstern etwas kleiner als vorher). |
 | 2026-11-02 | Standard von `helligkeit.gamma_ausgang` 1,95 → 2,4 und von `maske.staerke_dunkel` 1,1 → 0,4 (Mitteltöne waren zu dunkel). Gespeicherte Einstellungen mit den alten Werten bleiben gültig. |

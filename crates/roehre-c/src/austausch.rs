@@ -121,7 +121,15 @@ pub unsafe extern "C" fn roehre_austausch_einstellungen(a: *mut RoehreAustausch,
 /// Zielbild, meldet „fertig“. Kehrt sofort zurück, ohne auf die Grafikkarte zu warten.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn roehre_austausch_zeichnen(a: *mut RoehreAustausch, modus: i32, zeit: f32) -> i32 {
+    unsafe { roehre_austausch_zeichnen_im_takt(a, modus, zeit, 1, 1.0) }
+}
+
+/// Wie `roehre_austausch_zeichnen`, aber je Bildschirmauffrischung bei Bildschirmen mit mehr
+/// Hertz als das Spiel (Strahlsimulation und Schwarzbilder, Optionen `bewegung.*`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn roehre_austausch_zeichnen_im_takt(a: *mut RoehreAustausch, modus: i32, zeit: f32, neues_spielbild: i32, teilbilder_je_spielbild: f32) -> i32 {
     geschuetzt(-1, || {
+        let takt = roehre_wgpu::Takt { neues_spielbild: neues_spielbild != 0, teilbilder_je_spielbild: teilbilder_je_spielbild.max(1.0) };
         let a = unsafe { a.as_mut() }.ok_or("Austausch fehlt (NULL)")?;
         let modus = Modus::aus(modus)?;
         let zeit = if zeit >= 0.0 { zeit } else { a.start.elapsed().as_secs_f32() };
@@ -130,7 +138,7 @@ pub unsafe extern "C" fn roehre_austausch_zeichnen(a: *mut RoehreAustausch, modu
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("roehre-austausch") });
         let ansicht = a.ziel.create_view(&Default::default());
         let groesse = (a.ziel.width(), a.ziel.height());
-        a.platz.zeichne(&mut enc, &a.eingang, &a.eingang_info, &ansicht, groesse, modus, zeit)?;
+        a.platz.zeichne(&mut enc, &a.eingang, &a.eingang_info, &ansicht, groesse, modus, zeit, takt)?;
         // Beide Bilder verlassen roehre im Zustand „zum Lesen im Shader“ (Vulkan:
         // SHADER_READ_ONLY_OPTIMAL, D3D12: PIXEL_SHADER_RESOURCE | NON_PIXEL_SHADER_RESOURCE).
         enc.transition_resources(

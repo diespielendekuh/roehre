@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use roehre_raum::{Ansicht, Raum};
-use roehre_wgpu::{Ausgabe, Eingang, Einstellungen, FlaechenZiel, Roehre};
+use roehre_wgpu::{Ausgabe, Eingang, Einstellungen, FlaechenZiel, Roehre, Takt};
 
 /// Was gezeichnet wird.
 #[repr(C)]
@@ -69,9 +69,10 @@ impl Arbeitsplatz {
         groesse: (u32, u32),
         modus: Modus,
         zeit: f32,
+        takt: Takt,
     ) -> Result<(), String> {
         match modus {
-            Modus::Flach => self.roehre.zeichne(enc, eingang_textur, eingang, ziel, groesse).map(|_| ()).map_err(|f| f.to_string()),
+            Modus::Flach => self.roehre.zeichne_im_takt(enc, eingang_textur, eingang, ziel, groesse, takt).map(|_| ()).map_err(|f| f.to_string()),
             Modus::Raum => {
                 if self.raum.is_none() {
                     let raum = Raum::neu(&self.device, &self.queue, &self.shader, self.format).map_err(|f| f.to_string())?;

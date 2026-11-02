@@ -176,6 +176,12 @@ int32_t roehre_austausch_einstellungen(RoehreAustausch *a, const RoehreEinstellu
 /** Zeichnet ein Bild (modus: ROEHRE_MODUS_*; zeit in Sekunden, < 0 = Uhr seit dem Anlegen).
  *  Wartet auf der Grafikkarte auf „bereit“ und meldet „fertig“; kehrt sofort zurück. */
 int32_t roehre_austausch_zeichnen(RoehreAustausch *a, int32_t modus, float zeit);
+/** Für Bildschirme mit mehr Hertz als das Spiel (Optionen "bewegung.*", nur ROEHRE_MODUS_FLACH):
+ *  je Bildschirmauffrischung einmal aufrufen; neues_spielbild != 0, wenn seit der letzten
+ *  Auffrischung ein neues Spielbild in EINGANG liegt; teilbilder_je_spielbild = Hertz des
+ *  Bildschirms / Bildrate des Spiels (z. B. 240/60 = 4). Austauschprotokoll wie beim Zeichnen. */
+int32_t roehre_austausch_zeichnen_im_takt(RoehreAustausch *a, int32_t modus, float zeit,
+                                          int32_t neues_spielbild, float teilbilder_je_spielbild);
 /** Wartet auf der CPU, bis roehre auf der Grafikkarte nichts mehr zu tun hat (für Tests). */
 int32_t roehre_austausch_warten(RoehreAustausch *a);
 /** Freigeben. Andere Fenstergröße: freigeben und neu anlegen (Handles neu öffnen). */

@@ -134,7 +134,7 @@ pub unsafe extern "C" fn roehre_vorschau_zeichnen(
         let zeit = if zeit >= 0.0 { zeit } else { v.start.elapsed().as_secs_f32() };
         for _ in 0..3 {
             let mut enc = device.create_command_encoder(&Default::default());
-            v.platz.zeichne(&mut enc, eingang_t, &eingang, &ziel.create_view(&Default::default()), (ziel_breite, ziel_hoehe), modus, zeit)?;
+            v.platz.zeichne(&mut enc, eingang_t, &eingang, &ziel.create_view(&Default::default()), (ziel_breite, ziel_hoehe), modus, zeit, roehre_wgpu::Takt::EIN_BILD)?;
             queue.submit([enc.finish()]);
         }
         let px = lies(&device, &queue, &ziel)?;

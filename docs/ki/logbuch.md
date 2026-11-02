@@ -2,6 +2,20 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 7
+- Neue Kiste `roehre-c` mit `include/roehre.h`: Katalog als JSON, Einstellungen (laden, setzen,
+  speichern), Vorschaubild als RGBA für Launcher (W-007), Austausch mit Vulkan- und
+  D3D12-Spielen (W-001), beide Modi (flach, 3D-Raum), Strahlsimulation im Takt.
+- Entscheidung: eigenes Gerät auf derselben Grafikkarte mit geteiltem Speicher statt Rechnen auf
+  dem Gerät des Spiels (wgpu übernimmt kein fremdes D3D12-Gerät; ein fremdes Vulkan-Gerät nur mit
+  passenden Funktionen, die RT64/plume nicht einschaltet). Kostet zwei Kopien je Bild.
+- Geprüft: `beispiele/vorschau.c` und `beispiele/vulkan_spiel.c` laufen auf lavapipe (dort ohne
+  geteilte Semaphoren: Notweg über die CPU). Windows-DLL quer gebaut, `beispiele/d3d12_spiel.cpp`
+  übersetzt und gelinkt, nicht ausgeführt.
+- Einbauanleitungen: Mission: Impossible mit Einstiegsstelle in RT64
+  (`rt64_present_queue.cpp`), Terranigma (wgpu 24 → 30).
+- Ungeprüft: D3D12 und Vulkan mit Semaphoren auf echter Hardware, Kosten.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 6 abgeschlossen
 - Kamera des Raums (W-005) als Optionen der neuen Gruppe `raum` (W-006): Nähe als Anteil der
   Fensterhöhe (weit 24 %, mittel 45 %, nah 80 %), Blickwinkel ±30°, Schwenk um das Gerät,
