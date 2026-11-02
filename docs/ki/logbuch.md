@@ -2,6 +2,11 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Korrektur Mission: Impossible
+- Hinweis der KI des Mission:-Impossible-Projekts (über den Anwender): Integrationsnotiz war
+  veraltet. Jetzt: Repository MissionImpossibleDecomp, Port in C++ mit RT64 (D3D12/Vulkan),
+  Projektregel „kleine Eingriffe in Upstream-Code“, Wünsche W-001 und W-004 präzisiert.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 5
 - Bewegungsschärfe: Strahlsimulation nach Blur Busters mit echtem Vorgängerbild, Schwarzbilder,
   Schnittstelle `zeichne_im_takt`. Lichtsumme bei 120/144/165/240/480 Hz auf 0,5 % genau.

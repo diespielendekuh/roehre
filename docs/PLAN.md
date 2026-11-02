@@ -338,7 +338,10 @@ selbstkritischen Abnahme (Moiré? zu dunkel? Farben? Ränder? Ruckeln?).
   Notlösung, falls das nicht geht: der Vulkan-/D3D12-Weg über rohe Handles (`as_hal`), der
   ohnehin für die C-API gebaut wird.
 
-### 11.2 Mission: Impossible (`diespielendekuh/MissionImpossibleCodes`)
+### 11.2 Mission: Impossible (`diespielendekuh/MissionImpossibleDecomp`)
+
+> **Korrektur 2026-11-02:** Der Port ist C++ mit RT64 (D3D12/Vulkan) auf N64ModernRuntime, siehe
+> `docs/integration/mission-impossible.md`. Der folgende Text ist der ursprüngliche Stand.
 
 - Derzeit ein **bytegenauer Decomp** (C, KMC GCC 2.7.2, splat), noch kein PC-Port und noch
   kein Renderer. Geplant ist ein PC-Port mit echten 60 Hz. Ob er RT64, einen eigenen

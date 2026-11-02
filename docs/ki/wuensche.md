@@ -22,7 +22,11 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 - **Status:** geplant für Etappe 6 (Vorschau-Programm)
 - **Was fehlt:** Eine 3D-Szene mit einem selbst erzeugten Fernseher (gewölbtes Glas als
   Kugelkappe, Gehäuse als Körper), Kamera frei beweglich, Bild über den Flächen-Modus.
-- **Warum:** Prüfstein und Vorlage für den 3D-Monitor im Mission:-Impossible-Port.
+- **Warum:** Prüfstein und Vorlage für das „TV-Erlebnis“ im Mission:-Impossible-Port
+  (Agenda Punkt 5: Fernseher auf einem Tisch, Glasreflexionen mit sachtem Kameraschwenk,
+  Tiefenunschärfe, Lichtflackern, Fenster mit Vorhang/Straßenlicht im Hintergrund, geringe
+  Last). Die Vorlage soll so gebaut sein, dass sie sich später auf D3D12/Vulkan (RT64-Umfeld)
+  übertragen lässt.
 
 ### W-003: Permissive Variante ohne GPL-Shader
 - **Von:** roehre (Planung), 2026-11-02
@@ -46,7 +50,11 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 - **Was fehlt:** Eine C-Schnittstelle (`roehre.h`) für C/C++-Spiele: erstellen mit
   Vulkan-Gerät oder D3D12-Gerät, Einstellungen laden/setzen, Katalog auflisten, zeichnen in
   eine Zieltextur, Flächen-Modus.
-- **Warum:** Der PC-Port von Mission: Impossible entsteht in C (Renderer noch offen).
+- **Warum:** Der PC-Port von Mission: Impossible ist C++ mit **RT64 (D3D12/Vulkan)** auf
+  N64ModernRuntime (`diespielendekuh/MissionImpossibleDecomp`, `port/`). Der Eingriff in RT64
+  muss klein bleiben (Projektregel: Upstream jederzeit übernehmbar); ideal ist eine Funktion,
+  die nach der RT64-Ausgabe eine Textur (Spielbild unvergrößert oder hochaufgelöst) und ein
+  Ziel bekommt und alles Weitere selbst erledigt.
 - **Vorschlag:** librashader hat Vulkan- und D3D12-Laufzeiten und eine C-API; die eigenen
   Pässe (Zusammensetzen mit Gehäuse und HDR, Mipmaps, Eichung) liegen bisher nur als WGSL vor
   und müssen dafür als slang-Pässe oder je Backend vorliegen.

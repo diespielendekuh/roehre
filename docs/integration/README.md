@@ -8,4 +8,4 @@ hier, welche Spiele betroffen sein können.
 | Projekt | Datei | Stand |
 |---|---|---|
 | Terranigma PC-Port | [terranigma.md](terranigma.md) | noch nicht eingebaut |
-| Mission: Impossible (N64) | [mission-impossible.md](mission-impossible.md) | noch nicht eingebaut |
+| Mission: Impossible (N64), C++ mit RT64 (D3D12/Vulkan) | [mission-impossible.md](mission-impossible.md) | noch nicht eingebaut, wartet auf C-API |
