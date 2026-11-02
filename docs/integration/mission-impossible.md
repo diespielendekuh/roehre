@@ -40,7 +40,7 @@ das Vorgänger-Repository und „Renderer offen“).
 | W-005 | Kamera: Nähe, Blickwinkel, Schwenk, Lage im Fenster (Lens Shift), 4:3–32:9 | **fertig in Rust/wgpu (Etappe 6)**, Bilder: `docs/bilder/etappe-6/kamera_bogen.jpg` |
 | W-006 | Kamera-Optionen im Katalog, speicherbar | **fertig (Etappe 6)**: Gruppe `raum`, Festwerte über `festwerte()` |
 | W-007 | Filtervorschau im Launcher (Software-Zeichnung) | **gebaut (Etappe 7)**: `roehre_vorschau_zeichnen` liefert ein RGBA-Bild, flach oder Raum |
-| W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | **Messbefehl fertig** (`roehre-pruefstand leistung`); Zahlen von der Grafikkarte des Anwenders stehen aus |
+| W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | **gemessen** (RTX 5070 Ti, Vulkan): Filter 0,5–1,0 ms bei 4K, 3D-Raum 2,5 ms bei 4K; Tabelle in `docs/ki/STAND.md` 2a |
 
 
 ## Einbau über die C-API (Etappe 7)
@@ -98,6 +98,11 @@ einhüllen kann. Das ist Arbeit im Code des Ports, nicht in RT64.
   `roehre_einstellungen_als_text`.
 
 ### Offen
+
+* Erster D3D12-Lauf beim Anwender (2026-11-02) brach beim Anlegen ab: librashader forderte einen
+  Pipeline-Cache an, den wgpu unter D3D12 nicht kennt. Behoben in roehre (Cache nur, wenn das
+  Gerät ihn kann; Wache `ohne_zusatzfaehigkeiten`); der zweite Lauf steht aus. Am Einbau ändert
+  sich nichts.
 
 * Der D3D12-Weg und der Vulkan-Weg mit Semaphoren sind auf echter Hardware nicht ausgeführt
   (Etappe 8; Beispiel `beispiele/d3d12_spiel.cpp` zum Ausprobieren unter Windows).

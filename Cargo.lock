@@ -2599,6 +2599,7 @@ name = "roehre-wgpu"
 version = "0.1.0"
 dependencies = [
  "librashader",
+ "pollster 0.4.0",
  "roehre-kette",
  "roehre-modell",
  "thiserror 2.0.21",

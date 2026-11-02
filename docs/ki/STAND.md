@@ -40,8 +40,28 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | 3D-Vorführraum (Wohnzimmer der 80er, Röhrenfernseher auf Tisch, späte PS2-Optik, Rohpixel-Texturen 256², eigenes Wandbild, Tiefenunschärfe, Glühen) | fertig in Rust/wgpu; am echten Bildschirm und in der Leistung ungeprüft | `crates/roehre-raum`, `shader/eigen/raum/raum3d.wgsl` |
 | Kamera des Raums (Nähe weit/mittel/nah, Blickwinkel, Schwenk, Lage im Fenster per Lens Shift, 4:3–32:9) als Optionen der Gruppe `raum` mit Festwerten (`festwerte()`) | fertig, mit Prüfläufen (nie abgeschnitten, Anteil, Schwenk hält das Gerät fest) | `Kamera`, `Ansicht::aus_einstellungen`, `roehre-pruefstand kamera` |
 | C-API für C/C++-Spiele (`roehre.h`): Katalog als JSON, Einstellungen, Vorschaubild als RGBA (Launcher), Austausch mit Vulkan- und D3D12-Spielen über geteilten Grafikspeicher, flach und 3D-Raum, Strahlsimulation | gebaut; Vulkan auf lavapipe geprüft (Notweg ohne geteilte Semaphoren), D3D12 nur übersetzt; beides auf echter Hardware ungeprüft | `crates/roehre-c`, `crates/roehre-c/LIESMICH.md` |
-| Leistungsmessung (Filter / 3D-Raum, 1080p / 4K, Kosten je Regler) | Messbefehl fertig; **Zahlen von echter Grafikkarte fehlen** (Anwender misst) | `roehre-pruefstand leistung` |
+| Leistungsmessung (Filter / 3D-Raum, 1080p / 4K, Kosten je Regler) | gemessen auf RTX 5070 Ti (Vulkan), siehe Abschnitt 2a; D3D12 und schwächere Karten offen | `roehre-pruefstand leistung`, `docs/messungen/` |
 | Englische Texte (alle Optionen, Auswahlwerte, Voreinstellungen) | fertig, mit Wache | `katalog.rs`, `voreinstellungen/*.toml` |
+
+## 2a. Leistung (gemessen 2026-11-02, NVIDIA RTX 5070 Ti, Vulkan, GPU-Zeitstempel)
+
+Spielbild 320×240, Millisekunden je Bild (Median), Budget bei 60 Hz 16,7 ms. Volle Tabelle:
+`docs/messungen/2026-11-02_rtx5070ti_vulkan.md`.
+
+| Fall | 1080p | 4K | Anteil am 60-Hz-Budget (4K) |
+|---|---|---|---|
+| Nur Filter, günstigste Röhre (`pc-vga`, `bvm`, `pvm`) | 0,15–0,16 | 0,48–0,56 | 3 % |
+| Nur Filter, `scart-rgb` | 0,20 | 0,61 | 4 % |
+| Nur Filter, teuerste (`wohnzimmer-90er-composite`, `svideo`) | 0,66 | 1,00 | 6 % |
+| 3D-Raum (Standard, mit Unschärfe und Glühen) | 1,17 | 2,52 | 15 % |
+| 3D-Raum ohne Unschärfe und Glühen | 1,10 | 2,01 | 12 % |
+
+Kosten je Regler (4K, gegenüber `scart-rgb` 0,63 ms): Composite/S-Video +0,4 ms (NTSC-Pässe);
+Leistungsstufe „leicht“ −0,18 ms; Maske, Licht im Glas, Gehäuse, Wölbung, HDR je unter 0,1 ms;
+Strahlsimulation 0,23 ms je Bildschirmauffrischung (bei 240 Hz von 4,2 ms Budget).
+Einordnung: Das Ziel „unter 2 ms bei 4K“ hält jede Voreinstellung auf dieser Karte mit Abstand;
+der 3D-Raum liegt bei 4K knapp darüber. Eine Mittelklassekarte (etwa halb so schnell) ist nicht
+gemessen; hochgerechnet läge die teuerste Röhre bei rund 2 ms und der Raum bei rund 5 ms.
 
 ## 3. Einbauen (Rust, wgpu)
 

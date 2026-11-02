@@ -19,8 +19,8 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-008: Leistung getrennt messen (nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler)
 - **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
-- **Status:** in Arbeit (Etappe 8): Messbefehl `roehre-pruefstand leistung` fertig, Messung auf
-  dem Rechner des Anwenders steht aus
+- **Status:** erledigt für Vulkan auf RTX 5070 Ti (Etappe 8): `docs/ki/STAND.md` Abschnitt 2a,
+  Tabelle `docs/messungen/`. Offen: Messung unter D3D12 und auf einer Mittelklassekarte
 - **Was fehlt:** Messung auf echter Grafikkarte, getrennt für „nur Filter“ und „3D-Raum“, je
   1080p und 4K, mit dem Ziel stabiler 60 FPS; dazu eine Tabelle, welcher Regler wie viel kostet.
 - **Warum:** Der Port muss stabil 60 FPS halten.

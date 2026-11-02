@@ -240,7 +240,7 @@ impl Roehre {
             roehre_kette::lade_vorstufe(&shader_ordner)?,
             device,
             queue,
-            Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: true, adapter_info: None }),
+            Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: mit_cache(device), adapter_info: None }),
         )?;
         Ok(Self {
             vorstufe,
@@ -617,9 +617,16 @@ fn kette_fuer(e: &Einstellungen) -> Kette {
     roehre_kette::plane(e, &k).kette
 }
 
+/// librashader legt einen Pipeline-Cache nur an, wenn das Gerät ihn kann. Fehlt das Feature
+/// (wgpu unter D3D12 kennt es nicht), bricht wgpu sonst mit einem Prüffehler ab – genau so am
+/// 2026-11-02 im ersten D3D12-Lauf auf der Grafikkarte des Anwenders.
+fn mit_cache(device: &wgpu::Device) -> bool {
+    device.features().contains(wgpu::Features::PIPELINE_CACHE)
+}
+
 pub(crate) fn baue(device: &wgpu::Device, queue: &wgpu::Queue, ordner: &std::path::Path, kette: Kette) -> Result<FilterChain, Fehler> {
     let preset = kette.lade(ordner)?;
-    let optionen = FilterChainOptions { force_no_mipmaps: false, enable_cache: true, adapter_info: None };
+    let optionen = FilterChainOptions { force_no_mipmaps: false, enable_cache: mit_cache(device), adapter_info: None };
     Ok(FilterChain::load_from_preset(preset, device, queue, Some(&optionen))?)
 }
 

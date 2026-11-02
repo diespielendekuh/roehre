@@ -2,6 +2,14 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 8, Messwerte und D3D12-Fehler
+- Messung des Anwenders (RTX 5070 Ti, Vulkan): Filter 0,15–0,66 ms (1080p), 0,48–1,00 ms (4K);
+  3D-Raum 1,17 / 2,52 ms. Composite/S-Video +0,4 ms bei 4K, alles andere unter 0,2 ms.
+- Erster D3D12-Lauf brach ab: `enable_cache: true` ließ librashader einen Pipeline-Cache anlegen,
+  den wgpu unter D3D12 nicht kennt. Jetzt nur, wenn das Gerät `PIPELINE_CACHE` hat. Neue Wache
+  `roehre-wgpu/tests/ohne_zusatzfaehigkeiten.rs` (schlägt ohne die Korrektur genau so fehl).
+- Offen: zweiter D3D12-Lauf, Messung unter D3D12.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 8 (Teil 1 und 2)
 - Messbefehl `roehre-pruefstand leistung` (GPU-Zeitstempel; Filter je Voreinstellung, 3D-Raum,
   Kosten je Regler, 1080p/4K, Anteil am 60-Hz-Budget). Auf lavapipe nur auf Funktion geprüft.

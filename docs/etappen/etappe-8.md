@@ -1,4 +1,4 @@
-# Etappe 8: Leistung, Feinschliff, englische Texte (Zwischenstand)
+# Etappe 8: Leistung, Feinschliff, englische Texte
 
 ## Gebaut
 
@@ -16,11 +16,21 @@
   Programm.
 * **3D-Raum:** Konsole im Stil des Super Famicom mit Controller (Wunsch des Anwenders).
 
+## Messwerte (Anwender, RTX 5070 Ti, Vulkan)
+
+Siehe `docs/ki/STAND.md` Abschnitt 2a und `docs/messungen/2026-11-02_rtx5070ti_vulkan.md`.
+Kurz: jede Voreinstellung bleibt bei 4K unter 1 ms (Ziel war unter 2 ms), der 3D-Raum braucht
+2,5 ms bei 4K. Teuer sind nur die Signalwege Composite und S-Video (+0,4 ms); Tiefenunschärfe
+und Glühen kosten im Raum zusammen 0,5 ms bei 4K. Nichts davon gefährdet stabile 60 FPS.
+
+## Fehler aus dem ersten Lauf unter Windows
+
+`d3d12_spiel.exe` brach beim Anlegen ab: librashader legte einen Pipeline-Cache an, den wgpu
+unter D3D12 nicht anbietet. roehre fordert ihn jetzt nur noch an, wenn das Gerät ihn kann; die
+neue Wache startet alle Voreinstellungen auf einem Gerät ohne jede Zusatzfähigkeit.
+
 ## Offen
 
-* Die Zahlen: gemessen werden muss auf der Grafikkarte des Anwenders (`leistung.md`). Hier gibt
-  es nur lavapipe (Software); dessen Werte (200 ms je Bild bei 1080p) sagen nichts über echte
-  Grafikkarten und stehen deshalb nirgends als Ergebnis.
-* D3D12-Austausch unter Windows ausführen (`d3d12_spiel.exe`).
-* Danach: Tabelle in `STAND.md`, Empfehlungen je Grafikkartenklasse, ggf. teure Teile
-  beschleunigen.
+* Zweiter Lauf von `d3d12_spiel.exe` nach der Korrektur.
+* Messung unter D3D12 und auf einer Mittelklassekarte (Hochrechnung: teuerste Röhre um 2 ms,
+  Raum um 5 ms bei 4K).

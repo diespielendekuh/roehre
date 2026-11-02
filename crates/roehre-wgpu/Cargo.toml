@@ -18,3 +18,6 @@ default = ["vulkan", "dx12", "metal"]
 vulkan = ["wgpu/vulkan"]
 dx12 = ["wgpu/dx12"]
 metal = ["wgpu/metal"]
+
+[dev-dependencies]
+pollster.workspace = true
