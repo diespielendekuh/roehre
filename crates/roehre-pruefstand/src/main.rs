@@ -748,6 +748,10 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     let mut tischkante = Ansicht::sitzplatz(0.0, 1.0, 0.0);
     tischkante.auge = [0.30, 1.02, -0.70];
     tischkante.ziel = [0.55, 0.69, -0.30];
+    let mut bedienfeld = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    bedienfeld.auge = [0.12, 1.02, -0.62];
+    bedienfeld.ziel = [0.235, 0.98, -0.2];
+    bedienfeld.blickwinkel = 30.0;
     let ganznah = Ansicht::aus_kamera(&roehre_raum::Kamera { naehe: 1.0, schwenk: false, ..Default::default() }, 0.0, g.0 as f32 / g.1 as f32);
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
@@ -760,6 +764,7 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         ("kassetten", konsole),
         ("tischkante", tischkante),
         ("ganznah", ganznah),
+        ("bedienfeld", bedienfeld),
     ];
     for (name, mut a) in ansichten {
         a.rohpixel = !ohne_rohpixel;

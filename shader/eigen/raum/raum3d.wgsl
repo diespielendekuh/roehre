@@ -146,6 +146,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
     if (dot(n, blick) > 0.0) { n = -n; }
     let entfernung = length(e.welt - szene.auge.xyz);
     var c: vec3<f32>;
+    var strahlt = false;
 
     if (e.material == M_BILDROEHRE) {
         // Bildröhre: abgerundete Ecken, Bild mit bandbegrenzter Maske, Glas mit Spiegelung
@@ -155,6 +156,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let rand_dunkel = smoothstep(0.0, 0.06, min(min(e.uv.x, 1.0 - e.uv.x) * a, min(e.uv.y, 1.0 - e.uv.y)));
         let cos_t = clamp(dot(-blick, n), 0.0, 1.0);
         let fresnel = 0.04 + 0.96 * pow(1.0 - cos_t, 5.0);
+        strahlt = true;
         c = bild * mix(0.55, 1.0, rand_dunkel) + umgebung(reflect(blick, n), e.welt) * fresnel + vec3<f32>(0.003, 0.0035, 0.004);
     } else {
         // Rohpixel (Option raum.rohpixel): die Koordinate rastet auf die Texelmitte ein (aus der
@@ -247,6 +249,11 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
 
         // Umgebung und Spiegelung
         c += diffus * umgebungslicht(n) * kante;
+        // Rücklicht der Lampe: die hell angestrahlten Wände werfen warmes Licht zurück in den
+        // Raum. Ohne diesen Anteil lag alles, was die Lampe nicht direkt sieht (die Front des
+        // Fernsehers mit Knöpfen und Aufdrucken), im völligen Schwarz.
+        let von_waenden = normalize(vec3<f32>(0.35, 0.25, 1.0));
+        c += diffus * lampe_farbe() * (0.010 + 0.008 * max(dot(n, -von_waenden), 0.0)) * kante;
         let spiegel_staerke = (1.0 - rauheit) * (1.0 - rauheit);
         c += f0 * umgebung(reflect(blick, n), e.welt) * spiegel_staerke * 1.5;
 
@@ -257,13 +264,16 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         if (e.material == M_LED) { leuchten *= 1.5; }
         if (e.material == M_NACHT) { leuchten *= 0.8; }
         c += albedo * leuchten;
+        strahlt = leuchten > 0.01;
     }
 
     // Nebel: dichter Dunst, leicht grünlich-grau, vom Lampenlicht etwas aufgehellt
     let nebel = 1.0 - exp(-entfernung * szene.nachbild.x);
     let nebelfarbe = vec3<f32>(0.010, 0.012, 0.011) + lampe_farbe() * 0.004;
     c = mix(c, nebelfarbe, nebel);
-    return vec4<f32>(c, entfernung);
+    // Alpha trägt die Entfernung für die Tiefenunschärfe; negativ heißt »leuchtet selbst« und
+    // gibt dem Glühen die Quelle (Bildschirm, Schirm, Birne, LEDs, Fenster).
+    return vec4<f32>(c, select(entfernung, -entfernung, strahlt));
 }
 
 // ---------------------------------------------------------------- 3. Nachbearbeitung
@@ -275,19 +285,23 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
 // nur Glanzpass: Abtaster für das volle Bild
 @group(0) @binding(2) var glanz_abtaster: sampler;
 
-// Glanzpass: jeder Punkt des auf 1/8 verkleinerten Ziels mittelt die hellen Anteile eines
-// 8×8-Blocks (16 bilinear gefilterte Abtastungen zu je 2×2 Punkten).
 @fragment
 fn glanz_farbe(e: NachAus) -> @location(0) vec4<f32> {
-    let texel = 1.0 / vec2<f32>(textureDimensions(hdr));
+    // Glanzpass: jeder Punkt des auf 1/8 verkleinerten Ziels mittelt einen 8×8-Block. Es strahlen
+    // nur selbstleuchtende Punkte (Alpha negativ); angestrahlte Flächen erst weit über Weiß,
+    // sonst trüge das Glühen das Tapetenmuster neben der Lampe als helle Wolken mit.
+    let groesse = vec2<i32>(textureDimensions(hdr));
+    let basis = vec2<i32>(floor(e.pos.xy)) * 8;
     var summe = vec3<f32>(0.0);
-    for (var y = 0; y < 4; y++) {
-        for (var x = 0; x < 4; x++) {
-            let o = vec2<f32>(f32(x) * 2.0 - 3.0, f32(y) * 2.0 - 3.0) * texel;
-            summe += max(textureSampleLevel(hdr, glanz_abtaster, e.uv + o, 0.0).rgb - vec3<f32>(0.1), vec3<f32>(0.0));
+    for (var y = 0; y < 8; y++) {
+        for (var x = 0; x < 8; x++) {
+            let f = textureLoad(hdr, min(basis + vec2<i32>(x, y), groesse - vec2<i32>(1)), 0);
+            let l = dot(f.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+            let anteil = select(smoothstep(2.0, 4.0, l), 1.0, f.a < 0.0);
+            summe += max(f.rgb - vec3<f32>(0.05), vec3<f32>(0.0)) * anteil;
         }
     }
-    return vec4<f32>(summe / 16.0, 1.0);
+    return vec4<f32>(summe / 64.0, 1.0);
 }
 
 struct NachAus { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
@@ -329,7 +343,7 @@ fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
     let drehung = fract(52.9829189 * fract(dot(vec2<f32>(p), vec2<f32>(0.06711056, 0.00583715)))) * 6.2831853;
     let dreh = mat2x2<f32>(cos(drehung), sin(drehung), -sin(drehung), cos(drehung));
     let fokus = nach_szene.fokus.x;
-    let zk = nach_szene.fokus.y * abs(mitte.a - fokus) / max(mitte.a, 0.05) * groesse.y * 0.02;
+    let zk = nach_szene.fokus.y * abs(abs(mitte.a) - fokus) / max(abs(mitte.a), 0.05) * groesse.y * 0.02;
     let radius = min(zk, groesse.y * 0.008);
     if (radius > 0.75) {
         var summe = c;
@@ -337,7 +351,7 @@ fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
         for (var i = 0; i < 16; i++) {
             let q = clamp(p + vec2<i32>(dreh * scheibe(i) * radius), vec2<i32>(0), gmax);
             let s = textureLoad(hdr, q, 0);
-            let zk_s = nach_szene.fokus.y * abs(s.a - fokus) / max(s.a, 0.05) * groesse.y * 0.02;
+            let zk_s = nach_szene.fokus.y * abs(abs(s.a) - fokus) / max(abs(s.a), 0.05) * groesse.y * 0.02;
             let w = smoothstep(0.0, 1.0, zk_s / max(radius, 1e-3));
             summe += s.rgb * w;
             gewicht += w;
@@ -349,13 +363,17 @@ fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
     // verkleinerten Glanzbild, weich gefiltert über zwei Ringe.
     if (nach_szene.fokus.z > 0.0) {
         let t = 1.0 / vec2<f32>(textureDimensions(glanz_bild));
-        var glanz = textureSampleLevel(glanz_bild, weich, e.uv, 0.0).rgb * 0.2;
-        for (var i = 0; i < 8; i++) {
-            let w = f32(i) * 0.785398;
+        // drei versetzte Ringe zu je 12 Punkten, damit kein Ring- oder Blockmuster bleibt
+        var glanz = textureSampleLevel(glanz_bild, weich, e.uv, 0.0).rgb * 0.16;
+        for (var i = 0; i < 12; i++) {
+            let w = f32(i) * 0.523599;
             let r = vec2<f32>(cos(w), sin(w)) * t;
-            glanz += textureSampleLevel(glanz_bild, weich, e.uv + r * 1.6, 0.0).rgb * 0.06;
-            glanz += textureSampleLevel(glanz_bild, weich, e.uv + r * 3.8, 0.0).rgb * 0.04;
+            let r2 = vec2<f32>(cos(w + 0.2618), sin(w + 0.2618)) * t;
+            glanz += textureSampleLevel(glanz_bild, weich, e.uv + r * 1.2, 0.0).rgb * 0.035;
+            glanz += textureSampleLevel(glanz_bild, weich, e.uv + r2 * 2.6, 0.0).rgb * 0.025;
+            glanz += textureSampleLevel(glanz_bild, weich, e.uv + r * 4.5, 0.0).rgb * 0.0167;
         }
+        glanz *= 1.5;
         c += glanz * nach_szene.fokus.z * 0.9;
     }
     c *= nach_szene.nachbild.w;

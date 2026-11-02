@@ -244,28 +244,10 @@ fn fernseher(n: &mut Netz) {
     }
     n.bildroehre(&Trafo::bei([bx, by, z_front + tiefe - 0.004]), [hx, hy], 0.018);
 
-    // Bedienfeld rechts: zwei Drehknöpfe, Programmtasten, Netzschalter, Kontrolllampe,
-    // Lautsprechergitter, Plakette (ohne Schrift)
-    let px = 0.245;
-    for (i, y) in [mitte[1] + 0.17, mitte[1] + 0.09].iter().enumerate() {
-        let t = Trafo::bei([px, *y, front_z - 0.012]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2));
-        n.drehkoerper(&t, &[(0.0, 0.0), (0.026, 0.0), (0.026, 0.004), (0.024, 0.022), (0.02, 0.026), (0.0, 0.027)], 20, Gummi, 6.0);
-        n.drehkoerper(&Trafo::bei([px, *y, front_z - 0.039]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), &[(0.0, 0.0), (0.012, 0.0), (0.0, 0.001)], 16, Chrom, 1.0);
-        // Markierungsstrich
-        n.quader(&Trafo::bei([px + 0.008 * (i as f32 * 2.0 - 1.0), y + 0.012, front_z - 0.04]), [0.0015, 0.008, 0.001], 0.0, Lack, 1.0);
-    }
-    for i in 0..8 {
-        let (sx, sy) = (i % 2, i / 2);
-        n.quader(&Trafo::bei([px - 0.016 + sx as f32 * 0.032, mitte[1] + 0.02 - sy as f32 * 0.024, front_z - 0.014]), [0.012, 0.008, 0.006], 0.002, Chrom, 8.0);
-    }
-    n.quader(&Trafo::bei([px, mitte[1] - 0.09, front_z - 0.014]), [0.03, 0.01, 0.006], 0.003, KunststoffGrau, 8.0);
-    n.zylinder(&Trafo::bei([px + 0.045, mitte[1] - 0.09, front_z - 0.012]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.004, 0.004, 10, LedRot);
-    let gitter = Trafo::bei([px, mitte[1] - 0.165, front_z - 0.0125]);
-    n.flaeche(&gitter, [0.055, 0.055], Lautsprecherstoff, [0.0, 0.0, 1.0, 1.0]);
-    for (x, y, ax, ay) in [(px, mitte[1] - 0.105, 0.058, 0.003), (px, mitte[1] - 0.225, 0.058, 0.003), (px - 0.058, mitte[1] - 0.165, 0.003, 0.061), (px + 0.058, mitte[1] - 0.165, 0.003, 0.061)] {
-        n.quader(&Trafo::bei([x, y, front_z - 0.013]), [ax, ay, 0.003], 0.001, Chrom, 6.0);
-    }
+    bedienfeld(n, mitte[1], front_z, ox1, ix1 - ein, iy0 + ein, iy1 - ein);
+    // Plakette unter dem Bild und Aufdruck „STEREO“
     n.quader(&Trafo::bei([bx, by - hy - 0.05, front_z - 0.013]), [0.05, 0.009, 0.002], 0.002, Chrom, 4.0);
+    n.flaeche(&Trafo::bei([bx - hx + 0.03, by - hy - 0.05, front_z - 0.0005]), [0.03, 0.00375], Beschriftung, [0.0, 4.0 / 8.0, 1.0, 1.0 / 8.0]);
 
     // Zimmerantenne auf dem Gerät: Fuß und zwei Teleskopstäbe mit Kugeln
     let fuss = [0.05, y0 + 0.49, 0.06];
@@ -276,6 +258,76 @@ fn fernseher(n: &mut Netz) {
         n.rohr(&[t.punkt([0.0, 0.0, 0.0]), t.punkt([0.0, 0.2, 0.0])], 0.004, 8, Chrom);
         n.rohr(&[t.punkt([0.0, 0.2, 0.0]), spitze], 0.0028, 8, Chrom);
         n.drehkoerper(&Trafo::bei(spitze), &[(0.0, -0.006), (0.006, 0.0), (0.0, 0.006)], 10, Chrom, 1.0);
+    }
+}
+
+/// Ein Aufdruck aus dem Atlas `Beschriftung` (Zeile 0–4), mittig bei (x, y), Breite `b`.
+fn aufdruck(n: &mut Netz, x: f32, y: f32, z: f32, b: f32, zeile: u32) {
+    n.flaeche(&Trafo::bei([x, y, z]), [b / 2.0, b / 16.0], Beschriftung, [0.0, zeile as f32 / 8.0, 1.0, 1.0 / 8.0]);
+}
+
+/// Drehknopf auf der Front bei (x, y), Achse zum Betrachter: Bund, geriffelter Körper,
+/// Aluminiumkappe, weißer Zeigerstrich bei `stellung` (−1 … 1 über 270°), Skalenring dahinter.
+fn drehknopf(n: &mut Netz, x: f32, y: f32, front_z: f32, stellung: f32) {
+    let achse = Trafo::bei([x, y, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2));
+    // Skalenring auf der Front
+    n.flaeche(&Trafo::bei([x, y, front_z - 0.0006]), [0.034, 0.034], Skala, [0.0, 0.0, 1.0, 1.0]);
+    // Bund und Körper mit Griffrillen (Kanten doppelt, damit sie hart bleiben)
+    n.drehkoerper(
+        &achse,
+        &[(0.0, 0.0), (0.0215, 0.0), (0.0215, 0.0), (0.0215, 0.0035), (0.0215, 0.0035), (0.0185, 0.0045), (0.0185, 0.0045), (0.0185, 0.0205), (0.0185, 0.0205), (0.0172, 0.0218)],
+        36,
+        Knopf,
+        1.0,
+    );
+    // Kappe aus gebürstetem Aluminium, leicht gewölbt
+    n.drehkoerper(&achse, &[(0.0172, 0.0218), (0.009, 0.0226), (0.0, 0.0228)], 36, Chrom, 1.0);
+    // Zeigerstrich auf der Kappe, um die Achse gedreht
+    let w = stellung.clamp(-1.0, 1.0) * 135f32.to_radians();
+    let zeiger = achse.nach(&Trafo::dreh_y(w)).nach(&Trafo::bei([0.0, 0.0231, -0.010]));
+    n.quader(&zeiger, [0.0011, 0.0004, 0.0062], 0.0, Lack, 4.0);
+}
+
+/// Bedienfeld rechts neben dem Bild: Aluminiumplatte, zwei Drehknöpfe mit Skala, acht
+/// Programmtasten mit Ziffern (eine gedrückt, grüne Leuchte), Netztaste mit roter Lampe und
+/// Fenster für die Fernbedienung, gelochtes Lautsprechergitter mit Chromrahmen.
+fn bedienfeld(n: &mut Netz, my: f32, front_z: f32, x0: f32, x1: f32, y0: f32, y1: f32) {
+    let px = (x0 + x1) / 2.0 + 0.004;
+    let breite = x1 - x0;
+    let z = front_z - 0.0003;
+    n.flaeche(&Trafo::bei([(x0 + x1) / 2.0, (y0 + y1) / 2.0, z]), [breite / 2.0 - 0.004, (y1 - y0) / 2.0 - 0.004], Bedienfeld, [0.0, 0.0, 1.0, (y1 - y0) / breite]);
+    let zd = z - 0.0003;
+    // Drehknöpfe
+    aufdruck(n, px, my + 0.209, zd, 0.07, 0);
+    drehknopf(n, px, my + 0.168, front_z, 0.25);
+    aufdruck(n, px, my + 0.123, zd, 0.07, 1);
+    drehknopf(n, px, my + 0.082, front_z, -0.1);
+    // Programmtasten 2 × 4
+    aufdruck(n, px, my + 0.036, zd, 0.06, 2);
+    for i in 0..8 {
+        let (spalte, reihe) = (i % 2, i / 2);
+        let (x, y) = (px - 0.017 + spalte as f32 * 0.034, my + 0.016 - reihe as f32 * 0.024);
+        let gedrueckt = i == 2;
+        let tiefe = if gedrueckt { 0.0035 } else { 0.006 };
+        n.quader(&Trafo::bei([x, y, front_z - tiefe / 2.0]), [0.0135, 0.0075, tiefe / 2.0], 0.0015, KunststoffSchwarz, 8.0);
+        let feld = (i % 4) as f32;
+        let zeile = if i < 4 { 5.0 } else { 6.0 };
+        n.flaeche(&Trafo::bei([x, y, front_z - tiefe - 0.0003]), [0.008, 0.004], Beschriftung, [feld / 4.0, zeile / 8.0, 0.25, 1.0 / 8.0]);
+        if gedrueckt {
+            n.zylinder(&Trafo::bei([x + 0.0175, y + 0.0055, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.0016, 0.0016, 10, LedGruen);
+        }
+    }
+    // Netztaste, Kontrolllampe, Fenster für die Fernbedienung
+    aufdruck(n, px - 0.012, my - 0.072, zd, 0.04, 3);
+    n.quader(&Trafo::bei([px - 0.012, my - 0.092, front_z - 0.004]), [0.022, 0.009, 0.004], 0.002, KunststoffSchwarz, 8.0);
+    n.drehkoerper(&Trafo::bei([px + 0.035, my - 0.092, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), &[(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.002), (0.0035, 0.0028), (0.0, 0.0028)], 14, Chrom, 1.0);
+    n.zylinder(&Trafo::bei([px + 0.035, my - 0.092, front_z - 0.0028]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.0026, 0.0015, 12, LedRot);
+    n.quader(&Trafo::bei([px + 0.035, my - 0.112, front_z - 0.001]), [0.009, 0.004, 0.001], 0.0005, Glas, 4.0);
+    // Lautsprechergitter mit Chromrahmen
+    let (gy, gb, gh) = (my - 0.172, 0.058, 0.04);
+    n.flaeche(&Trafo::bei([px, gy, z - 0.0004]), [gb, gh], Gitter, [0.0, 0.0, 1.0, gh / gb]);
+    for (x, y, ax, ay) in [(px, gy + gh + 0.002, gb + 0.004, 0.002), (px, gy - gh - 0.002, gb + 0.004, 0.002), (px - gb - 0.002, gy, 0.002, gh + 0.004), (px + gb + 0.002, gy, 0.002, gh + 0.004)] {
+        n.quader(&Trafo::bei([x, y, front_z - 0.002]), [ax, ay, 0.002], 0.001, Chrom, 6.0);
     }
 }
 

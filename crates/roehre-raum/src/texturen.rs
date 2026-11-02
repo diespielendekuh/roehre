@@ -52,9 +52,15 @@ pub enum Material {
     Rinde,
     Buecher,
     Videorekorder,
+    Bedienfeld,
+    Beschriftung,
+    Skala,
+    Knopf,
+    Gitter,
+    LedGruen,
 }
 
-pub const ANZAHL: u32 = Material::Videorekorder as u32 + 1;
+pub const ANZAHL: u32 = Material::LedGruen as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -63,7 +69,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
-        Triebhuelle, Rinde, Buecher, Videorekorder,
+        Triebhuelle, Rinde, Buecher, Videorekorder, Bedienfeld, Beschriftung, Skala, Knopf, Gitter, LedGruen,
     ]
 };
 
@@ -302,9 +308,9 @@ fn eiche(a: f32, b: f32, saat: u32, ringe: f32) -> ([f32; 3], f32, f32) {
         ast = 1.0 - glatt(0.015, 0.035, d);
     }
     let ton = 0.82 + 0.28 * zufall(s, 407) + 0.12 * (fbm(a, b, 2, 2, saat + 14) - 0.5);
-    let hell = [0.235, 0.135, 0.064];
-    let dunkel = [0.085, 0.045, 0.020];
-    let mut c = mische(hell, dunkel, 0.10 + 0.72 * spaet);
+    let hell = [0.225, 0.13, 0.062];
+    let dunkel = [0.12, 0.066, 0.03];
+    let mut c = mische(hell, dunkel, 0.12 + 0.5 * spaet);
     c = mal(c, ton * (1.0 - 0.16 * faser) * (1.0 - 0.38 * poren));
     c = mische(c, [0.04, 0.022, 0.01], ast * 0.85);
     // Relief flach halten: geöltes Holz ist fast glatt, starke Poren glitzern als Einzelpixel
@@ -400,7 +406,7 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             // (Tischlänge), Leimfugen kaum sichtbar
             let brett = (v * 6.0).floor();
             let lb = (v * 6.0).fract();
-            let (c, h, rauh) = eiche(u, lb, 700 + brett as u32, 5.0);
+            let (c, h, rauh) = eiche(u, lb, 700 + brett as u32, 9.0);
             let fuge = 1.0 - glatt(0.0, 0.012, lb.min(1.0 - lb));
             let c = mal(c, 1.0 - 0.35 * fuge);
             ([c[0], c[1], c[2], 1.0], [h - 0.2 * fuge, rauh, 0.0, 0.0])
@@ -524,6 +530,7 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
         }
         Gluehbirne => ([1.0, 0.75, 0.45, 1.0], [0.5, 0.1, 0.0, 1.0]),
         LedRot => ([1.0, 0.08, 0.03, 1.0], [0.5, 0.2, 0.0, 1.0]),
+        LedGruen => ([0.08, 1.0, 0.18, 1.0], [0.5, 0.2, 0.0, 1.0]),
         Decke => {
             let n = fbm(u, v, 8, 4, 201);
             let c = mal([0.26, 0.25, 0.23], 0.9 + 0.2 * n);
@@ -610,6 +617,62 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let ty = (v * 256.0).floor() as i32;
             let (c, h, rauh, leuchten) = videorekorder(tx, ty, u, v);
             ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, leuchten])
+        }
+        Bedienfeld => {
+            // Bedienfeld des Fernsehers: silbern lackiert mit gebürsteter Struktur, wie bei vielen
+            // Geräten der späten 80er; hell genug, dass Knöpfe und Aufdrucke im Halbdunkel lesbar
+            // bleiben
+            let strich = wert(u * 256.0, v * 6.0, 256, 851);
+            let c = mal([0.20, 0.20, 0.195], 0.9 + 0.16 * strich - 0.1 * staub);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.06 * strich, 0.38, 0.0, 0.0])
+        }
+        Beschriftung => {
+            // Aufdrucke als Abziehbild (Alpha): acht Zeilen zu 256 × 32 Texeln. 0–4 Wörter
+            // (dunkel auf Silber, „STEREO“ hell), 5–6 Ziffern der Programmtasten (hell, 64 Texel)
+            let zeile = ((v * 8.0).floor() as usize).min(7);
+            let tx = (u * 256.0).floor() as i32;
+            let ty = ((v * 8.0).fract() * 32.0).floor() as i32;
+            const WOERTER: [&str; 5] = ["LAUTSTÄRKE", "HELLIGKEIT", "PROGRAMM", "NETZ", "STEREO"];
+            let (an, farbe) = if zeile < 5 {
+                let w = WOERTER[zeile];
+                let breite = w.chars().count() as i32 * 12 - 2;
+                // Zeile 4 („STEREO“) steht auf der schwarzen Front: hell; die anderen auf Silber: dunkel
+                (schrift(w, (256 - breite) / 2, 9, 2, false, tx, ty), if zeile == 4 { [0.55, 0.55, 0.53] } else { [0.012, 0.012, 0.014] })
+            } else if zeile < 7 {
+                let feld = tx / 64;
+                let ziffer = char::from_digit((feld + 1 + 4 * (zeile as i32 - 5)) as u32, 10).unwrap_or(' ');
+                (schrift(&ziffer.to_string(), feld * 64 + 27, 9, 2, false, tx, ty), [0.62, 0.62, 0.6])
+            } else {
+                (false, [0.0; 3])
+            };
+            ([farbe[0], farbe[1], farbe[2], if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
+        }
+        Skala => {
+            // Skalenring um einen Drehknopf (Alpha): elf Striche über 270°, jeder fünfte länger
+            let (dx, dy) = (u - 0.5, v - 0.5);
+            let r = (dx * dx + dy * dy).sqrt();
+            let winkel = dx.atan2(-dy).to_degrees();
+            let k = ((winkel + 135.0) / 27.0).round();
+            let nah = (winkel + 135.0 - k * 27.0).abs() < 2.2 && (0.0..=10.0).contains(&k);
+            let lang = k as i32 % 5 == 0;
+            let an = nah && r < 0.48 && r > if lang { 0.37 } else { 0.41 };
+            ([0.012, 0.012, 0.014, if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
+        }
+        Knopf => {
+            // Drehknopf aus satiniertem Kunststoff mit 36 Griffrillen ringsum (u = Umfang)
+            let rille = ((u * 36.0).fract() - 0.5).abs() * 2.0;
+            let c = mal([0.028, 0.028, 0.03], 0.75 + 0.35 * rille);
+            ([c[0], c[1], c[2], 1.0], [0.3 + 0.5 * rille, 0.42, 0.0, 0.0])
+        }
+        Gitter => {
+            // Lautsprechergitter: gelochtes, silbern lackiertes Blech, versetzte Lochreihen
+            let (x, y) = (u * 24.0, v * 24.0);
+            let zeile = y.floor();
+            let versatz = if zeile as i32 % 2 == 0 { 0.0 } else { 0.5 };
+            let (fx, fy) = ((x + versatz).fract() - 0.5, y.fract() - 0.5);
+            let loch = 1.0 - glatt(0.26, 0.32, (fx * fx + fy * fy).sqrt());
+            let c = mische(mal([0.17, 0.17, 0.165], 0.9 + 0.15 * staub), [0.006, 0.006, 0.006], loch);
+            ([c[0], c[1], c[2], 1.0], [0.6 - 0.5 * loch, 0.45 + 0.4 * loch, 0.0, 0.0])
         }
         Buecher => {
             // Buchrücken: unterschiedlich breite Bücher in gedeckten Farben, verblichen, mit

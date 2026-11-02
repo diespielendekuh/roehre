@@ -2,6 +2,24 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum: Fernseher im Detail, Szene feingeschliffen
+- Bedienfeld neu: silberne Blende statt schwarzer Fläche; zwei Drehknöpfe mit 36 Rippen,
+  Aluminiumkappe, weißem Zeiger und Skalenring (LAUTSTÄRKE, HELLIGKEIT); acht Programmtasten
+  mit hellen Ziffern, Taste 3 gedrückt mit grüner LED (PROGRAMM); Netztaste in Chromfassung mit
+  roter LED (NETZ), Fernbedienungsfenster; gelochtes Lautsprechergitter mit Chromrahmen;
+  Aufdruck STEREO unter dem Bildschirm. Beschriftung als eigene 5×7-Pixelschrift, keine Marke.
+- Rücklicht der Lampe (warmes Licht von den angestrahlten Wänden): vorher lag die Front des
+  Fernsehers mit Knöpfen und Aufdrucken im völligen Schwarz.
+- Eiche des Tisches ruhiger: weniger Kontrast, mehr Jahresringe je Brett.
+- Glühen nur noch aus selbstleuchtenden Flächen (Bildschirm, Schirm, Birne, LEDs, Fenster;
+  im Alpha der Raumfarbe als negatives Vorzeichen der Entfernung markiert). Vorher strahlte
+  jede helle Fläche über einer festen Schwelle: die angestrahlte Tapete neben der Lampe glühte
+  mit und trug ihr Muster als fleckige helle Wolken. Angestrahlte Flächen glühen erst weit über
+  Weiß. Glanzbild mittelt jetzt alle 64 Punkte seines Blocks, weich gefiltert über drei
+  versetzte Ringe zu je 12 Punkten.
+- Ungeprüft: Leistung nach diesen Änderungen (Glanzpass liest jetzt jeden Punkt einmal, das
+  entspricht dem vorherigen Aufwand in etwa); Bilder in `docs/bilder/feinschliff/`.
+
 ## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum: Rohpixel und Vignette schaltbar, Gehäusekante ruhig
 - Neue Optionen `raum.rohpixel` (an/aus, Standard an) und `raum.vignette` (0 … 1, Standard 1).
   Mit Korn 0 und Glühen 0 liegt über dem Raum nur noch die Tiefenunschärfe; die Farbstimmung
