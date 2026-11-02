@@ -99,8 +99,17 @@ pub fn virtuelle_groesse(e: &Einstellungen, eingang: (u32, u32), seitenverhaeltn
     if !e.schalter("allgemein.roehre") {
         return None;
     }
-    let wunsch = e.zahl("eingang.zeilen") as u32;
     let flaechen_hoehe = ziel_hoehe as f64 * e.zahl("bildformat.fuellung") / 100.0;
+    // Zeilenverdopplung (31-kHz-Monitor): nur für Bilder mit wenig Zeilen, und nur, wenn jede
+    // verdoppelte Zeile noch MIN_PIXEL_JE_ZEILE Pixel bekommt. Gemessen (pc-vga, SNES):
+    // 1080p mit Verdopplung (2,4 px je Zeile) 8,5 % Zeilenschwebung, 4K 0,9 %.
+    if e.schalter("strahl.zeilenverdopplung")
+        && eingang.1 <= AUTOMATIK_SCHWELLE / 2
+        && flaechen_hoehe >= 2.0 * eingang.1 as f64 * MIN_PIXEL_JE_ZEILE
+    {
+        return Some((eingang.0, eingang.1 * 2));
+    }
+    let wunsch = e.zahl("eingang.zeilen") as u32;
     let automatik = if flaechen_hoehe >= 480.0 * MIN_PIXEL_JE_ZEILE { 480 } else { 240 };
     let zeilen = match wunsch {
         0 if eingang.1 > AUTOMATIK_SCHWELLE => automatik,
@@ -223,6 +232,7 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
         p.push(("cust_artifacting", z("signal.artefakte") * faktor));
         p.push(("cust_fringing", z("signal.farbsaum") * faktor));
         p.push(("ntsc_sat", z("signal.saettigung")));
+        p.push(("ntsc_scale", z("signal.bandbreite")));
         let rf = if art == "antenne" { 0.1 + rauschen } else { 0.0 };
         p.push(("RFNOISE1", rf));
         p.push(("RFNOISE2", rf));
@@ -239,6 +249,7 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
         p.push(("ARTIFACTING", 0.7 * z("signal.artefakte")));
         p.push(("FRINGING", 0.7 * z("signal.farbsaum")));
         p.push(("SATURATION", 1.05 * z("signal.saettigung")));
+        p.push(("pal_scale", z("signal.bandbreite")));
     }
 
     // --- Strahl
@@ -247,9 +258,17 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     p.push(("beam_size", z("strahl.aufblaehen")));
     p.push(("scans", z("strahl.zeilenfarbe")));
     p.push(("h_sharp", z("strahl.schaerfe")));
+    // Die NTSC- und PAL-Ketten filtern waagerecht mit einer Gaußkurve statt h_sharp.
+    // Zuordnung so, dass der guest-Standard (h_sharp 5,2) dem Standard SIGMA_HOR 0,8
+    // entspricht: höhere Schärfe → schmalere Kurve.
+    p.push(("SIGMA_HOR", (0.8 * 5.2 / z("strahl.schaerfe")).clamp(0.1, 7.0)));
+    let verdoppelt = e.schalter("strahl.zeilenverdopplung");
+    // Verdoppelte Zeilen sind kein Zeilensprung (sonst hielte guest 448 Zeilen für 480i)
+    p.push(("vga_mode", if verdoppelt { 1.0 } else { 0.0 }));
     p.push((
         "interm",
         match e.auswahl("strahl.zeilensprung") {
+            _ if verdoppelt => 0.0,
             "aus" => 0.0,
             "geglaettet" => 4.0,
             _ => 1.0,

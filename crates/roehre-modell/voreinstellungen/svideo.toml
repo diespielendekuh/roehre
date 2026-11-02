@@ -1,0 +1,50 @@
+# Voreinstellung „Fernseher mit S-Video“
+# Helligkeit und Farbe getrennt: kein Dot-Crawl und kein Regenbogen, aber die Farbe bleibt
+# schmalbandig und läuft an Kanten leicht aus. Streifenmaske wie bei einem
+# Trinitron-Fernseher, senkrecht flaches Glas.
+version = 1
+
+[meta]
+name = "Fernseher mit S-Video"
+beschreibung = "Fernseher am S-Video-Eingang: klarer als Composite, ohne Regenbogen, Farbe leicht weich. Streifenmaske, senkrecht flaches Glas."
+lizenz = "gpl"
+
+[signal]
+art = "svideo"
+norm = "ntsc"
+farbsaum = 0.8
+bandbreite = 1.6
+
+[strahl]
+form_dunkel = 1.4
+form_hell = 0.85
+aufblaehen = 0.8
+schaerfe = 6.0
+
+[maske]
+typ = "streifenmaske"
+staerke = 0.4
+staerke_dunkel = 0.4
+triaden = 450
+
+[leuchtstoff]
+profil = "trinitron"
+nachgluehen = 0.15
+
+[licht]
+glow = 0.08
+bloom = 0.1
+halation = 0.06
+
+[geometrie]
+woelbung_x = 0.03
+woelbung_y = 0.0
+ecken = 0.03
+randweich = 0.2
+vignette = 0.1
+overscan = 2.5
+
+[helligkeit]
+ausgleich_dunkel = 1.0
+ausgleich_hell = 1.6
+nachher = 1.0

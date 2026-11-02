@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 2 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 3 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -23,9 +23,11 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (48 Optionen, 10 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
-| Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite` | fertig, abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
-| weitere Voreinstellungen (PAL, S-Video, PVM, BVM, Arcade, VGA, Breitbild) und leichte Stufen | **fehlt** (Etappe 3) | |
+| Einstellungsmodell (50 Optionen, 10 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
+| Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | **fehlt** (Etappe 4) | |
+| Permissive Variante ohne GPL-Shader (crt-beans) | **fehlt** (Wunsch W-003) | |
+| Prüflauf: Referenzbilder, Moiré-, Helligkeitsgrenzen | fertig; GitHub-Workflow noch nie gelaufen | `roehre-pruefstand pruefe`, `.github/workflows/pruefung.yml` |
 | Rust-Schnittstelle für wgpu 30 | fertig | `crates/roehre-wgpu` |
 | Seitenverhältnis, Pixel-Seitenverhältnis, ganzzahlige Skalierung, Füllung | fertig | `crates/roehre-wgpu/src/flaeche.rs` |
 | Virtuelle Zeilenzahl für hochaufgelöste 3D-Bilder | fertig | `shader/eigen/virtuelle-zeilen.slang` |
@@ -119,9 +121,11 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 ## 5. Bekannte Grenzen
 
-- 720p mit SNES-Bild: Zeilenschwebung bis 1,8 % (sichtbar auf großen Flächen); mit
+- 720p mit SNES-Bild: Zeilenschwebung bis 2 % (sichtbar auf großen Flächen); mit
   `bildformat.ganzzahlig = true` behoben.
-- Composite: rote/blaue Schrift auf Schwarz ist eher zu weich (Abstimmung Etappe 3).
+- PVM, BVM, VGA skalieren ganzzahlig (harte Zeilen schweben sonst); bei 1080p ist das Bild
+  dadurch 896 Pixel hoch.
+- Composite: blaue Schrift auf Schwarz bleibt weich (wie am echten Gerät).
 - Alles bisher nur auf der CPU (lavapipe) gerendert; Leistung auf echter GPU ungemessen.
 - Nur Rust/wgpu. C/C++-Spiele (Vulkan, D3D12) brauchen das C-API (Wunsch W-001).
 
@@ -129,6 +133,8 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-02 | Standard von `helligkeit.gamma_ausgang` 1,95 → 2,4 und von `maske.staerke_dunkel` 1,1 → 0,4 (Mitteltöne waren zu dunkel). Gespeicherte Einstellungen mit den alten Werten bleiben gültig. |
+| 2026-11-02 | Neue Optionen `strahl.zeilenverdopplung`, `signal.bandbreite`. |
 | 2026-11-02 | `Roehre::neu` nimmt `impl Into<Ausgabe>` statt `wgpu::TextureFormat` (ein Format allein heißt weiterhin SDR). |
 | 2026-11-02 | `roehre_kette::Kontext` hat neue Felder `hdr`, `flaeche_modus`; `virtuelle_groesse` braucht die Zielhöhe. |
 

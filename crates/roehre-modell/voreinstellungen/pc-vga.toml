@@ -1,0 +1,50 @@
+# Voreinstellung „PC-Röhrenmonitor (VGA)“
+# 31-kHz-Monitor: Bilder mit 240 Zeilen werden zeilenverdoppelt (480 dichte Zeilen), feine
+# Lochmaske, kaum Licht im Glas, fast flache Röhre, neutrale Farben.
+version = 1
+
+[meta]
+name = "PC-Röhrenmonitor (VGA)"
+beschreibung = "PC-Monitor der 90er: verdoppelte, sehr feine Zeilen, feine Lochmaske, scharf, kaum Überstrahlen, fast flach."
+lizenz = "gpl"
+
+[signal]
+art = "rgb"
+
+[strahl]
+form_dunkel = 1.6
+form_hell = 1.0
+aufblaehen = 0.5
+schaerfe = 7.0
+zeilenverdopplung = true
+
+[maske]
+typ = "lochmaske"
+staerke = 0.4
+staerke_dunkel = 0.4
+triaden = 640
+
+[leuchtstoff]
+profil = "aus"
+nachgluehen = 0.05
+
+[licht]
+glow = 0.02
+bloom = 0.0
+halation = 0.0
+
+[geometrie]
+woelbung_x = 0.01
+woelbung_y = 0.012
+ecken = 0.02
+randweich = 0.05
+
+[helligkeit]
+ausgleich_dunkel = 1.6
+ausgleich_hell = 1.5
+nachher = 1.17
+
+[bildformat]
+# Harte, schmale Zeilen schweben bei krummen Faktoren (gemessen 1080p: bis 5,8 %);
+# ganzzahlig unter 0,25 %.
+ganzzahlig = true

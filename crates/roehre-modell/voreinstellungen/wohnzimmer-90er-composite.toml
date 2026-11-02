@@ -13,17 +13,18 @@ art = "composite"
 norm = "ntsc"
 artefakte = 0.8
 farbsaum = 0.7
+bandbreite = 1.4
 
 [strahl]
 form_dunkel = 1.3
 form_hell = 0.8
 aufblaehen = 0.9
-schaerfe = 3.0
+schaerfe = 4.5
 
 [maske]
 typ = "schlitzmaske"
 staerke = 0.35
-staerke_dunkel = 1.1
+staerke_dunkel = 0.35
 triaden = 380
 
 [leuchtstoff]
@@ -44,6 +45,6 @@ vignette = 0.15
 overscan = 3.0
 
 [helligkeit]
-ausgleich_dunkel = 1.7
+ausgleich_dunkel = 1.0
 ausgleich_hell = 1.6
-nachher = 1.14
+nachher = 1.0

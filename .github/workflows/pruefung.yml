@@ -1,0 +1,37 @@
+# Prüflauf von roehre: Tests, Referenzbilder, Moiré- und Helligkeitsgrenzen.
+# Rendert ohne Grafikkarte mit Mesa lavapipe (Vulkan auf der CPU).
+# Läuft bei Pull Requests (z. B. Änderungen anderer KIs) und von Hand – nicht bei jedem Push,
+# um Actions-Minuten des privaten Repositorys zu sparen.
+name: Prüfung
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruefung:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: lavapipe installieren
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+      - name: Tests
+        run: cargo test --workspace
+      - name: Prüfstand bauen
+        run: cargo build --release -p roehre-pruefstand
+      - name: Prüflauf (Referenzbilder, Moiré, Helligkeit)
+        run: ./target/release/roehre-pruefstand pruefe
+      - name: Differenzbilder sichern
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roehre-pruefung
+          path: /tmp/roehre-pruefung

@@ -17,6 +17,14 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ## Einträge
 
+### W-003: Permissive Variante ohne GPL-Shader
+- **Von:** roehre (Planung), 2026-11-02
+- **Status:** offen
+- **Was fehlt:** Eine Kette auf Basis von crt-beans (MIT) und Cathode Retro (MIT), auf die
+  dieselben Optionen abgebildet werden, für Spiele, die keine GPL-Shader ausliefern wollen.
+  Die Shader liegen bereits unter `shader/fremd/mit/`.
+- **Warum:** Lizenzfreiheit für Projekte, die das brauchen.
+
 ### W-002: Einbauanleitung und Versionsanhebung für den Terranigma-Port
 - **Von:** roehre (Planung), 2026-11-02
 - **Status:** offen (geplant Etappe 7)

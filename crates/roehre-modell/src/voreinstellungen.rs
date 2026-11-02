@@ -60,6 +60,12 @@ static ALLE: &[Voreinstellung] = voreinstellungen![
     "aus",
     "scart-rgb",
     "wohnzimmer-90er-composite",
+    "wohnzimmer-90er-pal",
+    "svideo",
+    "pvm",
+    "bvm",
+    "arcade",
+    "pc-vga",
 ];
 
 /// Alle Voreinstellungen in Menüreihenfolge.

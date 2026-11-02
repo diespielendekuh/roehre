@@ -20,7 +20,7 @@ schaerfe = 4.5
 [maske]
 typ = "schlitzmaske"
 staerke = 0.45
-staerke_dunkel = 1.1
+staerke_dunkel = 0.45
 triaden = 450
 
 [leuchtstoff]
@@ -39,6 +39,6 @@ ecken = 0.03
 randweich = 0.15
 
 [helligkeit]
-ausgleich_dunkel = 1.8
+ausgleich_dunkel = 1.6
 ausgleich_hell = 1.8
-nachher = 1.36
+nachher = 1.09

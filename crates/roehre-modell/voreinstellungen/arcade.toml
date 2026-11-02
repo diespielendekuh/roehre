@@ -1,0 +1,46 @@
+# Voreinstellung „Arcade-Automat“
+# 15-kHz-Monitor eines Spielautomaten: grobe Lochmaske, helles Bild mit kräftigem
+# Überstrahlen und Lichthof, stärker gewölbtes Glas.
+version = 1
+
+[meta]
+name = "Arcade-Automat"
+beschreibung = "Monitor eines Spielautomaten: grobe Lochmaske, sehr hell mit kräftigem Überstrahlen und Lichthof, stark gewölbtes Glas."
+lizenz = "gpl"
+
+[signal]
+art = "rgb"
+
+[strahl]
+form_dunkel = 1.2
+form_hell = 0.8
+aufblaehen = 1.0
+schaerfe = 4.0
+
+[maske]
+typ = "lochmaske"
+staerke = 0.4
+staerke_dunkel = 0.4
+triaden = 330
+
+[leuchtstoff]
+profil = "p22"
+nachgluehen = 0.25
+saettigung = 1.1
+
+[licht]
+glow = 0.12
+bloom = 0.25
+halation = 0.15
+
+[geometrie]
+woelbung_x = 0.04
+woelbung_y = 0.05
+ecken = 0.035
+randweich = 0.2
+vignette = 0.15
+
+[helligkeit]
+ausgleich_dunkel = 2.0
+ausgleich_hell = 1.8
+nachher = 0.92

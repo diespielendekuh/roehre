@@ -1,0 +1,49 @@
+# Voreinstellung „Profi-Monitor BVM“
+# Broadcast-Referenzmonitor: sehr feine Streifenmaske (800–1000 Fernsehzeilen), harte,
+# schmale Zeilen mit tiefen Lücken, kein Glühen, flach.
+version = 1
+
+[meta]
+name = "Profi-Monitor BVM"
+beschreibung = "Broadcast-Referenzmonitor: sehr feine Maske, harte schmale Zeilen mit tiefen Lücken, kein Glühen, flaches Glas."
+lizenz = "gpl"
+
+[signal]
+art = "rgb"
+
+[strahl]
+form_dunkel = 2.6
+form_hell = 1.4
+aufblaehen = 0.3
+schaerfe = 8.0
+
+[maske]
+typ = "streifenmaske"
+staerke = 0.4
+staerke_dunkel = 0.4
+triaden = 900
+
+[leuchtstoff]
+profil = "smpte_c"
+nachgluehen = 0.08
+
+[licht]
+glow = 0.0
+bloom = 0.0
+halation = 0.0
+
+[geometrie]
+woelbung_x = 0.0
+woelbung_y = 0.0
+ecken = 0.01
+randweich = 0.03
+
+[helligkeit]
+ausgleich_dunkel = 1.6
+ausgleich_hell = 2.0
+nachher = 1.39
+
+[bildformat]
+# Harte, schmale Zeilen schweben bei krummen Faktoren (gemessen 1080p: bis 5,8 %);
+# ganzzahlig unter 0,25 %.
+ganzzahlig = true

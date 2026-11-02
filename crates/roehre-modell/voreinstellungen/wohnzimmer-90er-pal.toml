@@ -1,0 +1,14 @@
+# Voreinstellung „Wohnzimmer-Fernseher 90er (PAL)“
+# Derselbe Fernseher wie die Composite-Fassung, aber mit europäischem PAL-Signal: Die Farbe
+# wird über zwei Zeilen gemittelt (Verzögerungsleitung), es gibt keinen wandernden
+# Dot-Crawl, dafür etwas weichere Farben. Erbt alles Übrige von der Composite-Fassung.
+version = 1
+basis = "wohnzimmer-90er-composite"
+
+[meta]
+name = "Wohnzimmer-Fernseher 90er (PAL)"
+beschreibung = "Europäischer Fernseher am Cinch-Kabel mit PAL: ruhigere Kanten als NTSC, weiche Farben, gewölbtes Glas."
+lizenz = "gpl"
+
+[signal]
+norm = "pal"

@@ -45,11 +45,13 @@ fn main() {
         ),
         "testbilder" => testbilder(Path::new(&opt("-o").unwrap_or("testbilder".into()))),
         "umschalten" => umschalten(),
-        "moire" => moire_messen(opt("-v")),
+        "moire" => moire_messen(opt("-v")).map(|_| ()),
         "flaeche" => flaeche_vorfuehren(
             &opt("-v").unwrap_or("scart-rgb".into()),
             Path::new(&opt("-o").unwrap_or("flaeche.png".into())),
         ),
+        "helligkeit" => helligkeit_messen().map(|_| ()),
+        "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!("Befehle: foto, bogen, testbilder, umschalten (Einzelheiten in der Quelltext-Doku)");
@@ -225,7 +227,12 @@ fn umschalten() -> Ergebnis {
 }
 
 /// Moiré-Messung über Voreinstellungen, Ausgabegrößen und Eingänge (siehe `moire.rs`).
-fn moire_messen(nur: Option<String>) -> Ergebnis {
+/// Grenzen der Moiré-Messung für den Prüflauf: ab 1080p höchstens 1,2 %, darunter 2,5 %;
+/// Maske überall höchstens 0,5 %.
+const MOIRE_GRENZE: (f64, f64, f64) = (1.2, 2.5, 0.5);
+
+fn moire_messen(nur: Option<String>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut verstoesse = Vec::new();
     let gpu = Gpu::neu();
     let groessen = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
     let eingaenge: [(&str, u32, u32, f64); 3] =
@@ -253,23 +260,22 @@ fn moire_messen(nur: Option<String>) -> Ergebnis {
                 let (zeilen, spalten) = moire::profile(&voll, r.x, r.y, r.breite, r.hoehe);
                 // Sichtbare Zeilen: Overscan schneidet oben und unten ab
                 let (_, osy) = roehre_kette::overscan_pixel(roehre.einstellungen(), (b, h));
-                let pz = r.hoehe as f64 / (h as f64 - osy as f64);
+                // Zeilen, die die Röhre zeichnet (Vorstufe: Zeilenverdopplung, virtuelle Zeilen)
+                let roehrenzeilen = roehre_kette::virtuelle_groesse(roehre.einstellungen(), (b, h), b as f64 * par / h as f64, g.1)
+                    .map_or(h, |v| v.1);
+                let osy = osy as f64 * roehrenzeilen as f64 / h as f64;
+                let pz = r.hoehe as f64 / (roehrenzeilen as f64 - osy);
                 let pt = roehre.letzter_plan().and_then(|p| p.maske).map(|m| m.pixel_je_triade).unwrap_or(3.0);
-                println!(
-                    "| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |",
-                    schluessel,
-                    name,
-                    g.0,
-                    g.1,
-                    pz,
-                    moire::schwebung(&zeilen, pz),
-                    pt,
-                    moire::schwebung(&spalten, pt)
-                );
+                let (sz, sm) = (moire::schwebung(&zeilen, pz), moire::schwebung(&spalten, pt));
+                println!("| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |", schluessel, name, g.0, g.1, pz, sz, pt, sm);
+                let grenze = if g.1 >= 1080 { MOIRE_GRENZE.0 } else { MOIRE_GRENZE.1 };
+                if !(sz <= grenze) || !(sm <= MOIRE_GRENZE.2) {
+                    verstoesse.push(format!("Moiré {schluessel} {name} {}×{}: Zeilen {sz:.2} %, Maske {sm:.2} %", g.0, g.1));
+                }
             }
         }
     }
-    Ok(())
+    Ok(verstoesse)
 }
 
 /// Halbgenaue Gleitkommazahl (IEEE 754 binary16) → f32.
@@ -405,4 +411,120 @@ fn flaeche_vorfuehren(v: &str, aus: &Path) -> Ergebnis {
     bogen.save(aus)?;
     eprintln!("→ {}", aus.display());
     Ok(())
+}
+
+/// Lineare Leuchtdichte (BT.709) eines Bereichs der Röhrenfläche, Anteile 0…1.
+fn leuchtdichte(bild: &image::RgbaImage, r: &roehre_wgpu::Rechteck, fx: (f64, f64), fy: (f64, f64)) -> f64 {
+    let lin = |v: u8| {
+        let c = v as f64 / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    let (x0, x1) = (r.x + (r.breite as f64 * fx.0) as u32, r.x + (r.breite as f64 * fx.1) as u32);
+    let (y0, y1) = (r.y + (r.hoehe as f64 * fy.0) as u32, r.y + (r.hoehe as f64 * fy.1) as u32);
+    let mut s = 0.0;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let p = bild.get_pixel(x, y);
+            s += 0.2126 * lin(p[0]) + 0.7152 * lin(p[1]) + 0.0722 * lin(p[2]);
+        }
+    }
+    s / ((x1 - x0) * (y1 - y0)) as f64
+}
+
+/// Helligkeit je Voreinstellung (SDR, 1080p): 75-%-Weißbalken und 40-%-Graustufe des
+/// Farbbalkens, bezogen auf „Sauber/aus“. Ziel: 90–110 % beim Weiß.
+fn helligkeit_messen() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut verstoesse = Vec::new();
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::farbbalken(320, 240);
+    let g = (1920, 1080);
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    let mut bezug: Option<(f64, f64)> = None;
+    println!("| Voreinstellung | 75-%-Weiß | Anteil | 40-%-Grau | Anteil |");
+    println!("|---|---:|---:|---:|---:|");
+    for v in roehre_modell::voreinstellungen() {
+        roehre.uebernehme(Einstellungen::voreinstellung(v.schluessel)?);
+        roehre.warte_auf_kette()?;
+        let voll = rendere(&gpu, &mut roehre, &bild, g, 3)?;
+        let r = roehre.flaeche(&eingang_von(&bild), g);
+        // 75-%-Weiß: erster Balken; 40-%-Grau: vierte Stufe der Grautreppe (unten)
+        let weiss = leuchtdichte(&voll, &r, (0.25 / 7.0, 0.75 / 7.0), (0.25, 0.5));
+        let grau = leuchtdichte(&voll, &r, (0.40, 0.46), (0.80, 0.92));
+        let (bw, bg) = *bezug.get_or_insert((weiss, grau));
+        let (aw, ag) = (100.0 * weiss / bw, 100.0 * grau / bg);
+        println!("| {} | {:.3} | {:.0} % | {:.3} | {:.0} % |", v.schluessel, weiss, aw, grau, ag);
+        if !(95.0..=105.0).contains(&aw) || ag < 85.0 {
+            verstoesse.push(format!("Helligkeit {}: Weiß {aw:.0} % (Soll 95–105), Grau {ag:.0} % (Soll ≥ 85)", v.schluessel));
+        }
+    }
+    Ok(verstoesse)
+}
+
+/// Prüflauf: Referenzbilder, Moiré- und Helligkeitsgrenzen. Mit `--neu` werden die
+/// Referenzbilder neu geschrieben (nur nach bewusster, begutachteter Änderung!).
+fn pruefe(neu: bool) -> Ergebnis {
+    let ordner = Path::new(env!("CARGO_MANIFEST_DIR")).join("referenz");
+    let diff_ordner = std::env::temp_dir().join("roehre-pruefung");
+    std::fs::create_dir_all(&ordner)?;
+    std::fs::create_dir_all(&diff_ordner)?;
+    let mut verstoesse = Vec::new();
+
+    // 1. Referenzbilder: Pixelszene je Voreinstellung, gerendert bei 960×540 (Fläche 720×540)
+    let gpu = Gpu::neu();
+    eprintln!("Adapter: {}", gpu.adapter_name);
+    let bild = roehre_testbilder::pixelszene();
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    for v in roehre_modell::voreinstellungen() {
+        roehre.uebernehme(Einstellungen::voreinstellung(v.schluessel)?);
+        roehre.warte_auf_kette()?;
+        let voll = rendere(&gpu, &mut roehre, &bild, (960, 540), 3)?;
+        // Gespeichert wird nebeneinander: 1:1-Ausschnitt der Mitte (Maske, Zeilen, Signal)
+        // und die verkleinerte Gesamtansicht (Geometrie, Ränder, Helligkeit).
+        let mut ist = image::RgbaImage::new(320 + 320, 180);
+        image::imageops::overlay(&mut ist, &image::imageops::crop_imm(&voll, 400, 230, 320, 180).to_image(), 0, 0);
+        image::imageops::overlay(&mut ist, &image::imageops::resize(&voll, 320, 180, image::imageops::FilterType::Triangle), 320, 0);
+        let pfad = ordner.join(format!("{}.png", v.schluessel));
+        if neu || !pfad.exists() {
+            ist.save(&pfad)?;
+            eprintln!("Referenz geschrieben: {}", pfad.display());
+            continue;
+        }
+        let soll = image::open(&pfad)?.to_rgba8();
+        if soll.dimensions() != ist.dimensions() {
+            verstoesse.push(format!("Referenz {}: andere Größe", v.schluessel));
+            continue;
+        }
+        let mut abw: Vec<u8> = soll.as_raw().iter().zip(ist.as_raw()).map(|(a, b)| a.abs_diff(*b)).collect();
+        let mittel = abw.iter().map(|&d| d as f64).sum::<f64>() / abw.len() as f64;
+        let diff = image::RgbaImage::from_fn(ist.width(), ist.height(), |x, y| {
+            let i = ((y * ist.width() + x) * 4) as usize;
+            let d = abw[i].max(abw[i + 1]).max(abw[i + 2]).saturating_mul(8);
+            image::Rgba([d, d, d, 255])
+        });
+        abw.sort_unstable();
+        let p999 = abw[abw.len() * 999 / 1000];
+        eprintln!("Referenz {}: mittlere Abweichung {mittel:.3}, 99,9-%-Wert {p999}", v.schluessel);
+        // Grenzen: lässt Rundungsunterschiede verschiedener Treiber zu, keine sichtbare Änderung
+        if mittel > 1.0 || p999 > 24 {
+            diff.save(diff_ordner.join(format!("{}_diff.png", v.schluessel)))?;
+            ist.save(diff_ordner.join(format!("{}_ist.png", v.schluessel)))?;
+            verstoesse.push(format!("Referenz {}: mittlere Abweichung {mittel:.2}, 99,9 % {p999}", v.schluessel));
+        }
+    }
+    drop(roehre);
+
+    // 2. Moiré und 3. Helligkeit
+    verstoesse.extend(moire_messen(None)?);
+    verstoesse.extend(helligkeit_messen()?);
+
+    if verstoesse.is_empty() {
+        eprintln!("Prüflauf bestanden.");
+        Ok(())
+    } else {
+        for v in &verstoesse {
+            eprintln!("VERSTOSS: {v}");
+        }
+        eprintln!("Differenzbilder: {}", diff_ordner.display());
+        Err(format!("{} Verstöße", verstoesse.len()).into())
+    }
 }

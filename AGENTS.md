@@ -47,6 +47,7 @@ erklären *warum*, mit der Zahl, an der ein Befund hängt.
 ```bash
 cargo test --workspace                                   # alle Prüfläufe
 cargo build --release -p roehre-pruefstand
+./target/release/roehre-pruefstand pruefe                # Pflicht vor jedem Push: Referenzbilder, Moiré, Helligkeit
 ./target/release/roehre-pruefstand bogen -g 1920x1080 -o /tmp/bogen   # Fotos aller Voreinstellungen
 ./target/release/roehre-pruefstand moire                 # Moiré-Messung (Ziel: ab 1080p ≤ 1,1 %)
 ./target/release/roehre-pruefstand hdr                   # HDR-Leuchtdichten
@@ -55,7 +56,9 @@ cargo build --release -p roehre-pruefstand
 
 Unter Linux ohne GPU vorher: `apt-get install -y mesa-vulkan-drivers`.
 
-**Nichts darf still schlechter werden.** Die Moiré- und Helligkeitswerte in
+**Nichts darf still schlechter werden.** `roehre-pruefstand pruefe` muss bestehen. Ändert
+sich das Bild gewollt, schreibe die Referenzen mit `pruefe --neu` neu, sieh dir die Bilder an
+(`crates/roehre-pruefstand/referenz/`) und begründe die Änderung im Logbuch. Die Moiré- und Helligkeitswerte in
 `docs/etappen/` sind der Maßstab. Verschlechtert deine Änderung für ein anderes Projekt etwas
 (z. B. andere Voreinstellung, andere Auflösung), mach es über eine Einstellung oder einen
 Schalter, nicht über einen geänderten Standard.
