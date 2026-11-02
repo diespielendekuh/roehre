@@ -800,7 +800,7 @@ static KATALOG: &[OptionBeschreibung] = &[
         schluessel: "raum.naehe",
         gruppe: Gruppe::Raum,
         name: Texte::de_en("Nähe", "Distance"),
-        beschreibung: Texte::de_en("Wie groß der Fernseher im Fenster erscheint. Weit (0): viel vom Raum; Mittel (0,5): etwas vom Tisch; Nah (1): das Gerät füllt das Fenster weitgehend, oben und unten bleibt ein Rand. Bei schmalen Fenstern wird so weit zurückgenommen, dass das Gerät in der Breite passt.", "How large the TV appears in the window. Wide (0): much of the room; medium (0.5): some of the table; close (1): the set mostly fills the window with a margin at top and bottom. In narrow windows it pulls back so the set fits the width."),
+        beschreibung: Texte::de_en("Wie groß der Fernseher im Fenster erscheint. Weit (0): viel vom Raum; Mittel (0,5): etwas vom Tisch; Nah (0,75): das Gerät füllt das Fenster weitgehend, oben und unten bleibt ein Rand; Ganz nah (1): der Bildschirm füllt das Fenster fast, oben und unten ist nur noch das Gehäuse zu sehen. Bei schmalen Fenstern wird so weit zurückgenommen, dass es in der Breite passt.", "How large the TV appears in the window. Wide (0): much of the room; medium (0.5): some of the table; close (0.75): the set mostly fills the window with a margin at top and bottom; very close (1): the screen almost fills the window, only the cabinet shows at top and bottom. In narrow windows it pulls back so it fits the width."),
         art: zahl(0.0, 1.0, 0.01, 0.75),
         kosten: Kosten::Keine,
         wirkt_wenn: None,
@@ -894,10 +894,11 @@ static KATALOG: &[OptionBeschreibung] = &[
 /// Benannte Festwerte einer stufenlosen Option (für Menüs mit Stufen): Schlüssel, Name, Wert.
 /// Stufen und Regler stellen dieselbe Option ein.
 pub fn festwerte(schluessel: &str) -> &'static [(&'static str, Texte, f64)] {
-    static NAEHE: [(&str, Texte, f64); 3] = [
+    static NAEHE: [(&str, Texte, f64); 4] = [
         ("weit", Texte::de_en("Weit", "Wide"), 0.0),
         ("mittel", Texte::de_en("Mittel", "Medium"), 0.5),
-        ("nah", Texte::de_en("Nah", "Close"), 1.0),
+        ("nah", Texte::de_en("Nah", "Close"), 0.75),
+        ("ganz_nah", Texte::de_en("Ganz nah", "Very close"), 1.0),
     ];
     static BLICK: [(&str, Texte, f64); 3] = [
         ("links", Texte::de_en("Leicht von links", "Slightly from the left"), -0.5),

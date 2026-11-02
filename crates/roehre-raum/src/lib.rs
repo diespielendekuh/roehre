@@ -97,6 +97,30 @@ fn geraet() -> ([f32; 3], [f32; 3]) {
     ([0.0, szene::TISCH_HOEHE + h, 0.0], [0.33, h, 0.205])
 }
 
+/// Hüllquader der Bildröhre mit einem schmalen Streifen Rahmen – Bezug der Stufe „ganz nah“.
+fn bildkasten() -> ([f32; 3], [f32; 3]) {
+    (szene::BILD_MITTE, [szene::BILD_HALB[0] + 0.02, szene::BILD_HALB[1] + 0.02, 0.03])
+}
+
+/// Ab dieser Nähe wechselt der Bezug der Kamera vom ganzen Gerät zum Bildschirm.
+const NAH: f32 = 0.75;
+
+/// Bezugskasten der Kamera und sein Anteil an der Fensterhöhe für eine Nähe 0 … 1:
+/// weit (0) 24 %, mittel (0,5) 45 %, nah (0,75) 80 % des Geräts; darüber gleitet der Bezug
+/// zum Bildschirm, bis bei „ganz nah“ (1) Bildschirm samt schmalem Rahmen 84 % der Höhe
+/// einnimmt – oben und unten ist dann nur noch Gehäuse zu sehen.
+fn bezug(naehe: f32) -> ([f32; 3], [f32; 3], f32) {
+    let (gm, gh) = geraet();
+    if naehe <= NAH {
+        let anteil = if naehe < 0.5 { 0.24 + (0.45 - 0.24) * naehe * 2.0 } else { 0.45 + (0.80 - 0.45) * (naehe - 0.5) / (NAH - 0.5) };
+        return (gm, gh, anteil);
+    }
+    let t = (naehe - NAH) / (1.0 - NAH);
+    let (bm, bh) = bildkasten();
+    let l = |a: [f32; 3], b: [f32; 3]| [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    (l(gm, bm), l(gh, bh), 0.80 + (0.84 - 0.80) * t)
+}
+
 /// Projiziert einen Punkt (Spaltenmatrix wie im Shader) in normierte Bildkoordinaten.
 fn projiziere(m: &Mat, p: [f32; 3]) -> [f32; 2] {
     let c = |r: usize| m[0][r] * p[0] + m[1][r] * p[1] + m[2][r] * p[2] + m[3][r];
@@ -104,10 +128,10 @@ fn projiziere(m: &Mat, p: [f32; 3]) -> [f32; 2] {
     [c(0) / w, c(1) / w]
 }
 
-/// Grenzen des Geräts im Bild (xmin, xmax, ymin, ymax) ohne Verschiebung.
-fn grenzen(auge: [f32; 3], ziel: [f32; 3], seite: f32) -> [f32; 4] {
+/// Grenzen eines Kastens im Bild (xmin, xmax, ymin, ymax) ohne Verschiebung.
+fn grenzen(auge: [f32; 3], ziel: [f32; 3], seite: f32, kasten: ([f32; 3], [f32; 3])) -> [f32; 4] {
     let m = mal(&perspektive(BLICKWINKEL, seite, 0.03, 20.0), &blick(auge, ziel));
-    let (mitte, halb) = geraet();
+    let (mitte, halb) = kasten;
     let mut g = [f32::MAX, f32::MIN, f32::MAX, f32::MIN];
     for i in 0..8 {
         let p = [
@@ -125,7 +149,8 @@ impl Ansicht {
     /// Ansicht aus der Kamera für ein Fenster mit Seitenverhältnis `seite` (Breite/Höhe).
     ///
     /// Die Nähe legt fest, welchen Anteil der Fensterhöhe das Gerät einnimmt (weit 24 %,
-    /// mittel 45 %, nah 80 %); ist das Fenster dafür zu schmal, wird so weit zurückgenommen,
+    /// mittel 45 %, nah 80 %; „ganz nah“ 84 % für den Bildschirm samt schmalem Rahmen, das
+    /// Gehäuse reicht dann über den Fensterrand); ist das Fenster dafür zu schmal, wird so weit zurückgenommen,
     /// dass das Gerät in der Breite passt. Die Lage im Fenster entsteht durch Verschieben des
     /// Bildausschnitts (außermittige Projektion), nicht durch Drehen der Kamera: Blickwinkel
     /// und Form des Geräts bleiben gleich. Der Schwenk kreist um das Gerät und blickt immer auf
@@ -133,10 +158,10 @@ impl Ansicht {
     pub fn aus_kamera(k: &Kamera, zeit: f32, seite: f32) -> Self {
         let seite = seite.max(0.1);
         let naehe = k.naehe.clamp(0.0, 1.0);
-        let anteil = if naehe < 0.5 { 0.24 + (0.45 - 0.24) * naehe * 2.0 } else { 0.45 + (0.80 - 0.45) * (naehe - 0.5) * 2.0 };
+        let (mitte, halb, anteil) = bezug(naehe);
+        let kasten = (mitte, halb);
         let gier = k.blickwinkel.clamp(-1.0, 1.0) * 30f32.to_radians();
-        let hoehe = (14.0 + (5.0 - 14.0) * naehe).to_radians();
-        let (mitte, halb) = geraet();
+        let hoehe = if naehe <= NAH { 14.0 + (5.0 - 14.0) * naehe / NAH } else { 5.0 - 2.0 * (naehe - NAH) / (1.0 - NAH) }.to_radians();
         let lage_auge = |d: f32, gier: f32, hoehe: f32| {
             [mitte[0] + d * gier.sin() * hoehe.cos(), mitte[1] + d * hoehe.sin(), mitte[2] - d * gier.cos() * hoehe.cos()]
         };
@@ -144,14 +169,14 @@ impl Ansicht {
         let t = (BLICKWINKEL.to_radians() / 2.0).tan();
         let mut d = halb[1] / (anteil * t);
         for _ in 0..6 {
-            let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite);
+            let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite, kasten);
             let (h, b) = ((g[3] - g[2]) / 2.0, (g[1] - g[0]) / 2.0);
             d *= (h / anteil).max(b / (1.0 - RAND_SEITE));
         }
         // im Zimmer bleiben (vordere Wand bei z = −4,6, Seitenwände bei ±2,4)
         let d_max = ((mitte[2] + 4.3) / (gier.cos() * hoehe.cos()).max(0.1)).min(2.1 / (gier.sin().abs() * hoehe.cos()).max(1e-3));
         d = d.min(d_max);
-        let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite);
+        let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite, kasten);
         let b = (g[1] - g[0]) / 2.0;
         let spiel = (1.0 - RAND_SEITE - b).max(0.0);
         let verschiebung = [k.lage.clamp(-1.0, 1.0) * spiel - (g[0] + g[1]) / 2.0, -(g[2] + g[3]) / 2.0];
@@ -801,7 +826,11 @@ mod tests {
 
     /// Grenzen des Geräts im fertigen Bild (mit Verschiebung).
     fn im_bild(a: &Ansicht, seite: f32) -> [f32; 4] {
-        let g = grenzen(a.auge, a.ziel, seite);
+        im_bild_von(a, seite, geraet())
+    }
+
+    fn im_bild_von(a: &Ansicht, seite: f32, kasten: ([f32; 3], [f32; 3])) -> [f32; 4] {
+        let g = grenzen(a.auge, a.ziel, seite, kasten);
         [g[0] + a.verschiebung[0], g[1] + a.verschiebung[0], g[2] + a.verschiebung[1], g[3] + a.verschiebung[1]]
     }
 
@@ -810,11 +839,13 @@ mod tests {
     #[test]
     fn geraet_wird_nie_abgeschnitten() {
         for seite in FORMATE {
-            for naehe in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            for naehe in [0.0, 0.25, 0.5, 0.75, 0.9, 1.0] {
                 for blick in [-1.0, -0.5, 0.0, 0.5, 1.0] {
                     for lage in [-1.0, -0.5, 0.0, 0.5, 1.0] {
                         let k = Kamera { naehe, blickwinkel: blick, lage, schwenk: false, ..Kamera::default() };
-                        let g = im_bild(&Ansicht::aus_kamera(&k, 0.0, seite), seite);
+                        // bis „nah“ das ganze Gerät, darüber mindestens der Bildschirm
+                        let kasten = if naehe <= NAH { geraet() } else { bildkasten() };
+                        let g = im_bild_von(&Ansicht::aus_kamera(&k, 0.0, seite), seite, kasten);
                         assert!(g[0] >= -1.0 + 1e-3 && g[1] <= 1.0 - 1e-3 && g[2] >= -1.0 && g[3] <= 1.0, "{seite} {naehe} {blick} {lage}: {g:?}");
                     }
                 }
@@ -825,21 +856,27 @@ mod tests {
     #[test]
     fn naehe_bestimmt_den_anteil_der_hoehe() {
         // bei 16:9 von vorn: weit 24 %, mittel 45 %, nah 80 % der Fensterhöhe
-        for (naehe, soll) in [(0.0, 0.24), (0.5, 0.45), (1.0, 0.80)] {
+        for (naehe, soll) in [(0.0, 0.24), (0.5, 0.45), (0.75, 0.80)] {
             let k = Kamera { naehe, schwenk: false, ..Kamera::default() };
             let g = im_bild(&Ansicht::aus_kamera(&k, 0.0, 16.0 / 9.0), 16.0 / 9.0);
             let anteil = (g[3] - g[2]) / 2.0;
             assert!((anteil - soll).abs() < 0.01, "{naehe}: {anteil}");
             assert!(((g[2] + g[3]) / 2.0).abs() < 1e-3, "senkrecht mittig");
         }
+        // ganz nah: Bildschirm mit schmalem Rahmen 84 % der Höhe, das Gehäuse ragt hinaus
+        let a = Ansicht::aus_kamera(&Kamera { naehe: 1.0, schwenk: false, ..Kamera::default() }, 0.0, 16.0 / 9.0);
+        let b = im_bild_von(&a, 16.0 / 9.0, bildkasten());
+        assert!(((b[3] - b[2]) / 2.0 - 0.84).abs() < 0.01, "{b:?}");
+        let g = im_bild(&a, 16.0 / 9.0);
+        assert!(g[3] > 1.0 && g[2] < -1.0, "Gehäuse oben und unten angeschnitten: {g:?}");
     }
 
     #[test]
     fn lage_schiebt_bis_an_den_rand_ohne_blickwinkel_zu_aendern() {
         for seite in [16.0 / 9.0, 32.0 / 9.0] {
-            let mitte = Ansicht::aus_kamera(&Kamera { naehe: 1.0, schwenk: false, ..Kamera::default() }, 0.0, seite);
+            let mitte = Ansicht::aus_kamera(&Kamera { naehe: NAH, schwenk: false, ..Kamera::default() }, 0.0, seite);
             for lage in [-1.0f32, 1.0] {
-                let a = Ansicht::aus_kamera(&Kamera { naehe: 1.0, lage, schwenk: false, ..Kamera::default() }, 0.0, seite);
+                let a = Ansicht::aus_kamera(&Kamera { naehe: NAH, lage, schwenk: false, ..Kamera::default() }, 0.0, seite);
                 assert_eq!(a.auge, mitte.auge, "Kamera bleibt, nur der Ausschnitt wandert");
                 let g = im_bild(&a, seite);
                 let rand = if lage < 0.0 { g[0] + 1.0 } else { 1.0 - g[1] };
@@ -854,7 +891,7 @@ mod tests {
         let seite = 16.0 / 9.0;
         let m = |a: &Ansicht| {
             let p = mal(&perspektive(BLICKWINKEL, seite, 0.03, 20.0), &blick(a.auge, a.ziel));
-            let q = projiziere(&p, geraet().0);
+            let q = projiziere(&p, a.ziel);
             [q[0] + a.verschiebung[0], q[1] + a.verschiebung[1]]
         };
         let ruhe = m(&Ansicht::aus_kamera(&k, 0.0, seite));

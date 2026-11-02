@@ -740,8 +740,12 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     wand.auge = [0.3, 1.45, -0.6];
     wand.ziel = [0.6, 1.5, 1.05];
     let mut konsole = Ansicht::sitzplatz(0.0, 1.0, 0.0);
-    konsole.auge = [-0.22, 0.98, -0.62];
-    konsole.ziel = [-0.42, 0.72, -0.18];
+    konsole.auge = [-0.25, 0.98, -0.72];
+    konsole.ziel = [-0.52, 0.74, -0.2];
+    let mut tischkante = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    tischkante.auge = [0.30, 1.02, -0.70];
+    tischkante.ziel = [0.55, 0.69, -0.30];
+    let ganznah = Ansicht::aus_kamera(&roehre_raum::Kamera { naehe: 1.0, schwenk: false, ..Default::default() }, 0.0, g.0 as f32 / g.1 as f32);
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
         ("mittel", Ansicht::sitzplatz(2.0, 0.5, 1.0)),
@@ -750,7 +754,9 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         ("detail", detail),
         ("pflanze", pflanze),
         ("wand", wand),
-        ("konsole", konsole),
+        ("kassetten", konsole),
+        ("tischkante", tischkante),
+        ("ganznah", ganznah),
     ];
     for (name, a) in ansichten {
         let t = Instant::now();

@@ -79,7 +79,7 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(super::json().to_str().unwrap()).unwrap();
         assert_eq!(v["optionen"].as_array().unwrap().len(), roehre_modell::katalog().len());
         let naehe = v["optionen"].as_array().unwrap().iter().find(|o| o["schluessel"] == "raum.naehe").unwrap();
-        assert_eq!(naehe["festwerte"].as_array().unwrap().len(), 3);
+        assert_eq!(naehe["festwerte"].as_array().unwrap().len(), 4);
         assert!(v["voreinstellungen"].as_array().unwrap().len() >= 10);
     }
 }

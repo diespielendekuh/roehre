@@ -2,6 +2,19 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum nach Rückmeldung (Kamera, Rekorder, Tisch)
+- Neue Kamerastufe „Ganz nah“ (`raum.naehe` = 1): Bildschirm samt schmalem Rahmen füllt 84 %
+  der Höhe, oben und unten nur Gehäuse. Festwerte jetzt weit 0 / mittel 0,5 / nah 0,75 /
+  ganz nah 1 (vorher war 1 „nah“). Prüfläufe angepasst (Bildschirm nie abgeschnitten).
+- Super Famicom entfernt (zu hell im Lampenlicht); Videorekorder ohne Marke mit Leuchtanzeige
+  „CH 03 · 12:00“; statt der Zeitschrift ein Stapel Videohüllen mit lesbaren Rückentiteln
+  (eigene 5×7-Pixelschrift, erfundene Titel im Stil von Verleihkassetten, eine selbst bespielte
+  „SOMMER '88“).
+- Tisch: massive Eiche neu (Bretter entlang der Tischlänge – vorher quer –, feine Faserlinien,
+  dunkles Spätholz, Poren, dunkleres Braun, flaches Relief gegen Glitzern), Platte mit
+  gerundeter Oberkante und abgesetzter Unterkante, Kopfleisten mit quer laufender Faser,
+  gedrechselte Beine mit Wulst. Parkett nutzt dieselbe Eiche.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Vulkan unter Windows
 - `vulkan_spiel.c` jetzt auch für Windows (Win32-Handles, Vulkan zur Laufzeit geladen).
 - Lauf beim Anwender (RTX 5070 Ti): Bilder flach und Raum korrekt. Ob mit geteilten Semaphoren:

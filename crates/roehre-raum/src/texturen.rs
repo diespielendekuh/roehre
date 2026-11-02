@@ -1,6 +1,6 @@
 //! Selbst erzeugte Materialien des Raums (keine Fotos, keine fremden Texturen).
 //!
-//! Jedes Material ist eine Ebene zweier Texturfelder (512 × 512):
+//! Jedes Material ist eine Ebene zweier Texturfelder (256 × 256):
 //! * **Farbe** (sRGB) und Deckung (Alpha, für Blätter),
 //! * **Eigenschaften**: R = Relief (Höhe), G = Rauheit, B = Metall, A = Selbstleuchten.
 //!
@@ -51,12 +51,10 @@ pub enum Material {
     Triebhuelle,
     Rinde,
     Buecher,
-    KonsoleHell,
-    Lila,
-    Steuergeraet,
+    Videorekorder,
 }
 
-pub const ANZAHL: u32 = Material::Steuergeraet as u32 + 1;
+pub const ANZAHL: u32 = Material::Videorekorder as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -65,7 +63,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
-        Triebhuelle, Rinde, Buecher, KonsoleHell, Lila, Steuergeraet,
+        Triebhuelle, Rinde, Buecher, Videorekorder,
     ]
 };
 
@@ -91,42 +89,226 @@ fn maserung(u: f32, v: f32, dichte: f32, saat: u32) -> (f32, f32) {
     (ring.powf(2.5), poren)
 }
 
-/// Wildeiche (geölt): Maserung entlang u, Äste mit Ringen, Trockenrisse, Farbspiel zwischen
-/// hellem Honig und grauem Braun. `saat` wählt das Brett. Liefert Farbe (linear), Höhe,
-/// Rauheit.
-fn wildeiche(u: f32, v: f32, saat: u32, dichte: f32) -> ([f32; 3], f32, f32) {
-    // Äste: bis zu zwei je Brett, verzerren die Maserung ringförmig
-    let mut ast_verzug = 0.0;
-    let mut ast_kern: f32 = 0.0;
-    let mut ast_ring = 0.0;
-    for k in 0..2 {
-        if zufall(saat as i32 * 7 + k, 301) < 0.55 {
-            continue;
-        }
-        let (cx, cy) = (zufall(saat as i32 * 13 + k, 302), zufall(saat as i32 * 17 + k, 303));
-        let (dx, dy) = ((u - cx) * 2.5, (v - cy) * 9.0);
-        let d = (dx * dx + dy * dy).sqrt();
-        let r = 0.035 + 0.03 * zufall(saat as i32 * 19 + k, 304);
-        ast_verzug += 0.6 * (-d / (r * 3.0)).exp() * (dy * 20.0).signum() * 0.0 + 1.5 * (-d / (r * 2.5)).exp();
-        ast_kern = ast_kern.max(1.0 - glatt(r * 0.6, r, d));
-        ast_ring += ((d * 160.0).sin() * 0.5 + 0.5) * (1.0 - glatt(r, r * 3.0, d));
+/// 5 × 7-Pixelschrift (Großbuchstaben, Ziffern, Umlaute, wenige Zeichen). Zeile für Zeile,
+/// Bit 4 ist das linke Pixel.
+fn glyphe(z: char) -> [u8; 7] {
+    match z {
+        'A' => [14, 17, 17, 31, 17, 17, 17],
+        'B' => [30, 17, 17, 30, 17, 17, 30],
+        'C' => [14, 17, 16, 16, 16, 17, 14],
+        'D' => [30, 17, 17, 17, 17, 17, 30],
+        'E' => [31, 16, 16, 30, 16, 16, 31],
+        'F' => [31, 16, 16, 30, 16, 16, 16],
+        'G' => [14, 17, 16, 23, 17, 17, 15],
+        'H' => [17, 17, 17, 31, 17, 17, 17],
+        'I' => [14, 4, 4, 4, 4, 4, 14],
+        'J' => [7, 2, 2, 2, 2, 18, 12],
+        'K' => [17, 18, 20, 24, 20, 18, 17],
+        'L' => [16, 16, 16, 16, 16, 16, 31],
+        'M' => [17, 27, 21, 21, 17, 17, 17],
+        'N' => [17, 17, 25, 21, 19, 17, 17],
+        'O' => [14, 17, 17, 17, 17, 17, 14],
+        'P' => [30, 17, 17, 30, 16, 16, 16],
+        'Q' => [14, 17, 17, 17, 21, 18, 13],
+        'R' => [30, 17, 17, 30, 20, 18, 17],
+        'S' => [15, 16, 16, 14, 1, 1, 30],
+        'T' => [31, 4, 4, 4, 4, 4, 4],
+        'U' => [17, 17, 17, 17, 17, 17, 14],
+        'V' => [17, 17, 17, 17, 17, 10, 4],
+        'W' => [17, 17, 17, 21, 21, 21, 10],
+        'X' => [17, 17, 10, 4, 10, 17, 17],
+        'Y' => [17, 17, 10, 4, 4, 4, 4],
+        'Z' => [31, 1, 2, 4, 8, 16, 31],
+        'Ä' => [10, 0, 14, 17, 31, 17, 17],
+        'Ö' => [10, 0, 14, 17, 17, 17, 14],
+        'Ü' => [10, 0, 17, 17, 17, 17, 14],
+        '0' => [14, 17, 19, 21, 25, 17, 14],
+        '1' => [4, 12, 4, 4, 4, 4, 14],
+        '2' => [14, 17, 1, 2, 4, 8, 31],
+        '3' => [31, 2, 4, 2, 1, 17, 14],
+        '4' => [2, 6, 10, 18, 31, 2, 2],
+        '5' => [31, 16, 30, 1, 1, 17, 14],
+        '6' => [6, 8, 16, 30, 17, 17, 14],
+        '7' => [31, 1, 2, 4, 8, 8, 8],
+        '8' => [14, 17, 17, 14, 17, 17, 14],
+        '9' => [14, 17, 17, 15, 1, 2, 12],
+        ':' => [0, 12, 12, 0, 12, 12, 0],
+        '.' => [0, 0, 0, 0, 0, 12, 12],
+        '-' => [0, 0, 0, 31, 0, 0, 0],
+        '\'' => [4, 4, 8, 0, 0, 0, 0],
+        '&' => [12, 18, 20, 8, 21, 18, 13],
+        '!' => [4, 4, 4, 4, 4, 0, 4],
+        _ => [0; 7],
     }
-    let verzug = fbm(u * 0.5, v, 2, 4, saat) * 3.0 + fbm(u, v * 2.0, 4, 3, saat + 1) * 0.8 + ast_verzug;
-    let ring = ((v * dichte + verzug) * std::f32::consts::TAU).sin() * 0.5 + 0.5;
-    let fein = wert(u * 160.0, v * 60.0, 160, saat + 2);
-    let poren = glatt(0.7, 0.95, wert(u * 220.0, v * 24.0, 220, saat + 3));
-    // Trockenrisse: schmale dunkle Linien entlang der Maserung
-    let riss = glatt(0.985, 0.998, wert(u * 2.0, (v + verzug * 0.02) * 90.0, 2, saat + 4)) * glatt(0.4, 0.8, fbm(u, v, 3, 3, saat + 5));
-    let farbspiel = fbm(u * 0.7, v * 0.7, 2, 3, saat + 6);
-    let hell = mische([0.40, 0.25, 0.12], [0.30, 0.22, 0.14], farbspiel);       // Honig ↔ graues Braun
-    let dunkel = [0.17, 0.10, 0.05];
-    let mut c = mische(hell, dunkel, 0.18 + 0.45 * ring.powf(1.6));
-    c = mal(c, 0.88 + 0.18 * fein - 0.22 * poren);
-    c = mische(c, [0.11, 0.06, 0.03], ast_ring * 0.55);
-    c = mische(c, [0.05, 0.028, 0.014], ast_kern);
-    c = mische(c, [0.03, 0.018, 0.01], riss);
-    let hoehe = 0.55 + 0.15 * ring - 0.25 * poren - 0.5 * riss - 0.2 * ast_kern;
-    (c, hoehe, 0.62 + 0.15 * poren)
+}
+
+/// Deckt die Pixelschrift das Texel (tx, ty)? `ox`, `oy` linke obere Ecke, `s` Vergrößerung,
+/// `wackeln` versetzt jedes Zeichen senkrecht um bis zu einen Pixel (Handschrift).
+fn schrift(text: &str, ox: i32, oy: i32, s: i32, wackeln: bool, tx: i32, ty: i32) -> bool {
+    let (gx, gy) = ((tx - ox).div_euclid(s), (ty - oy).div_euclid(s));
+    if gx < 0 {
+        return false;
+    }
+    let (i, spalte) = ((gx / 6) as usize, gx % 6);
+    let Some(z) = text.chars().nth(i) else { return false };
+    let dy = if wackeln { (zufall(i as i32, 811) * 2.0) as i32 - 1 } else { 0 };
+    let zeile = gy - dy;
+    spalte < 5 && (0..7).contains(&zeile) && glyphe(z)[zeile as usize] >> (4 - spalte) & 1 == 1
+}
+
+/// Rücken einer Videohülle (Zeile `zeile` des Atlas), Texel (tx 0 … 255, ty 0 … 31).
+fn kassettenruecken(zeile: usize, tx: i32, ty: i32, u: f32, v: f32) -> ([f32; 3], f32) {
+    // (Titel, Grund, Schrift, Akzent): erfundene Filme im Stil der Genres
+    const HUELLEN: [(&str, [f32; 3], [f32; 3], [f32; 3]); 8] = [
+        ("NEBELNACHT", [0.010, 0.010, 0.012], [0.62, 0.02, 0.02], [0.30, 0.30, 0.30]),
+        ("STERNENFEUER", [0.012, 0.025, 0.12], [0.85, 0.62, 0.06], [0.50, 0.50, 0.55]),
+        ("DER STILLE SEE", [0.60, 0.56, 0.44], [0.03, 0.12, 0.06], [0.10, 0.25, 0.12]),
+        ("SCHATTENSTADT", [0.045, 0.045, 0.05], [0.78, 0.26, 0.02], [0.60, 0.20, 0.02]),
+        ("LETZTE FAHRT", [0.42, 0.03, 0.02], [0.85, 0.85, 0.82], [0.05, 0.05, 0.05]),
+        ("WINTERREISE", [0.70, 0.72, 0.76], [0.06, 0.22, 0.48], [0.25, 0.40, 0.60]),
+        ("GEISTERSTUNDE", [0.11, 0.03, 0.17], [0.22, 0.62, 0.10], [0.45, 0.45, 0.10]),
+        ("SOMMER '88", [0.016, 0.016, 0.018], [0.05, 0.08, 0.40], [0.66, 0.65, 0.60]),
+    ];
+    let (titel, grund, farbe, akzent) = HUELLEN[zeile];
+    let alter = fbm(u, v, 16, 3, 821 + zeile as u32);
+    let mut c = grund;
+    let mut h = 0.5;
+    if zeile == 7 {
+        // Selbst bespielt: weißer Aufkleber, mit Kuli beschriftet
+        if (36..220).contains(&tx) && (6..26).contains(&ty) {
+            c = mal(akzent, 0.9 + 0.15 * alter);
+            if ty == 8 || ty == 23 {
+                c = mische(c, [0.3, 0.05, 0.05], 0.4); // vorgedruckte Linien
+            }
+            if schrift(titel, 66, 9, 2, true, tx, ty) {
+                c = farbe;
+            }
+            h = 0.55;
+        }
+    } else {
+        // Verleihhülle: Verlaufsband, Studiokasten links, Freigabefleck rechts, Titel
+        let verlauf = ty as f32 / 31.0;
+        c = mische(grund, mal(grund, 1.6), 0.5 - (verlauf - 0.5).abs());
+        if (6..34).contains(&tx) && (5..27).contains(&ty) {
+            c = akzent;
+            if (10..30).contains(&tx) && (13..19).contains(&ty) {
+                c = mal(grund, 0.6);
+            }
+        }
+        if (228..246).contains(&tx) && (8..24).contains(&ty) {
+            c = [[0.05, 0.25, 0.6], [0.05, 0.4, 0.08], [0.7, 0.6, 0.05], [0.6, 0.05, 0.04]][zeile % 4];
+        }
+        if zeile == 1 && zufall(tx * 37 + ty, 831) > 0.985 {
+            c = [0.8, 0.8, 0.7]; // Sterne
+        }
+        if schrift(titel, 44, 9, 2, false, tx, ty) {
+            c = farbe;
+            h = 0.6;
+        }
+    }
+    // Rand, Abrieb, Staub
+    if ty == 0 || ty == 31 {
+        c = mal(c, 0.5);
+    }
+    let c = mal(c, 0.9 + 0.12 * alter);
+    (c, h)
+}
+
+/// Front des Videorekorders (Texel tx 0 … 255, ty 0 … 53). Liefert Farbe, Höhe, Rauheit,
+/// Selbstleuchten.
+fn videorekorder(tx: i32, ty: i32, u: f32, v: f32) -> ([f32; 3], f32, f32, f32) {
+    let gebuerstet = wert(u * 4.0, v * 256.0, 4, 841);
+    let mut c = mal([0.028, 0.028, 0.031], 0.9 + 0.2 * gebuerstet);
+    let (mut h, mut rauh, mut leuchten) = (0.5, 0.45, 0.0);
+    let kasten = |x0: i32, y0: i32, x1: i32, y1: i32| (x0..x1).contains(&tx) && (y0..y1).contains(&ty);
+    // Zierleisten oben und unten (gebürstetes Silber)
+    if ty < 3 || (48..54).contains(&ty) {
+        c = mal([0.20, 0.20, 0.21], 0.85 + 0.3 * gebuerstet);
+        rauh = 0.3;
+    }
+    // Kassettenklappe mit Rand
+    if kasten(18, 10, 132, 33) {
+        c = [0.008, 0.008, 0.009];
+        rauh = 0.18;
+        h = 0.4;
+        if ty == 10 || ty == 32 || tx == 18 || tx == 131 {
+            c = [0.09, 0.09, 0.095];
+            h = 0.6;
+        }
+        if ty == 21 && (30..120).contains(&tx) {
+            c = [0.05, 0.05, 0.055];
+        }
+    }
+    // Anzeige (Leuchtziffern) mit blinkender Uhrzeit, die nie jemand eingestellt hat
+    if kasten(150, 10, 236, 28) {
+        c = [0.004, 0.006, 0.010];
+        rauh = 0.1;
+        if schrift("12:00", 175, 13, 2, false, tx, ty) {
+            c = [0.10, 0.80, 0.62];
+            leuchten = 1.0;
+        }
+        if schrift("CH", 154, 15, 1, false, tx, ty) || schrift("03", 154, 21, 1, false, tx, ty) {
+            c = [0.08, 0.55, 0.45];
+            leuchten = 0.8;
+        }
+    }
+    // Tastenreihe unter der Anzeige
+    for i in 0..5 {
+        if kasten(150 + i * 17, 35, 163 + i * 17, 42) {
+            c = mal([0.16, 0.16, 0.17], 0.9 + 0.2 * gebuerstet);
+            h = 0.75;
+            rauh = 0.35;
+        }
+    }
+    // Netzschalter mit roter Leuchte
+    if kasten(20, 37, 40, 44) {
+        c = [0.14, 0.14, 0.15];
+        h = 0.75;
+    }
+    if kasten(46, 39, 49, 42) {
+        c = [0.9, 0.05, 0.02];
+        leuchten = 1.0;
+    }
+    (c, h, rauh, leuchten)
+}
+
+/// Massive Eiche, geölt. `a` läuft entlang der Faser (0 … 1, kachelbar), `b` quer über das
+/// Brett (0 … 1); `saat` wählt das Brett. Was Eiche als Eiche lesbar macht: viele feine,
+/// gerade Faserlinien, Jahresringe als lange, leicht wellige Streifen mit dunklem Spätholz,
+/// Porenrillen als kurze dunkle Striche im Frühholz, selten ein kleiner Ast, dazu ein warmes,
+/// mittleres Braun (nicht honiggelb). Liefert Farbe (linear), Höhe, Rauheit.
+fn eiche(a: f32, b: f32, saat: u32, ringe: f32) -> ([f32; 3], f32, f32) {
+    use std::f32::consts::TAU;
+    let s = saat as i32;
+    // Fladerung: die Ringe biegen sich über die Länge langsam (kachelbar in a)
+    let bogen = 0.10 * (a * TAU + zufall(s, 401) * TAU).sin() + 0.04 * (2.0 * a * TAU + zufall(s, 402) * TAU).sin();
+    let welle = fbm(a, b * 0.5, 4, 3, saat + 11) * 0.5 + fbm(a, b, 16, 2, saat + 12) * 0.06;
+    let rk = b * ringe + (bogen + welle) * ringe * 0.35;
+    let ring = rk.fract();
+    let spaet = glatt(0.40, 0.70, ring) * (1.0 - glatt(0.86, 1.0, ring));
+    let frueh = 1.0 - glatt(0.0, 0.22, ring);
+    // Poren: kurze Striche entlang der Faser, gehäuft im Frühholz
+    let poren = glatt(0.68, 0.86, wert(a * 48.0, b * 160.0 + rk * 3.0, 48, saat + 13)) * (0.35 + 0.65 * frueh);
+    // Feine Faserlinien quer verteilt, jede mit eigener Stärke
+    let fl = b * 110.0 + welle * 20.0;
+    let faser = glatt(0.78, 0.98, 1.0 - (fl.fract() - 0.5).abs() * 2.0) * (0.3 + 0.7 * zufall(fl.floor() as i32 + s * 1000, 403));
+    // Seltener kleiner Ast
+    let mut ast = 0.0f32;
+    if zufall(s, 404) > 0.72 {
+        let (cx, cy) = (zufall(s, 405), 0.2 + 0.6 * zufall(s, 406));
+        let (dx, dy) = ((a - cx).abs().min(1.0 - (a - cx).abs()) * 4.0, (b - cy) * 1.4);
+        let d = (dx * dx + dy * dy).sqrt();
+        ast = 1.0 - glatt(0.015, 0.035, d);
+    }
+    let ton = 0.82 + 0.28 * zufall(s, 407) + 0.12 * (fbm(a, b, 2, 2, saat + 14) - 0.5);
+    let hell = [0.235, 0.135, 0.064];
+    let dunkel = [0.085, 0.045, 0.020];
+    let mut c = mische(hell, dunkel, 0.10 + 0.72 * spaet);
+    c = mal(c, ton * (1.0 - 0.16 * faser) * (1.0 - 0.38 * poren));
+    c = mische(c, [0.04, 0.022, 0.01], ast * 0.85);
+    // Relief flach halten: geöltes Holz ist fast glatt, starke Poren glitzern als Einzelpixel
+    let hoehe = 0.55 + 0.04 * spaet - 0.10 * poren - 0.04 * faser - 0.15 * ast;
+    (c, hoehe, 0.48 + 0.2 * poren + 0.08 * spaet)
 }
 
 /// Farbe (linear, Alpha) und Eigenschaften (Höhe, Rauheit, Metall, Leuchten) bei (u, v).
@@ -182,7 +364,7 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let versatz = zufall(reihe as i32, 51);
             let stoss_u = (u + versatz) * 1.5;
             let brett = reihe as i32 * 31 + stoss_u.floor() as i32;
-            let (mut c, h, rauh) = wildeiche(stoss_u.fract(), lokal_v * 0.125 + reihe * 0.125, 500 + brett as u32, 26.0);
+            let (mut c, h, rauh) = eiche(stoss_u.fract(), lokal_v, 500 + brett as u32, 4.0);
             c = mal(c, 0.82 + 0.3 * zufall(brett, 53));
             let stoss = stoss_u.fract();
             let fuge = (1.0 - glatt(0.0, 0.04, lokal_v.min(1.0 - lokal_v))).max(1.0 - glatt(0.0, 0.008, stoss.min(1.0 - stoss)));
@@ -213,12 +395,14 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], 1.0], [flor, 1.0, 0.0, 0.0])
         }
         Tischholz => {
-            // Tischplatte aus verleimten Wildeiche-Brettern (vier je Kachel)
-            let brett = (u * 4.0).floor();
-            let (c, h, rauh) = wildeiche(v, (u * 4.0).fract() * 0.25 + brett * 0.25, 700 + brett as u32, 18.0);
-            let fuge = 1.0 - glatt(0.0, 0.01, (u * 4.0).fract().min(1.0 - (u * 4.0).fract()));
-            let c = mal(c, (0.9 + 0.2 * zufall(brett as i32, 71)) * (1.0 - 0.5 * fuge));
-            ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, 0.0])
+            // Massive Eichenplatte: sechs verleimte Bretter je Kachel, Faser entlang u
+            // (Tischlänge), Leimfugen kaum sichtbar
+            let brett = (v * 6.0).floor();
+            let lb = (v * 6.0).fract();
+            let (c, h, rauh) = eiche(u, lb, 700 + brett as u32, 5.0);
+            let fuge = 1.0 - glatt(0.0, 0.012, lb.min(1.0 - lb));
+            let c = mal(c, 1.0 - 0.35 * fuge);
+            ([c[0], c[1], c[2], 1.0], [h - 0.2 * fuge, rauh, 0.0, 0.0])
         }
         Terrakotta => {
             let n = fbm(u, v, 8, 4, 81);
@@ -255,24 +439,13 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], alpha], [0.5 + 0.3 * rippe - 0.1 * seiten, 0.2 + 0.2 * fleck, 0.0, 0.0])
         }
         Kassette => {
-            // Atlas aus vier Videokassetten-Rücken: schwarzes Gehäuse, Etikett mit
-            // Farbstreifen und Kritzelschrift (kein Markenname)
-            let welche = (u * 4.0).floor() as i32;
-            let lu = (u * 4.0).fract();
-            let mut c = [0.018, 0.018, 0.02];
-            let mut h = 0.5;
-            if (0.12..0.88).contains(&lu) && (0.25..0.75).contains(&v) {
-                let farben = [[0.45, 0.05, 0.04], [0.04, 0.12, 0.35], [0.5, 0.4, 0.05], [0.05, 0.25, 0.08]];
-                c = [0.62, 0.6, 0.55];
-                if v < 0.36 {
-                    c = farben[welche.rem_euclid(4) as usize];
-                }
-                let schrift = glatt(0.62, 0.66, wert(lu * 60.0, v * 18.0, 60, 111 + welche as u32))
-                    * glatt(0.5, 0.48, (v - 0.55).abs() * 4.0);
-                c = mische(c, [0.04, 0.04, 0.12], schrift);
-                h = 0.6;
-            }
-            ([c[0], c[1], c[2], 1.0], [h, 0.45, 0.0, 0.0])
+            // Atlas aus acht Rücken von Videohüllen, je 256 × 32 Texel (Zeile = Hülle):
+            // erfundene Filmtitel im Stil von Verleihkassetten der 80er, lesbar in Pixelschrift
+            let zeile = ((v * 8.0).floor() as usize).min(7);
+            let tx = (u * 256.0).floor() as i32;
+            let ty = ((v * 8.0).fract() * 32.0).floor() as i32;
+            let (c, h) = kassettenruecken(zeile, tx, ty, u, v);
+            ([c[0], c[1], c[2], 1.0], [h, 0.35, 0.0, 0.0])
         }
         Keramik => {
             let n = fbm(u, v, 6, 3, 121);
@@ -429,70 +602,13 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let c = mische([0.28, 0.05, 0.04], [0.12, 0.06, 0.03], v + 0.2 * fbm(u, v, 4, 2, 261));
             ([c[0], c[1], c[2], 1.0], [0.5, 0.35, 0.0, 0.0])
         }
-        KonsoleHell => {
-            // hellgrauer, leicht vergilbter Kunststoff der 90er: feine Narbung, Gebrauchsspuren
-            let fein = wert(u * 256.0, v * 256.0, 256, 291);
-            let vergilbt = fbm(u, v, 3, 3, 292);
-            let c = mische([0.50, 0.50, 0.48], [0.50, 0.47, 0.40], vergilbt * 0.6);
-            let c = mal(c, 0.95 + 0.06 * fein - 0.1 * staub);
-            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * fein, 0.55, 0.0, 0.0])
-        }
-        Lila => {
-            // die blasslila Schieber und Tasten
-            let fein = wert(u * 256.0, v * 256.0, 256, 293);
-            let c = mal([0.26, 0.22, 0.40], 0.95 + 0.08 * fein);
-            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * fein, 0.45, 0.0, 0.0])
-        }
-        Steuergeraet => {
-            // Oberseite eines Controllers im Stil der 90er (Hundeknochenform), alles als Textur:
-            // Steuerkreuz links, Select/Start schräg in der Mitte, vier farbige Tasten rechts in
-            // einer lila Mulde. Maße in Metern (147 × 63 mm), u quer, v in die Tiefe.
-            let x = (u - 0.5) * 0.147;
-            let y = (v - 0.5) * 0.063;
-            let kreis = |cx: f32, cy: f32, r: f32| ((x - cx).powi(2) + (y - cy).powi(2)).sqrt() - r;
-            let koerper = kreis(-0.042, 0.0, 0.0315).min(kreis(0.042, 0.0, 0.0315)).min(
-                // Steg in der Mitte mit leicht eingezogener Taille
-                (x.abs() - 0.045).max(y.abs() - (0.025 + 0.004 * (x / 0.045).powi(2))),
-            );
-            let alpha = if koerper < 0.0 { 1.0 } else { 0.0 };
-            let mut c = mal([0.50, 0.50, 0.48], 0.95 + 0.05 * wert(u * 256.0, v * 256.0, 256, 294) - 0.08 * staub);
-            let mut h = 0.5;
-            // Rand: leicht abgerundet (dunkler zur Kante)
-            c = mal(c, 0.8 + 0.2 * glatt(0.0, 0.004, -koerper));
-            // Steuerkreuz in flacher Mulde
-            let mulde = 1.0 - glatt(-0.0005, 0.0005, kreis(-0.042, 0.0, 0.016));
-            c = mische(c, mal(c, 0.88), mulde);
-            let (dx, dy) = (x + 0.042, y);
-            let kreuz = ((dx.abs() - 0.0115).max(dy.abs() - 0.0042)).min((dy.abs() - 0.0115).max(dx.abs() - 0.0042));
-            let kreuz_an = 1.0 - glatt(-0.0003, 0.0003, kreuz);
-            c = mische(c, [0.035, 0.035, 0.038], kreuz_an);
-            h += 0.3 * kreuz_an - 0.1 * mulde;
-            // Select und Start: zwei schräge Gummiknöpfe
-            for sx in [-0.009f32, 0.009] {
-                let (px, py) = (x - sx, y - 0.006);
-                let (a, b) = ((px + py) * std::f32::consts::FRAC_1_SQRT_2, (py - px) * std::f32::consts::FRAC_1_SQRT_2);
-                let pille = ((a.abs() - 0.0045).max(0.0).powi(2) + b.powi(2)).sqrt() - 0.0016;
-                let an = 1.0 - glatt(-0.0002, 0.0002, pille);
-                c = mische(c, [0.20, 0.20, 0.21], an);
-                h += 0.2 * an;
-            }
-            // Tastenmulde rechts (lila) und vier farbige Tasten: oben blau, links grün, rechts
-            // rot, unten gelb
-            let lila = 1.0 - glatt(-0.0004, 0.0004, kreis(0.042, 0.0, 0.0215));
-            c = mische(c, [0.24, 0.20, 0.36], lila);
-            for (bx, by, farbe) in [
-                (0.0f32, -0.0115f32, [0.06f32, 0.10, 0.45]),
-                (-0.0115, 0.0, [0.06, 0.28, 0.08]),
-                (0.0115, 0.0, [0.55, 0.04, 0.04]),
-                (0.0, 0.0115, [0.62, 0.48, 0.03]),
-            ] {
-                let d = kreis(0.042 + bx, by, 0.0052);
-                let an = 1.0 - glatt(-0.0003, 0.0003, d);
-                let wulst = (1.0 - (d + 0.0052).max(0.0) / 0.0052).max(0.0).sqrt();
-                c = mische(c, mal(farbe, 0.8 + 0.4 * wulst), an);
-                h += 0.4 * an * wulst;
-            }
-            ([c[0], c[1], c[2], alpha], [h, 0.4, 0.0, 0.0])
+        Videorekorder => {
+            // Front eines Videorekorders der 80er (ohne Marke), maßstäblich: 256 Texel über
+            // 43 cm Breite, die Front nimmt die obersten 54 Texelzeilen ein (9 cm)
+            let tx = (u * 256.0).floor() as i32;
+            let ty = (v * 256.0).floor() as i32;
+            let (c, h, rauh, leuchten) = videorekorder(tx, ty, u, v);
+            ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, leuchten])
         }
         Buecher => {
             // Buchrücken: unterschiedlich breite Bücher in gedeckten Farben, verblichen, mit

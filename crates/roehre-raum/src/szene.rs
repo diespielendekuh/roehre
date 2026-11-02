@@ -26,7 +26,7 @@ pub fn bauen() -> Netz {
     zimmer(&mut n);
     tisch(&mut n);
     fernseher(&mut n);
-    konsole(&mut n);
+    videorekorder(&mut n);
     kleinkram(&mut n);
     gummibaum(&mut n);
     kabel(&mut n);
@@ -148,15 +148,34 @@ fn bilderrahmen(n: &mut Netz, mitte: V3, aussen: [f32; 2], b: f32) {
     n.flaeche(&Trafo::bei(add(mitte, [0.0, 0.0, -0.0075])), foto, Wandbild, [0.0, 0.0, 1.0, 1.0]);
 }
 
+/// Tisch aus massiver Eiche: Platte mit gerundeter Oberkante und abgesetzter Unterkante
+/// (Stufenprofil), an den Enden Kopfleisten mit quer laufender Faser, Zarge, gedrechselte
+/// Beine mit Wulst.
 fn tisch(n: &mut Netz) {
-    let mitte = [0.0, TISCH_HOEHE - 0.022, -0.05];
-    n.quader(&Trafo::bei(mitte), [0.78, 0.022, 0.40], 0.008, Tischholz, 1.4);
-    // Zarge (Brett unter der Platte)
-    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 0.075, -0.05]), [0.70, 0.032, 0.34], 0.004, Tischholz, 1.4);
-    // Beine, leicht verjüngt
+    let (z0, uvm) = (-0.05f32, 1.1);
+    let dicke = 0.016;
+    // Mittelteil der Platte (Faser entlang der Tischlänge)
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - dicke, z0]), [0.735, dicke, 0.42], 0.011, Tischholz, uvm);
+    // Kopfleisten an beiden Enden (Faser quer, sichtbare Fuge zur Platte)
+    for sx in [-1.0f32, 1.0] {
+        let t = Trafo::bei([sx * 0.772, TISCH_HOEHE - dicke, z0]).nach(&Trafo::dreh_y(std::f32::consts::FRAC_PI_2));
+        n.quader(&t, [0.42, dicke, 0.036], 0.011, Tischholz, uvm);
+    }
+    // Abgesetzte Unterkante: etwas schmaler, bildet mit der Platte eine Stufe
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 2.0 * dicke - 0.007, z0]), [0.79, 0.007, 0.405], 0.003, Tischholz, uvm);
+    // Zarge
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 0.085, z0]), [0.70, 0.04, 0.345], 0.004, Tischholz, uvm);
+    // Gedrechselte Beine: Fuß, Wulst unter der Zarge, leicht verjüngt
+    let h = TISCH_HOEHE - 0.04;
     for (sx, sz) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-        let p = [0.70 * sx, 0.0, -0.05 + 0.33 * sz];
-        n.drehkoerper(&Trafo::bei(p), &[(0.0, 0.0), (0.02, 0.0), (0.024, 0.04), (0.03, TISCH_HOEHE - 0.06), (0.0, TISCH_HOEHE - 0.06)], 10, Tischholz, 1.0);
+        let p = [0.70 * sx, 0.0, z0 + 0.335 * sz];
+        n.drehkoerper(
+            &Trafo::bei(p),
+            &[(0.0, 0.0), (0.022, 0.0), (0.026, 0.012), (0.024, 0.03), (0.028, 0.32), (0.034, h - 0.16), (0.038, h - 0.15), (0.034, h - 0.14), (0.032, h), (0.0, h)],
+            12,
+            Tischholz,
+            1.0,
+        );
     }
 }
 
@@ -256,66 +275,42 @@ fn fernseher(n: &mut Netz) {
     }
 }
 
-/// Spielkonsole im Stil des Super Famicom (ohne Logo und Schriftzug): hellgraues, flaches
-/// Gehäuse, erhöhter Modulschacht in dunklerem Grau, lila Schieber für Netz und Reset, lila
-/// Auswurftaste, zwei Controllerbuchsen vorn, rote Leuchte; davor der passende Controller in
-/// Hundeknochenform. Feinheiten (Tasten, Steuerkreuz) als Textur.
-fn konsole(n: &mut Netz) {
-    let m = [-0.50, TISCH_HOEHE, -0.04];
-    let dreh = Trafo::bei(m).nach(&Trafo::dreh_y(0.12));
-    // Grundkörper: vorn etwas niedriger als hinten (zwei Stufen)
-    n.quader(&dreh.nach(&Trafo::bei([0.0, 0.021, 0.0])), [0.10, 0.021, 0.12], 0.008, KonsoleHell, 4.0);
-    n.quader(&dreh.nach(&Trafo::bei([0.0, 0.046, 0.035])), [0.096, 0.006, 0.08], 0.006, KonsoleHell, 4.0);
-    // Modulschacht: dunkleres Grau, Öffnung mit Klappe
-    n.quader(&dreh.nach(&Trafo::bei([0.0, 0.055, 0.045])), [0.07, 0.006, 0.05], 0.004, KunststoffGrau, 6.0);
-    n.quader(&dreh.nach(&Trafo::bei([0.0, 0.0615, 0.045])), [0.055, 0.0012, 0.006], 0.0005, Gummi, 8.0);
-    // Schieber (Netz links, Reset rechts) und Auswurftaste davor
-    for (x, z) in [(-0.075f32, -0.015f32), (0.075, -0.015)] {
-        n.quader(&dreh.nach(&Trafo::bei([x, 0.054, z])), [0.012, 0.004, 0.011], 0.003, Lila, 8.0);
-        n.quader(&dreh.nach(&Trafo::bei([x, 0.0525, z - 0.008])), [0.015, 0.0012, 0.022], 0.0005, KunststoffGrau, 8.0);
+/// Videorekorder der 80er links neben dem Fernseher (ohne Marke): flaches schwarzes Gehäuse,
+/// die Front mit Kassettenklappe, Leuchtanzeige („12:00“), Tasten und Netzschalter als Textur.
+fn videorekorder(n: &mut Netz) {
+    let (halb, fuss) = ([0.212f32, 0.044, 0.16], 0.006);
+    let m = [-0.555, TISCH_HOEHE + fuss + halb[1], -0.06];
+    n.quader(&Trafo::bei(m), halb, 0.004, KunststoffSchwarz, 6.0);
+    // Front: Textur maßstäblich (256 Texel über die Breite, oberste 54 Zeilen)
+    let front = Trafo::bei([m[0], m[1], m[2] - halb[2] - 0.0006]);
+    n.flaeche(&front, [halb[0] - 0.002, halb[1] - 0.001], Videorekorder, [0.0, 0.0, 1.0, 54.0 / 256.0]);
+    // Lüftungsschlitze oben hinten
+    for i in 0..9 {
+        n.quader(&Trafo::bei([m[0] - 0.12 + i as f32 * 0.03, m[1] + halb[1] + 0.0004, m[2] + 0.09]), [0.011, 0.0005, 0.04], 0.0, Gummi, 8.0);
     }
-    n.quader(&dreh.nach(&Trafo::bei([0.0, 0.0535, -0.018])), [0.022, 0.004, 0.008], 0.003, Lila, 8.0);
-    // vorn: zwei Buchsen und die Leuchte
-    for x in [-0.03f32, 0.03] {
-        n.quader(&dreh.nach(&Trafo::bei([x, 0.02, -0.1205])), [0.012, 0.0065, 0.0015], 0.0006, Gummi, 8.0);
+    for (sx, sz) in [(-1.0f32, -1.0f32), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+        n.zylinder(&Trafo::bei([m[0] + sx * (halb[0] - 0.03), TISCH_HOEHE, m[2] + sz * (halb[2] - 0.03)]), 0.012, fuss, 10, Gummi);
     }
-    n.zylinder(&dreh.nach(&Trafo::bei([-0.075, 0.03, -0.1205])).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.0018, 0.001, 8, LedRot);
+}
 
-    // Controller: zwei runde Enden und der Steg, oben die Textur mit allen Tasten
-    let c = Trafo::bei([-0.30, TISCH_HOEHE, -0.32]).nach(&Trafo::dreh_y(0.28));
-    let dicke = 0.016;
-    for x in [-0.042f32, 0.042] {
-        n.zylinder(&c.nach(&Trafo::bei([x, 0.0, 0.0])), 0.0312, dicke, 24, KonsoleHell);
-    }
-    n.quader(&c.nach(&Trafo::bei([0.0, dicke / 2.0, 0.0])), [0.044, dicke / 2.0, 0.0248], 0.002, KonsoleHell, 8.0);
-    // Schultertasten hinten
-    for x in [-0.046f32, 0.046] {
-        n.quader(&c.nach(&Trafo::bei([x, dicke * 0.72, 0.021])), [0.014, dicke * 0.26, 0.006], 0.003, KunststoffGrau, 8.0);
-    }
-    let oben = c.nach(&Trafo::bei([0.0, dicke + 0.0004, 0.0])).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
-    n.flaeche(&oben, [0.0735, 0.0315], Steuergeraet, [0.0, 0.0, 1.0, 1.0]);
-    // Kabel von hinten zur linken Buchse, auf dem Tisch durchhängend
-    let a = c.punkt([0.0, dicke * 0.5, 0.03]);
-    let b = dreh.punkt([-0.03, 0.02, -0.122]);
-    let punkte: Vec<V3> = (0..=20)
-        .map(|i| {
-            let s = i as f32 / 20.0;
-            let x = a[0] + (b[0] - a[0]) * s + 0.05 * (s * std::f32::consts::PI * 1.5).sin();
-            let z = a[2] + (b[2] - a[2]) * s - 0.04 * (s * std::f32::consts::PI).sin();
-            let y = TISCH_HOEHE + 0.003 + (a[1] - TISCH_HOEHE) * (1.0 - s).powi(3) + (b[1] - TISCH_HOEHE) * s.powi(4);
-            [x, y, z]
-        })
-        .collect();
-    n.rohr(&punkte, 0.0026, 6, KunststoffGrau);
+/// Eine Videohülle liegend: Rücken (Atlaszeile `zeile`) zur Kamera.
+fn videohuelle(n: &mut Netz, t: &Trafo, zeile: u32) {
+    let halb = [0.095f32, 0.0135, 0.0525];
+    n.quader(t, halb, 0.002, KunststoffSchwarz, 8.0);
+    n.flaeche(&t.nach(&Trafo::bei([0.0, 0.0, -halb[2] - 0.0004])), [halb[0] - 0.001, halb[1] - 0.0008], Kassette, [0.0, zeile as f32 / 8.0, 1.0, 1.0 / 8.0]);
 }
 
 fn kleinkram(n: &mut Netz) {
-    // Videokassetten, gestapelt, leicht verdreht; Rücken zeigen zur Kamera
-    for i in 0..3 {
-        let t = Trafo::bei([0.52, TISCH_HOEHE + 0.0125 + i as f32 * 0.025, -0.08]).nach(&Trafo::dreh_y(0.08 * (i as f32 - 1.0) + 0.1));
-        n.quader(&t, [0.095, 0.012, 0.0935], 0.002, KunststoffSchwarz, 6.0);
-        // Rücken mit Etikett (Atlas: vier Etiketten nebeneinander)
-        n.flaeche(&t.nach(&Trafo::bei([0.0, 0.0, -0.0937])), [0.09, 0.0115], Kassette, [i as f32 * 0.25, 0.0, 0.25, 1.0]);
+    // Videokassetten in Hüllen, gestapelt, leicht verdreht; die Rücken zeigen zur Kamera.
+    // Rechts hinten drei, links vorn in der Tischecke vier (oben die selbst bespielte); die
+    // Anzeige des Videorekorders bleibt frei.
+    for (i, zeile) in [4u32, 5, 6].into_iter().enumerate() {
+        let t = Trafo::bei([0.52, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.08]).nach(&Trafo::dreh_y(0.08 * (i as f32 - 1.0) + 0.1));
+        videohuelle(n, &t, zeile);
+    }
+    for (i, (zeile, dreh, dx)) in [(0u32, -0.04f32, 0.0f32), (1, 0.05, 0.006), (2, -0.02, -0.004), (7, 0.16, 0.01)].into_iter().enumerate() {
+        let t = Trafo::bei([-0.685 + dx, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.345]).nach(&Trafo::dreh_y(dreh));
+        videohuelle(n, &t, zeile);
     }
     // Tasse mit Henkel
     let tasse = [0.40, TISCH_HOEHE, -0.30];
@@ -330,9 +325,6 @@ fn kleinkram(n: &mut Netz) {
     n.quader(&fb, [0.022, 0.007, 0.092], 0.005, KunststoffSchwarz, 8.0);
     let oben = fb.nach(&Trafo::bei([0.0, 0.0072, 0.0])).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
     n.flaeche(&oben, [0.019, 0.088], Fernbedienung, [0.0, 0.0, 1.0, 1.0]);
-    // Zeitschrift
-    let z = Trafo::bei([-0.62, TISCH_HOEHE + 0.003, -0.32]).nach(&Trafo::dreh_y(0.25)).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
-    n.flaeche(&z, [0.105, 0.14], Zeitschrift, [0.0, 0.0, 1.0, 1.0]);
 }
 
 /// Gummibaum (Ficus elastica): drei Triebe verschiedener Höhe aus einem Topf, große ovale
