@@ -99,11 +99,10 @@ einhüllen kann. Das ist Arbeit im Code des Ports, nicht in RT64.
 
 ### Offen
 
-* Erster D3D12-Lauf beim Anwender (2026-11-02) brach beim Anlegen ab: librashader forderte einen
-  Pipeline-Cache an, den wgpu unter D3D12 nicht kennt. Behoben in roehre (Cache nur, wenn das
-  Gerät ihn kann; Wache `ohne_zusatzfaehigkeiten`); der zweite Lauf steht aus. Am Einbau ändert
-  sich nichts.
+* **D3D12-Austausch auf echter Hardware geprüft** (2026-11-02, RTX 5070 Ti, `d3d12_spiel.exe`):
+  Testmuster flach und im 3D-Raum korrekt. Der erste Lauf war am Pipeline-Cache gescheitert
+  (behoben, Wache `ohne_zusatzfaehigkeiten`). Bild: `docs/bilder/etappe-8/`.
 
-* Der D3D12-Weg und der Vulkan-Weg mit Semaphoren sind auf echter Hardware nicht ausgeführt
-  (Etappe 8; Beispiel `beispiele/d3d12_spiel.cpp` zum Ausprobieren unter Windows).
+* Der Vulkan-Weg mit geteilten Semaphoren ist auf echter Hardware nicht ausgeführt (unter
+  Windows ist D3D12 der empfohlene Weg und geprüft).
 * Die Kosten (zwei Kopien je Bild, Röhre, Raum) sind auf echter Grafikkarte ungemessen (W-008).

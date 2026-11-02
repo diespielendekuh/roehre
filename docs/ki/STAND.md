@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, Etappe 8 (wartet auf Messwerte vom Anwender) · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 8 (alle geplanten Etappen abgeschlossen) · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -39,7 +39,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | Vorschau-Programm mit Fenster (Testbild/PNG/Folge, A/B-Vergleich, Lupe, Bildschirmfoto, alle Optionen) | fertig | `crates/roehre-vorschau` |
 | 3D-Vorführraum (Wohnzimmer der 80er, Röhrenfernseher auf Tisch, späte PS2-Optik, Rohpixel-Texturen 256², eigenes Wandbild, Tiefenunschärfe, Glühen) | fertig in Rust/wgpu; am echten Bildschirm und in der Leistung ungeprüft | `crates/roehre-raum`, `shader/eigen/raum/raum3d.wgsl` |
 | Kamera des Raums (Nähe weit/mittel/nah, Blickwinkel, Schwenk, Lage im Fenster per Lens Shift, 4:3–32:9) als Optionen der Gruppe `raum` mit Festwerten (`festwerte()`) | fertig, mit Prüfläufen (nie abgeschnitten, Anteil, Schwenk hält das Gerät fest) | `Kamera`, `Ansicht::aus_einstellungen`, `roehre-pruefstand kamera` |
-| C-API für C/C++-Spiele (`roehre.h`): Katalog als JSON, Einstellungen, Vorschaubild als RGBA (Launcher), Austausch mit Vulkan- und D3D12-Spielen über geteilten Grafikspeicher, flach und 3D-Raum, Strahlsimulation | gebaut; Vulkan auf lavapipe geprüft (Notweg ohne geteilte Semaphoren), D3D12 nur übersetzt; beides auf echter Hardware ungeprüft | `crates/roehre-c`, `crates/roehre-c/LIESMICH.md` |
+| C-API für C/C++-Spiele (`roehre.h`): Katalog als JSON, Einstellungen, Vorschaubild als RGBA (Launcher), Austausch mit Vulkan- und D3D12-Spielen über geteilten Grafikspeicher, flach und 3D-Raum, Strahlsimulation | fertig; **D3D12 auf RTX 5070 Ti geprüft** (flach und Raum, Testmuster korrekt); Vulkan auf lavapipe im Notweg geprüft, Vulkan mit geteilten Semaphoren auf echter Hardware ungeprüft | `crates/roehre-c`, `crates/roehre-c/LIESMICH.md` |
 | Leistungsmessung (Filter / 3D-Raum, 1080p / 4K, Kosten je Regler) | gemessen auf RTX 5070 Ti (Vulkan), siehe Abschnitt 2a; D3D12 und schwächere Karten offen | `roehre-pruefstand leistung`, `docs/messungen/` |
 | Englische Texte (alle Optionen, Auswahlwerte, Voreinstellungen) | fertig, mit Wache | `katalog.rs`, `voreinstellungen/*.toml` |
 

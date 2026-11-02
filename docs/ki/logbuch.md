@@ -2,6 +2,11 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 8 abgeschlossen
+- D3D12-Austausch beim Anwender (RTX 5070 Ti) in Ordnung, flach und Raum.
+- Alle geplanten Etappen 0–8 abgeschlossen. Offen bleiben: W-003 (permissive Variante ohne
+  GPL-Shader), Vulkan mit geteilten Semaphoren auf echter Hardware, Messung auf Mittelklasse.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 8, Messwerte und D3D12-Fehler
 - Messung des Anwenders (RTX 5070 Ti, Vulkan): Filter 0,15–0,66 ms (1080p), 0,48–1,00 ms (4K);
   3D-Raum 1,17 / 2,52 ms. Composite/S-Video +0,4 ms bei 4K, alles andere unter 0,2 ms.
