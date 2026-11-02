@@ -1,0 +1,169 @@
+//! Austausch mit einem Spiel, das selbst Vulkan oder D3D12 benutzt.
+//!
+//! roehre rechnet auf einem **eigenen** Gerät derselben Grafikkarte. Eingangs- und Zielbild
+//! legt roehre in geteiltem Grafikspeicher an; das Spiel öffnet sie über Handles, kopiert sein
+//! Bild hinein und das Ergebnis heraus. Zwei geteilte Semaphoren bzw. ein geteilter Zaun ordnen
+//! die Arbeit beider Geräte.
+//!
+//! Warum nicht direkt auf dem Gerät des Spiels: wgpu kann ein fremdes D3D12-Gerät gar nicht
+//! übernehmen, ein fremdes Vulkan-Gerät nur, wenn es mit genau den Funktionen angelegt wurde,
+//! die wgpu erwartet (z. B. Timeline-Semaphoren) – das hieße, am Gerät des Spiels (bei
+//! Mission: Impossible: RT64/plume) etwas zu ändern. Der geteilte Speicher kostet je Bild zwei
+//! Kopien auf der Grafikkarte (bei 4K etwa 0,1 ms), braucht unter D3D12 aber keinerlei Eingriff
+//! und unter Vulkan nur zwei Geräteerweiterungen.
+
+use std::ffi::c_char;
+use std::path::PathBuf;
+use std::time::Instant;
+
+use roehre_wgpu::{Ausgabe, Eingang, Einstellungen};
+
+use crate::arbeitsplatz::{Arbeitsplatz, Modus};
+use crate::einstellungen::{innen, RoehreEinstellungen};
+use crate::fehler::{geschuetzt, text};
+
+/// Parameter zum Anlegen (siehe roehre.h).
+#[repr(C)]
+pub struct RoehreAustauschParameter {
+    pub struktur_groesse: u32,
+    pub shader_ordner: *const c_char,
+    pub geraet_kennung: [u8; 16],
+    pub eingang_breite: u32,
+    pub eingang_hoehe: u32,
+    pub pixel_seitenverhaeltnis: f32,
+    pub ziel_breite: u32,
+    pub ziel_hoehe: u32,
+    pub ausgabe: i32,
+    pub einstellungen: *const RoehreEinstellungen,
+}
+
+pub(crate) struct Gelesen {
+    pub shader: PathBuf,
+    pub kennung: [u8; 16],
+    pub eingang: Eingang,
+    pub ziel: (u32, u32),
+    pub ausgabe: Ausgabe,
+    pub einstellungen: Einstellungen,
+}
+
+pub(crate) unsafe fn lies_parameter(p: *const RoehreAustauschParameter) -> Result<Gelesen, String> {
+    let p = unsafe { p.as_ref() }.ok_or("Parameter fehlen (NULL)")?;
+    if (p.struktur_groesse as usize) < std::mem::size_of::<RoehreAustauschParameter>() {
+        return Err("struktur_groesse zu klein (sizeof(RoehreAustauschParameter) eintragen)".into());
+    }
+    let ok = |b: u32, h: u32| (1..=16384).contains(&b) && (1..=16384).contains(&h);
+    if !ok(p.eingang_breite, p.eingang_hoehe) || !ok(p.ziel_breite, p.ziel_hoehe) {
+        return Err("Bildgrößen ungültig (1 … 16384)".into());
+    }
+    let ausgabe = match p.ausgabe {
+        0 => Ausgabe::sdr(wgpu::TextureFormat::Rgba8UnormSrgb),
+        1 => Ausgabe::scrgb(),
+        2 => Ausgabe::hdr10(),
+        a => return Err(format!("unbekannte Ausgabe {a} (0 SDR, 1 scRGB, 2 HDR10)")),
+    };
+    let einstellungen = if p.einstellungen.is_null() { Einstellungen::standard() } else { unsafe { innen(p.einstellungen) }?.clone() };
+    Ok(Gelesen {
+        shader: PathBuf::from(unsafe { text(p.shader_ordner, "Shader-Ordner") }?),
+        kennung: p.geraet_kennung,
+        eingang: Eingang {
+            breite: p.eingang_breite,
+            hoehe: p.eingang_hoehe,
+            pixel_seitenverhaeltnis: if p.pixel_seitenverhaeltnis > 0.0 { p.pixel_seitenverhaeltnis as f64 } else { 1.0 },
+        },
+        ziel: (p.ziel_breite, p.ziel_hoehe),
+        ausgabe,
+        einstellungen,
+    })
+}
+
+/// Der Teil, der von der Grafik-API abhängt.
+pub(crate) trait Weg: Send {
+    /// Vor dem Übergeben: auf das Spiel warten und danach melden lassen.
+    fn vor_submit(&mut self, queue: &wgpu::Queue) -> Result<(), String>;
+    /// Nach dem Übergeben (z. B. Zaun setzen).
+    fn nach_submit(&mut self, queue: &wgpu::Queue) -> Result<(), String>;
+}
+
+/// Undurchsichtiges Austausch-Objekt.
+pub struct RoehreAustausch {
+    pub(crate) platz: Arbeitsplatz,
+    pub(crate) eingang: wgpu::Texture,
+    pub(crate) ziel: wgpu::Texture,
+    pub(crate) eingang_info: Eingang,
+    pub(crate) weg: Box<dyn Weg>,
+    pub(crate) start: Instant,
+    /// Plattformteil (Handles der Bilder und Semaphoren)
+    pub(crate) teile: Box<dyn std::any::Any + Send>,
+}
+
+/// Format des Eingangsbilds: 8 Bit je Kanal, Werte wie im Spiel (sRGB-kodiert).
+pub(crate) const EINGANG_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+pub(crate) const BILD_NUTZUNG: wgpu::TextureUsages = wgpu::TextureUsages::TEXTURE_BINDING
+    .union(wgpu::TextureUsages::RENDER_ATTACHMENT)
+    .union(wgpu::TextureUsages::COPY_SRC)
+    .union(wgpu::TextureUsages::COPY_DST);
+
+/// Setzt neue Einstellungen. Blockiert, bis eine neu nötige Shaderkette gebaut ist (beim
+/// Wechsel der Kette bis etwa eine Sekunde, sonst sofort), damit keine Arbeit im Hintergrund
+/// zwischen die Übergaben an die Grafikkarte gerät.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn roehre_austausch_einstellungen(a: *mut RoehreAustausch, e: *const RoehreEinstellungen) -> i32 {
+    geschuetzt(-1, || {
+        let a = unsafe { a.as_mut() }.ok_or("Austausch fehlt (NULL)")?;
+        let e = unsafe { innen(e) }?;
+        a.platz.einstellungen(e, true)?;
+        Ok(0)
+    })
+}
+
+/// Zeichnet ein Bild: wartet (auf der Grafikkarte) auf „bereit“, rechnet das Eingangsbild ins
+/// Zielbild, meldet „fertig“. Kehrt sofort zurück, ohne auf die Grafikkarte zu warten.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn roehre_austausch_zeichnen(a: *mut RoehreAustausch, modus: i32, zeit: f32) -> i32 {
+    geschuetzt(-1, || {
+        let a = unsafe { a.as_mut() }.ok_or("Austausch fehlt (NULL)")?;
+        let modus = Modus::aus(modus)?;
+        let zeit = if zeit >= 0.0 { zeit } else { a.start.elapsed().as_secs_f32() };
+        let device = a.platz.device.clone();
+        let queue = a.platz.queue.clone();
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("roehre-austausch") });
+        let ansicht = a.ziel.create_view(&Default::default());
+        let groesse = (a.ziel.width(), a.ziel.height());
+        a.platz.zeichne(&mut enc, &a.eingang, &a.eingang_info, &ansicht, groesse, modus, zeit)?;
+        // Beide Bilder verlassen roehre im Zustand „zum Lesen im Shader“ (Vulkan:
+        // SHADER_READ_ONLY_OPTIMAL, D3D12: PIXEL_SHADER_RESOURCE | NON_PIXEL_SHADER_RESOURCE).
+        enc.transition_resources(
+            std::iter::empty(),
+            [&a.eingang, &a.ziel].into_iter().map(|t| wgpu::TextureTransition { texture: t, selector: None, state: wgpu::TextureUses::RESOURCE }),
+        );
+        a.weg.vor_submit(&queue)?;
+        queue.submit([enc.finish()]);
+        a.weg.nach_submit(&queue)?;
+        let _ = device.poll(wgpu::PollType::Poll);
+        Ok(0)
+    })
+}
+
+/// Wartet, bis alle Arbeit von roehre auf der Grafikkarte erledigt ist (zum Aufräumen, für
+/// Tests; im Spiel nicht nötig).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn roehre_austausch_warten(a: *mut RoehreAustausch) -> i32 {
+    geschuetzt(-1, || {
+        let a = unsafe { a.as_mut() }.ok_or("Austausch fehlt (NULL)")?;
+        a.platz.device.poll(wgpu::PollType::wait_indefinitely()).map_err(|e| e.to_string())?;
+        Ok(0)
+    })
+}
+
+/// Gibt den Austausch frei (wartet vorher auf die Grafikkarte). Handles, die das Spiel bereits
+/// geöffnet hat, bleiben dort gültig, bis es sie selbst schließt.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn roehre_austausch_freigeben(a: *mut RoehreAustausch) {
+    if a.is_null() {
+        return;
+    }
+    let a = unsafe { Box::from_raw(a) };
+    let _ = a.platz.device.poll(wgpu::PollType::wait_indefinitely());
+    drop(a);
+}

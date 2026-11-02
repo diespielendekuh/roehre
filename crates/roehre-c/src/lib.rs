@@ -14,12 +14,16 @@
 #![allow(clippy::missing_safety_doc)]
 
 mod arbeitsplatz;
+mod austausch;
 mod einstellungen;
 mod fehler;
 mod katalog;
 mod vorschau;
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "android", target_os = "freebsd"))]
+mod vulkan;
 
 pub use arbeitsplatz::Modus;
+pub use austausch::{RoehreAustausch, RoehreAustauschParameter};
 pub use einstellungen::RoehreEinstellungen;
 pub use vorschau::RoehreVorschau;
 

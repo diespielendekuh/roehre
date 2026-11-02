@@ -126,6 +126,97 @@ int32_t roehre_vorschau_zeichnen(RoehreVorschau *v, const RoehreEinstellungen *e
                                  float pixel_seitenverhaeltnis,
                                  uint8_t *ziel_rgba, uint32_t ziel_breite, uint32_t ziel_hoehe);
 
+/* ------------------------------------------------------------------ Austausch mit Vulkan/D3D12 */
+
+/**
+ * Für Spiele, die selbst mit Vulkan oder D3D12 zeichnen (z. B. hinter RT64).
+ *
+ * roehre rechnet auf einem eigenen Gerät derselben Grafikkarte. Es legt zwei Bilder in
+ * geteiltem Grafikspeicher an – EINGANG (das Spielbild) und ZIEL (das fertige Bild) – und gibt
+ * dem Spiel Handles dafür. Das Spiel öffnet sie einmal auf seinem Gerät und tut dann je Bild:
+ *
+ *   1. sein Bild in EINGANG kopieren (vkCmdBlitImage/CopyResource, skaliert/konvertiert nach
+ *      Belieben) und EINGANG in den Lesezustand bringen
+ *      (Vulkan: SHADER_READ_ONLY_OPTIMAL; D3D12: PIXEL_SHADER_RESOURCE|NON_PIXEL_SHADER_RESOURCE),
+ *   2. „bereit“ melden (Vulkan: Semaphore 0 signalisieren; D3D12: Zaun auf den Wert setzen,
+ *      den roehre_austausch_zeichnen erwartet, siehe D3D12-Teil),
+ *   3. roehre_austausch_zeichnen() aufrufen (kehrt sofort zurück),
+ *   4. auf „fertig“ warten (auf der Grafikkarte) und ZIEL lesen oder kopieren; ZIEL danach
+ *      wieder im Lesezustand lassen.
+ *
+ * Wer EINGANG beschreibt, setzt vorher eine Barriere ab ALL_COMMANDS (der Lesevorgang von
+ * roehre aus dem letzten Bild liegt in der Warteschlange davor). Formate: EINGANG ist RGBA8
+ * UNORM mit sRGB-kodierten Werten wie ein gewöhnliches Spielbild; ZIEL ist RGBA8 sRGB (SDR),
+ * RGBA16F (scRGB) oder RGB10A2 (HDR10).
+ */
+typedef struct RoehreAustausch RoehreAustausch;
+
+enum {
+    ROEHRE_AUSGABE_SDR = 0,   /**< ZIEL in RGBA8 sRGB */
+    ROEHRE_AUSGABE_SCRGB = 1, /**< ZIEL in RGBA16F, linear, 1.0 = 80 nit */
+    ROEHRE_AUSGABE_HDR10 = 2  /**< ZIEL in RGB10A2, PQ, BT.2020 */
+};
+
+typedef struct RoehreAustauschParameter {
+    uint32_t struktur_groesse;          /**< sizeof(RoehreAustauschParameter) */
+    const char *shader_ordner;          /**< der mitgelieferte Ordner shader/ */
+    uint8_t geraet_kennung[16];         /**< Vulkan: VkPhysicalDeviceIDProperties::deviceUUID;
+                                             D3D12: LUID des Adapters in den ersten 8 Byte;
+                                             alles 0 = erste Grafikkarte */
+    uint32_t eingang_breite, eingang_hoehe; /**< Größe von EINGANG (z. B. 320×240 oder die Ausgabegröße von RT64) */
+    float pixel_seitenverhaeltnis;      /**< Breite/Höhe eines Spielpixels in EINGANG */
+    uint32_t ziel_breite, ziel_hoehe;   /**< Größe von ZIEL, meist die Fenstergröße */
+    int32_t ausgabe;                    /**< ROEHRE_AUSGABE_* */
+    const RoehreEinstellungen *einstellungen; /**< NULL = Standard */
+} RoehreAustauschParameter;
+
+/** Neue Einstellungen. Blockiert, bis eine neu nötige Shaderkette gebaut ist (beim Wechsel der
+ *  Kette bis etwa eine Sekunde, sonst sofort). Kamera und Raum wirken sofort. */
+int32_t roehre_austausch_einstellungen(RoehreAustausch *a, const RoehreEinstellungen *e);
+/** Zeichnet ein Bild (modus: ROEHRE_MODUS_*; zeit in Sekunden, < 0 = Uhr seit dem Anlegen).
+ *  Wartet auf der Grafikkarte auf „bereit“ und meldet „fertig“; kehrt sofort zurück. */
+int32_t roehre_austausch_zeichnen(RoehreAustausch *a, int32_t modus, float zeit);
+/** Wartet auf der CPU, bis roehre auf der Grafikkarte nichts mehr zu tun hat (für Tests). */
+int32_t roehre_austausch_warten(RoehreAustausch *a);
+/** Freigeben. Andere Fenstergröße: freigeben und neu anlegen (Handles neu öffnen). */
+void roehre_austausch_freigeben(RoehreAustausch *a);
+
+/* --- Vulkan ---
+ * Gerät des Spiels: Vulkan 1.1 oder neuer, mit den Geräteerweiterungen
+ *   Linux:   VK_KHR_external_memory_fd    und VK_KHR_external_semaphore_fd
+ *   Windows: VK_KHR_external_memory_win32 und VK_KHR_external_semaphore_win32
+ * Bild öffnen: VkImage mit VkExternalMemoryImageCreateInfo{handle_art}, Format vk_format,
+ * Nutzung vk_nutzung, 2D, 1 Mip, 1 Schicht, OPTIMAL, EXCLUSIVE; Speicher mit
+ * VkImportMemoryFdInfoKHR bzw. VkImportMemoryWin32HandleInfoKHR, Größe speicher_groesse, Typ
+ * speicher_typ, dazu VkMemoryDedicatedAllocateInfo (dediziert = 1).
+ * Semaphoren: binär, dauerhaft importieren (vkImportSemaphoreFdKHR bzw. ...Win32HandleKHR).
+ * Je Bild: „bereit“ (0) im Submit nach dem Beschreiben von EINGANG signalisieren, „fertig“ (1)
+ * im Submit vor dem Lesen von ZIEL abwarten – jede genau einmal je roehre_austausch_zeichnen.
+ *
+ * Notweg ohne geteilte Semaphoren (Treiber ohne VK_KHR_external_semaphore_*, z. B. Mesa
+ * lavapipe; roehre_vulkan_semaphore liefert dann < 0): vor roehre_austausch_zeichnen auf das
+ * Ende des eigenen Submits warten (Zaun), vor dem Lesen von ZIEL roehre_austausch_warten()
+ * aufrufen. Kostet die Gleichzeitigkeit; nur zum Prüfen gedacht.
+ */
+typedef struct RoehreVulkanBild {
+    int64_t handle;            /**< Linux: fd; Windows: HANDLE. Neu je Aufruf, gehört dem Spiel. */
+    uint32_t handle_art;       /**< VkExternalMemoryHandleTypeFlagBits */
+    uint32_t vk_format;        /**< VkFormat */
+    uint32_t vk_nutzung;       /**< VkImageUsageFlags */
+    uint32_t breite, hoehe;
+    uint64_t speicher_groesse; /**< VkMemoryAllocateInfo::allocationSize */
+    uint32_t speicher_typ;     /**< VkMemoryAllocateInfo::memoryTypeIndex (gleiche Grafikkarte) */
+    uint32_t dediziert;        /**< 1: VkMemoryDedicatedAllocateInfo verwenden */
+} RoehreVulkanBild;
+
+/** Legt den Austausch an (eigenes Gerät auf der Grafikkarte mit geraet_kennung = deviceUUID). */
+RoehreAustausch *roehre_vulkan_erstellen(const RoehreAustauschParameter *p);
+/** welches: 0 = EINGANG, 1 = ZIEL. Liefert jedes Mal ein neues Handle. */
+int32_t roehre_vulkan_bild(const RoehreAustausch *a, int32_t welches, RoehreVulkanBild *aus);
+/** welches: 0 = „bereit“ (Spiel signalisiert), 1 = „fertig“ (roehre signalisiert).
+ *  handle_art: VkExternalSemaphoreHandleTypeFlagBits (darf NULL sein). */
+int32_t roehre_vulkan_semaphore(const RoehreAustausch *a, int32_t welches, int64_t *handle, uint32_t *handle_art);
+
 #ifdef __cplusplus
 }
 #endif

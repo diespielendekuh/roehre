@@ -45,7 +45,7 @@ pub unsafe extern "C" fn roehre_vorschau_erstellen(shader_ordner: *const c_char)
     geschuetzt(ptr::null_mut(), || {
         let ordner = PathBuf::from(unsafe { text(shader_ordner, "Shader-Ordner") }?);
         let (device, queue) = geraet()?;
-        let platz = Arbeitsplatz::neu(device, queue, ordner, FORMAT, Einstellungen::standard())?;
+        let platz = Arbeitsplatz::neu(device, queue, ordner, FORMAT.into(), Einstellungen::standard())?;
         Ok(Box::into_raw(Box::new(RoehreVorschau { platz, eingang: None, ziel: None, start: Instant::now() })))
     })
 }

@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use roehre_raum::{Ansicht, Raum};
-use roehre_wgpu::{Eingang, Einstellungen, FlaechenZiel, Roehre};
+use roehre_wgpu::{Ausgabe, Eingang, Einstellungen, FlaechenZiel, Roehre};
 
 /// Was gezeichnet wird.
 #[repr(C)]
@@ -39,8 +39,9 @@ pub(crate) struct Arbeitsplatz {
 }
 
 impl Arbeitsplatz {
-    pub fn neu(device: wgpu::Device, queue: wgpu::Queue, shader: PathBuf, format: wgpu::TextureFormat, e: Einstellungen) -> Result<Self, String> {
-        let roehre = Roehre::neu(&device, &queue, shader.clone(), e.clone(), format).map_err(|f| f.to_string())?;
+    pub fn neu(device: wgpu::Device, queue: wgpu::Queue, shader: PathBuf, ausgabe: Ausgabe, e: Einstellungen) -> Result<Self, String> {
+        let format = ausgabe.format;
+        let roehre = Roehre::neu(&device, &queue, shader.clone(), e.clone(), ausgabe).map_err(|f| f.to_string())?;
         Ok(Self { device, queue, roehre, raum: None, format, shader, einstellungen: e })
     }
 
