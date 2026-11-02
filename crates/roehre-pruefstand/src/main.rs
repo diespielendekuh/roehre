@@ -14,6 +14,7 @@
 //! `-b` den Namen eines Testbilds oder den Pfad eines PNG.
 
 mod gpu;
+mod moire;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -43,6 +44,7 @@ fn main() {
         ),
         "testbilder" => testbilder(Path::new(&opt("-o").unwrap_or("testbilder".into()))),
         "umschalten" => umschalten(),
+        "moire" => moire_messen(opt("-v")),
         _ => {
             eprintln!("Befehle: foto, bogen, testbilder, umschalten (Einzelheiten in der Quelltext-Doku)");
             Ok(())
@@ -212,6 +214,52 @@ fn umschalten() -> Ergebnis {
             "→ {ziel_v}: Kette nach {:.2} s bereit, währenddessen {bilder_waehrenddessen} Bilder mit der alten Kette gezeichnet",
             t.elapsed().as_secs_f64()
         );
+    }
+    Ok(())
+}
+
+/// Moiré-Messung über Voreinstellungen, Ausgabegrößen und Eingänge (siehe `moire.rs`).
+fn moire_messen(nur: Option<String>) -> Ergebnis {
+    let gpu = Gpu::neu();
+    let groessen = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
+    let eingaenge: [(&str, u32, u32, f64); 3] =
+        [("SNES 256×224", 256, 224, 8.0 / 7.0), ("N64 320×240", 320, 240, 1.0), ("PAL 256×239", 256, 239, 8.0 / 7.0)];
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    println!("| Voreinstellung | Eingang | Ausgabe | px je Zeile | Zeilenschwebung | px je Tripel | Maskenschwebung |");
+    println!("|---|---|---|---:|---:|---:|---:|");
+    let liste: Vec<(String, Einstellungen)> = match nur.as_deref() {
+        Some(pfad) if pfad.ends_with(".toml") => vec![(pfad.to_string(), lade_einstellungen(pfad)?)],
+        _ => roehre_modell::voreinstellungen()
+            .iter()
+            .filter(|v| v.schluessel != "aus" && nur.as_deref().is_none_or(|n| n == v.schluessel))
+            .map(|v| Ok((v.schluessel.to_string(), Einstellungen::voreinstellung(v.schluessel)?)))
+            .collect::<Result<_, roehre_modell::Fehler>>()?,
+    };
+    for (schluessel, e) in liste {
+        roehre.uebernehme(e);
+        roehre.warte_auf_kette()?;
+        for (name, b, h, par) in eingaenge {
+            let mut bild = Bild::neu(b, h, [128, 128, 128]);
+            bild.pixel_seitenverhaeltnis = par;
+            for g in groessen {
+                let voll = rendere(&gpu, &mut roehre, &bild, g, 2)?;
+                let r = roehre.flaeche(&eingang_von(&bild), g);
+                let (zeilen, spalten) = moire::profile(&voll, r.x, r.y, r.breite, r.hoehe);
+                let pz = r.hoehe as f64 / h as f64;
+                let pt = roehre.letzter_plan().and_then(|p| p.maske).map(|m| m.pixel_je_triade).unwrap_or(3.0);
+                println!(
+                    "| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |",
+                    schluessel,
+                    name,
+                    g.0,
+                    g.1,
+                    pz,
+                    moire::schwebung(&zeilen, pz),
+                    pt,
+                    moire::schwebung(&spalten, pt)
+                );
+            }
+        }
     }
     Ok(())
 }

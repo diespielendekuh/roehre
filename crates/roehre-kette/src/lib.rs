@@ -70,6 +70,51 @@ impl Kette {
     }
 }
 
+/// Preset der Vorstufe „virtuelle Zeilen“ (eigener Shader, MIT OR Apache-2.0).
+pub const VORSTUFE_PFAD: &str = "eigen/virtuelle-zeilen.slangp";
+
+/// Lädt das Preset der Vorstufe.
+pub fn lade_vorstufe(shader_ordner: &Path) -> Result<ShaderPreset, Fehler> {
+    let pfad = shader_ordner.join(VORSTUFE_PFAD);
+    if !pfad.is_file() {
+        return Err(Fehler::ShaderOrdner(shader_ordner.into(), pfad));
+    }
+    Ok(ShaderPreset::try_parse(&pfad, ShaderFeatures::NONE)?)
+}
+
+/// Ab dieser Zeilenzahl gilt ein Eingangsbild als hochaufgelöst (Automatik von
+/// `eingang.zeilen`): 576i ist die höchste Zeilenzahl eines Röhrenfernsehers.
+pub const AUTOMATIK_SCHWELLE: u32 = 600;
+/// Mindestzahl an Ausgabepixeln je Röhrenzeile, damit Strahlprofil und Lücke sauber
+/// gezeichnet werden. Gemessen (Etappe 2): 480 Zeilen auf 1080p (2,25 px je Zeile)
+/// ergeben ein deutliches Schwebungsmuster, 240 Zeilen (4,5 px) nicht.
+pub const MIN_PIXEL_JE_ZEILE: f64 = 4.0;
+
+/// Größe, auf die die Vorstufe das Eingangsbild bringt, oder `None`, wenn das Bild
+/// unverändert zur Röhre geht. `seitenverhaeltnis` ist das Bildseitenverhältnis des
+/// Eingangs (Breite × Pixel-Seitenverhältnis / Höhe), `ziel_hoehe` die Höhe des Ziels in
+/// Pixeln (für die Automatik: 480 Zeilen nur, wenn jede Zeile mindestens
+/// [`MIN_PIXEL_JE_ZEILE`] Pixel bekommt, sonst 240).
+pub fn virtuelle_groesse(e: &Einstellungen, eingang: (u32, u32), seitenverhaeltnis: f64, ziel_hoehe: u32) -> Option<(u32, u32)> {
+    if !e.schalter("allgemein.roehre") {
+        return None;
+    }
+    let wunsch = e.zahl("eingang.zeilen") as u32;
+    let flaechen_hoehe = ziel_hoehe as f64 * e.zahl("bildformat.fuellung") / 100.0;
+    let automatik = if flaechen_hoehe >= 480.0 * MIN_PIXEL_JE_ZEILE { 480 } else { 240 };
+    let zeilen = match wunsch {
+        0 if eingang.1 > AUTOMATIK_SCHWELLE => automatik,
+        0 => return None,
+        z => z,
+    };
+    if zeilen >= eingang.1 {
+        // Nur verkleinern; hochrechnen würde nichts gewinnen.
+        return None;
+    }
+    let breite = (zeilen as f64 * seitenverhaeltnis * e.zahl("eingang.waagerecht")).round() as u32;
+    Some((breite.clamp(1, eingang.0), zeilen))
+}
+
 /// Was die Übersetzung über Eingang und Ausgabe wissen muss.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Kontext {
@@ -220,7 +265,12 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
         p.push(("slotmask", slot_hell));
         p.push(("slotmask1", slot_dunkel));
         p.push(("slotwidth", 0.0));
-        p.push(("double_slot", 2.0));
+        // Niedrige Schlitze und halbe Abschwächung der Schlitz-Zeilen-Wechselwirkung:
+        // Die senkrechte Periode der Schlitzmaske schwebt sonst gegen die Zeilenperiode.
+        // Gemessen (roehre-pruefstand moire, SNES 256×224, scart-rgb): Zeilenschwebung
+        // bei 1080p 5,4 % → 0,8 %, bei 4K 3,2 % → 0,3 % (Etappe 2).
+        p.push(("double_slot", 1.0));
+        p.push(("smask_mit", if typ == "schlitzmaske" { 0.5 } else { 0.0 }));
         p.push(("slotms", wahl.groesse as f32));
         p.push(("mshift", versatz));
         Some(wahl)
@@ -264,7 +314,25 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     p.push(("post_br", z("helligkeit.nachher")));
     p.push(("gamma_out", z("helligkeit.gamma_ausgang")));
 
+    // Entwicklerhilfe zum Abstimmen: ROEHRE_ROHPARAMETER="name=wert,name=wert" setzt
+    // Parameter der Kette direkt (nach allen anderen, überschreibt sie).
+    p.extend(rohparameter().iter().map(|(n, w)| (n.as_str(), *w)));
+
     Plan { kette, parameter: p, maske }
+}
+
+fn rohparameter() -> &'static [(String, f32)] {
+    static ROH: std::sync::OnceLock<Vec<(String, f32)>> = std::sync::OnceLock::new();
+    ROH.get_or_init(|| {
+        std::env::var("ROEHRE_ROHPARAMETER")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|t| {
+                let (n, w) = t.split_once('=')?;
+                Some((n.trim().to_string(), w.trim().parse().ok()?))
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]
@@ -285,6 +353,17 @@ mod tests {
     }
 
     #[test]
+    fn virtuelle_zeilen() {
+        let e = Einstellungen::voreinstellung("scart-rgb").unwrap();
+        assert_eq!(virtuelle_groesse(&e, (256, 224), 4.0 / 3.0, 1080), None);
+        assert_eq!(virtuelle_groesse(&e, (1920, 1080), 16.0 / 9.0, 1080), Some((853, 240)));
+        assert_eq!(virtuelle_groesse(&e, (3840, 2160), 4.0 / 3.0, 2160), Some((1280, 480)));
+        let mut e = e;
+        e.setze("eingang.zeilen", roehre_modell::Wert::Ganzzahl(240));
+        assert_eq!(virtuelle_groesse(&e, (640, 480), 4.0 / 3.0, 1080), Some((640, 240)));
+    }
+
+    #[test]
     fn kettenwahl() {
         let k = Kontext { eingang: (256, 224), flaeche: (1440, 1080) };
         let mut e = Einstellungen::voreinstellung("wohnzimmer-90er-composite").unwrap();
@@ -298,6 +377,7 @@ mod tests {
     #[test]
     fn presets_laden() {
         let ordner = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shader");
+        assert!(!lade_vorstufe(&ordner).unwrap().passes.is_empty());
         for kette in [Kette::Sauber, Kette::GuestRgb, Kette::GuestSchnell, Kette::GuestNtsc, Kette::GuestPal] {
             let p = kette.lade(&ordner).unwrap_or_else(|e| panic!("{kette:?}: {e}"));
             assert!(!p.passes.is_empty());

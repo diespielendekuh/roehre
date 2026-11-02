@@ -22,10 +22,11 @@ pub enum Gruppe {
     Geometrie,
     Helligkeit,
     Bildformat,
+    Eingang,
 }
 
 impl Gruppe {
-    pub const ALLE: [Gruppe; 9] = [
+    pub const ALLE: [Gruppe; 10] = [
         Gruppe::Allgemein,
         Gruppe::Signal,
         Gruppe::Strahl,
@@ -35,6 +36,7 @@ impl Gruppe {
         Gruppe::Geometrie,
         Gruppe::Helligkeit,
         Gruppe::Bildformat,
+        Gruppe::Eingang,
     ];
 
     /// Schlüssel der Gruppe, zugleich Tabellenname in TOML.
@@ -49,6 +51,7 @@ impl Gruppe {
             Gruppe::Geometrie => "geometrie",
             Gruppe::Helligkeit => "helligkeit",
             Gruppe::Bildformat => "bildformat",
+            Gruppe::Eingang => "eingang",
         }
     }
 
@@ -63,6 +66,7 @@ impl Gruppe {
             Gruppe::Geometrie => Texte::de_en("Geometrie", "Geometry"),
             Gruppe::Helligkeit => Texte::de_en("Helligkeit", "Brightness"),
             Gruppe::Bildformat => Texte::de_en("Bildformat", "Picture format"),
+            Gruppe::Eingang => Texte::de_en("Eingangsbild", "Input picture"),
         }
     }
 }
@@ -554,6 +558,25 @@ static KATALOG: &[OptionBeschreibung] = &[
         kosten: Kosten::Keine,
         wirkt_wenn: None,
     },
+    // ---------------------------------------------------------------- Helligkeit (HDR)
+    OptionBeschreibung {
+        schluessel: "helligkeit.hdr_weiss",
+        gruppe: Gruppe::Helligkeit,
+        name: Texte::de_en("HDR: Helligkeit von Weiß", "HDR: white level"),
+        beschreibung: Texte::de("Nur bei HDR-Ausgabe. Leuchtdichte, die eine weiße Fläche im Mittel haben soll. 200 nit entspricht einem hellen Röhrenfernseher."),
+        art: zahl_einheit(80.0, 600.0, 10.0, 200.0, "nit"),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "helligkeit.hdr_spitze",
+        gruppe: Gruppe::Helligkeit,
+        name: Texte::de_en("HDR: Spitzenhelligkeit", "HDR: peak brightness"),
+        beschreibung: Texte::de("Nur bei HDR-Ausgabe. Höchste Leuchtdichte einzelner Leuchtstreifen. Sie sollte der Spitzenhelligkeit des eigenen Bildschirms entsprechen; darüber wird weich begrenzt."),
+        art: zahl_einheit(200.0, 4000.0, 50.0, 1000.0, "nit"),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
     // ---------------------------------------------------------------- Bildformat
     OptionBeschreibung {
         schluessel: "bildformat.seitenverhaeltnis",
@@ -588,6 +611,25 @@ static KATALOG: &[OptionBeschreibung] = &[
         beschreibung: Texte::de("Anteil der Fensterhöhe, den das Bild höchstens einnimmt."),
         art: zahl_einheit(50.0, 100.0, 1.0, 100.0, "%"),
         kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    // ---------------------------------------------------------------- Eingang
+    OptionBeschreibung {
+        schluessel: "eingang.zeilen",
+        gruppe: Gruppe::Eingang,
+        name: Texte::de_en("Zeilenzahl der Röhre", "Tube line count"),
+        beschreibung: Texte::de("Wie viele Zeilen die Röhre zeichnet. 0 heißt automatisch: Bilder bis 600 Zeilen (SNES, N64) zeigen ihre eigenen Zeilen, höher aufgelöste Bilder (z. B. 1080p eines 3D-Spiels) werden auf 240 Zeilen gebracht, ab einer Ausgabe von 4K auf 480 (jede Zeile braucht mindestens 4 Bildschirmpixel, sonst entsteht ein Schwebungsmuster). 240 und 480 entsprechen NTSC, 288 und 576 PAL."),
+        art: OptionsArt::Ganzzahl { min: 0, max: 1200, standard: 0 },
+        kosten: Kosten::Gering,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "eingang.waagerecht",
+        gruppe: Gruppe::Eingang,
+        name: Texte::de_en("Waagerechte Auflösung", "Horizontal resolution"),
+        beschreibung: Texte::de("Nur wenn die Zeilenzahl verringert wird: Bildpunkte je Zeile im Verhältnis zur Zeilenzahl und zum Seitenverhältnis. 2 heißt doppelt so viele Punkte wie bei quadratischen Pixeln; das hält das Bild waagerecht scharf, so wie der Strahl einer Röhre entlang der Zeile nicht in Pixel zerfällt."),
+        art: zahl(1.0, 4.0, 0.25, 2.0),
+        kosten: Kosten::Gering,
         wirkt_wenn: None,
     },
 ];

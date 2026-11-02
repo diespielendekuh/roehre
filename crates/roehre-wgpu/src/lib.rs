@@ -71,6 +71,43 @@ pub fn empfohlene_features() -> wgpu::Features {
 
 const ZWISCHENFORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// Eine Zwischentextur mit Ansicht und Größe.
+struct Zwischen {
+    textur: wgpu::Texture,
+    ansicht: wgpu::TextureView,
+    groesse: (u32, u32),
+}
+
+impl Zwischen {
+    /// Legt die Textur an, wenn sie fehlt oder die Größe nicht passt.
+    fn sichern(platz: &mut Option<Zwischen>, device: &wgpu::Device, groesse: (u32, u32), name: &str) {
+        if platz.as_ref().map(|z| z.groesse) == Some(groesse) {
+            return;
+        }
+        let textur = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(name),
+            size: wgpu::Extent3d { width: groesse.0, height: groesse.1, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: ZWISCHENFORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let ansicht = textur.create_view(&Default::default());
+        *platz = Some(Zwischen { textur, ansicht, groesse });
+    }
+
+    fn viewport(&self) -> Viewport<'_, WgpuOutputView<'_>> {
+        let ausgabe = WgpuOutputView::new_from_raw(
+            &self.ansicht,
+            librashader::runtime::Size::new(self.groesse.0, self.groesse.1),
+            ZWISCHENFORMAT,
+        );
+        Viewport::new_render_target_sized_origin(ausgabe, None).expect("Größe ist bekannt")
+    }
+}
+
 struct Ausstehend {
     kette: Kette,
     empfaenger: mpsc::Receiver<Result<FilterChain, Fehler>>,
@@ -84,7 +121,10 @@ pub struct Roehre {
     einstellungen: Einstellungen,
     aktiv: (Kette, FilterChain),
     ausstehend: Option<Ausstehend>,
-    zwischen: Option<(wgpu::Texture, wgpu::TextureView, (u32, u32))>,
+    zwischen: Option<Zwischen>,
+    /// Vorstufe „virtuelle Zeilen“ (eigener Shader) und ihr Ziel.
+    vorstufe: FilterChain,
+    vorstufe_ziel: Option<Zwischen>,
     setzer: Zusammensetzer,
     bild: usize,
     /// Hintergrundfarbe außerhalb der Röhrenfläche (linear).
@@ -106,7 +146,15 @@ impl Roehre {
         let shader_ordner = shader_ordner.into();
         let kette = kette_fuer(&einstellungen);
         let filter = baue(device, queue, &shader_ordner, kette)?;
+        let vorstufe = FilterChain::load_from_preset(
+            roehre_kette::lade_vorstufe(&shader_ordner)?,
+            device,
+            queue,
+            Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: true, adapter_info: None }),
+        )?;
         Ok(Self {
+            vorstufe,
+            vorstufe_ziel: None,
             device: device.clone(),
             queue: queue.clone(),
             shader_ordner,
@@ -175,9 +223,15 @@ impl Roehre {
         Ok(())
     }
 
-    /// Röhrenfläche für ein Ziel der angegebenen Größe.
+    /// Röhrenfläche für ein Ziel der angegebenen Größe (berücksichtigt die virtuelle
+    /// Zeilenzahl, die bei ganzzahliger Skalierung zählt).
     pub fn flaeche(&self, eingang: &Eingang, ziel_groesse: (u32, u32)) -> Rechteck {
-        flaeche::berechne(&self.einstellungen, eingang, ziel_groesse)
+        let seite = eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64;
+        let wirksam = match roehre_kette::virtuelle_groesse(&self.einstellungen, (eingang.breite, eingang.hoehe), seite, ziel_groesse.1) {
+            None => *eingang,
+            Some((vb, vh)) => Eingang { breite: vb, hoehe: vh, pixel_seitenverhaeltnis: seite * vh as f64 / vb as f64 },
+        };
+        flaeche::berechne(&self.einstellungen, &wirksam, ziel_groesse)
     }
 
     /// Plan des zuletzt gezeichneten Bildes (Kette, Parameter, gewählte Maske).
@@ -196,27 +250,27 @@ impl Roehre {
         ziel_groesse: (u32, u32),
     ) -> Result<Rechteck, Fehler> {
         self.tausche_wenn_fertig(false)?;
-        let r = self.flaeche(eingang, ziel_groesse);
 
-        // Zwischentextur in Größe der Röhrenfläche
-        if self.zwischen.as_ref().map(|z| z.2) != Some((r.breite, r.hoehe)) {
-            let t = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("roehre: Röhrenfläche"),
-                size: wgpu::Extent3d { width: r.breite, height: r.hoehe, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: ZWISCHENFORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-            let v = t.create_view(&Default::default());
-            self.zwischen = Some((t, v, (r.breite, r.hoehe)));
-        }
-        let (_, zwischen_ansicht, _) = self.zwischen.as_ref().expect("eben angelegt");
+        // Vorstufe: hochaufgelöste Bilder auf die Zeilenzahl der Röhre bringen
+        let seite = eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64;
+        let virtuell = roehre_kette::virtuelle_groesse(&self.einstellungen, (eingang.breite, eingang.hoehe), seite, ziel_groesse.1);
+        let (roehren_eingang, wirksam) = match virtuell {
+            None => (eingang_textur, *eingang),
+            Some((vb, vh)) => {
+                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen");
+                let z = self.vorstufe_ziel.as_ref().expect("eben gesichert");
+                self.vorstufe.frame(eingang_textur, &z.viewport(), encoder, self.bild, None)?;
+                let par = seite * vh as f64 / vb as f64;
+                (&z.textur, Eingang { breite: vb, hoehe: vh, pixel_seitenverhaeltnis: par })
+            }
+        };
+
+        let r = self.flaeche(&wirksam, ziel_groesse);
+        Zwischen::sichern(&mut self.zwischen, &self.device, (r.breite, r.hoehe), "roehre: Röhrenfläche");
+        let zwischen = self.zwischen.as_ref().expect("eben gesichert");
 
         // Parameter setzen (Regler wirken sofort, auch während eine neue Kette gebaut wird)
-        let kontext = roehre_kette::Kontext { eingang: (eingang.breite, eingang.hoehe), flaeche: (r.breite, r.hoehe) };
+        let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe) };
         let plan = roehre_kette::plane(&self.einstellungen, &kontext);
         {
             let parameter = self.aktiv.1.parameters();
@@ -226,16 +280,11 @@ impl Roehre {
         }
         self.letzter_plan = Some(plan);
 
-        let ausgabe = WgpuOutputView::new_from_raw(zwischen_ansicht, librashader::runtime::Size::new(r.breite, r.hoehe), ZWISCHENFORMAT);
-        let viewport = Viewport::new_render_target_sized_origin(ausgabe, None).expect("Größe ist bekannt");
-        let optionen = FrameOptions {
-            aspect_ratio: (eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64) as f32,
-            ..Default::default()
-        };
-        self.aktiv.1.frame(eingang_textur, &viewport, encoder, self.bild, Some(&optionen))?;
+        let optionen = FrameOptions { aspect_ratio: seite as f32, ..Default::default() };
+        self.aktiv.1.frame(roehren_eingang, &zwischen.viewport(), encoder, self.bild, Some(&optionen))?;
         self.bild = self.bild.wrapping_add(1);
 
-        self.setzer.setze(&self.device, &self.queue, encoder, zwischen_ansicht, ziel, r, self.hintergrund);
+        self.setzer.setze(&self.device, &self.queue, encoder, &zwischen.ansicht, ziel, r, self.hintergrund);
         Ok(r)
     }
 }
