@@ -35,15 +35,38 @@ pub fn berechne(e: &Einstellungen, eingang: &Eingang, ziel: (u32, u32)) -> Recht
         _ => 4.0 / 3.0,
     };
     let max_h = (zh * fuellung).min(zb * fuellung / seite);
-    let mut h = max_h.floor();
-    if e.schalter("bildformat.ganzzahlig") && eingang.hoehe > 0 {
-        let faktor = (max_h / eingang.hoehe as f64).floor();
-        if faktor >= 1.0 {
-            h = faktor * eingang.hoehe as f64;
-        }
-    }
+    let h = bildhoehe(max_h, sichtbare_zeilen(e, eingang), e.schalter("bildformat.ganzzahlig"), e.schalter("allgemein.roehre"));
     let b = (h * seite).round().min(zb);
     mittig(ziel, b as u32, h as u32)
+}
+
+/// Unter so vielen Pixeln je Zeile rastet die Bildhöhe auch ohne `bildformat.ganzzahlig`
+/// auf ein ganzzahliges Vielfaches der Zeilenzahl ein. Gemessen (Etappe 4): Breitbild-Röhre
+/// im Gehäuse bei 720p, 2,5 px je Zeile: Zeilenschwebung 3,4–4,6 %.
+pub const AUTOMATISCH_GANZZAHLIG_UNTER: f64 = 4.0;
+/// … aber nur, wenn das Bild dabei höchstens um diesen Anteil kleiner wird.
+pub const AUTOMATISCH_GANZZAHLIG_VERLUST: f64 = 0.3;
+
+/// Höhe der Bildfläche in ganzen Pixeln: ganzzahlig, wenn gewünscht oder wenn die Zeilen sonst
+/// zu dicht für ein sauberes Strahlprofil liegen (`automatik`, nur bei eingeschalteter Röhre).
+/// `zeilen` sind die sichtbaren Zeilen (nach Overscan, siehe [`sichtbare_zeilen`]).
+pub fn bildhoehe(max_h: f64, zeilen: f64, ganzzahlig: bool, automatik: bool) -> f64 {
+    if zeilen < 1.0 {
+        return max_h.floor();
+    }
+    let faktor = (max_h / zeilen).floor();
+    let einrasten = faktor >= 1.0
+        && (ganzzahlig
+            || automatik
+                && (max_h / zeilen) < AUTOMATISCH_GANZZAHLIG_UNTER
+                && faktor * zeilen >= (1.0 - AUTOMATISCH_GANZZAHLIG_VERLUST) * max_h);
+    if einrasten { (faktor * zeilen).round() } else { max_h.floor() }
+}
+
+/// Zeilen, die nach dem Overscan sichtbar bleiben (bei Overscan kein ganzer Wert).
+pub fn sichtbare_zeilen(e: &Einstellungen, eingang: &Eingang) -> f64 {
+    let (_, osy) = roehre_kette::overscan_pixel(e, (eingang.breite, eingang.hoehe));
+    eingang.hoehe as f64 - osy as f64
 }
 
 fn mittig(ziel: (u32, u32), b: u32, h: u32) -> Rechteck {
@@ -78,6 +101,7 @@ mod tests {
     fn hochformat_fenster() {
         let e = Einstellungen::standard();
         let r = berechne(&e, &SNES, (600, 1000));
-        assert_eq!((r.breite, r.hoehe), (600, 450));
+        // 450 px Höhe wären 2,0 px je Zeile: rastet auf 2 × 224 ein
+        assert_eq!((r.breite, r.hoehe), (597, 448));
     }
 }

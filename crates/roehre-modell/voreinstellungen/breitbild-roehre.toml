@@ -1,0 +1,52 @@
+# Voreinstellung „Breitbild-Röhre (16:9, 2000er)“
+# Späte Röhrenfernseher mit 16:9-Glas und flachem Bildschirm, am Komponenten- bzw.
+# RGB-Eingang: Ein 4:3-Spiel sitzt mittig, links und rechts bleibt schwarzer Leuchtstoff
+# hinter dem Glas. Feine Streifenmaske, flach, wenig Glühen.
+version = 1
+
+[meta]
+name = "Breitbild-Röhre (16:9, 2000er)"
+beschreibung = "Später Flachbild-Röhrenfernseher mit 16:9-Glas: 4:3-Bild mittig mit schwarzem Rand auf der Röhre, feine Streifenmaske, flaches Glas."
+lizenz = "gpl"
+
+[signal]
+art = "rgb"
+
+[strahl]
+form_dunkel = 1.4
+form_hell = 0.85
+aufblaehen = 0.8
+schaerfe = 5.0
+
+[maske]
+typ = "streifenmaske"
+staerke = 0.4
+staerke_dunkel = 0.4
+triaden = 520
+
+[leuchtstoff]
+profil = "trinitron"
+nachgluehen = 0.12
+
+[licht]
+glow = 0.05
+bloom = 0.08
+halation = 0.03
+
+[geometrie]
+woelbung_x = 0.0
+woelbung_y = 0.0
+ecken = 0.01
+randweich = 0.08
+
+[helligkeit]
+ausgleich_dunkel = 1.9
+ausgleich_hell = 1.5
+nachher = 1.04
+
+[bildformat]
+roehrenformat = "16:9"
+
+[gehaeuse]
+typ = "fernseher"
+zoom = 0.6

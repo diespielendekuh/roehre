@@ -23,10 +23,11 @@ pub enum Gruppe {
     Helligkeit,
     Bildformat,
     Eingang,
+    Gehaeuse,
 }
 
 impl Gruppe {
-    pub const ALLE: [Gruppe; 10] = [
+    pub const ALLE: [Gruppe; 11] = [
         Gruppe::Allgemein,
         Gruppe::Signal,
         Gruppe::Strahl,
@@ -37,6 +38,7 @@ impl Gruppe {
         Gruppe::Helligkeit,
         Gruppe::Bildformat,
         Gruppe::Eingang,
+        Gruppe::Gehaeuse,
     ];
 
     /// Schlüssel der Gruppe, zugleich Tabellenname in TOML.
@@ -52,6 +54,7 @@ impl Gruppe {
             Gruppe::Helligkeit => "helligkeit",
             Gruppe::Bildformat => "bildformat",
             Gruppe::Eingang => "eingang",
+            Gruppe::Gehaeuse => "gehaeuse",
         }
     }
 
@@ -67,6 +70,7 @@ impl Gruppe {
             Gruppe::Helligkeit => Texte::de_en("Helligkeit", "Brightness"),
             Gruppe::Bildformat => Texte::de_en("Bildformat", "Picture format"),
             Gruppe::Eingang => Texte::de_en("Eingangsbild", "Input picture"),
+            Gruppe::Gehaeuse => Texte::de_en("Gehäuse", "Cabinet"),
         }
     }
 }
@@ -614,6 +618,21 @@ static KATALOG: &[OptionBeschreibung] = &[
         wirkt_wenn: None,
     },
     OptionBeschreibung {
+        schluessel: "bildformat.roehrenformat",
+        gruppe: Gruppe::Bildformat,
+        name: Texte::de_en("Format der Röhre", "Tube format"),
+        beschreibung: Texte::de("Seitenverhältnis des Glases. „Wie das Bild“ heißt: Die Röhre ist so breit wie das Bild. 16:9 entspricht einer späten Breitbild-Röhre: Ein 4:3-Bild sitzt dann mittig, links und rechts bleibt schwarzer Leuchtstoff hinter dem Glas. Sichtbar nur mit Gehäuse (mindestens „nur Glas“)."),
+        art: OptionsArt::Auswahl {
+            werte: &[
+                ("wie_bild", Texte::de_en("Wie das Bild", "Like the picture")),
+                ("16:9", Texte::de("16:9")),
+            ],
+            standard: "wie_bild",
+        },
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
         schluessel: "bildformat.ganzzahlig",
         gruppe: Gruppe::Bildformat,
         name: Texte::de_en("Ganzzahlige Skalierung", "Integer scaling"),
@@ -649,6 +668,70 @@ static KATALOG: &[OptionBeschreibung] = &[
         art: zahl(1.0, 4.0, 0.25, 2.0),
         kosten: Kosten::Gering,
         wirkt_wenn: None,
+    },
+    // ---------------------------------------------------------------- Gehäuse
+    OptionBeschreibung {
+        schluessel: "gehaeuse.typ",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Gehäuse", "Cabinet"),
+        beschreibung: Texte::de("Zeigt nicht nur das Bild, sondern den ganzen Bildschirm: Glas mit Glanz, Rahmen mit Spiegelung des Bildes und Licht, das das Bild auf Rahmen und Wand wirft. Alle Gehäuse sind berechnet, keine Fotos. „Nur Glas“ zeigt die Bildöffnung ohne Rahmen."),
+        art: OptionsArt::Auswahl {
+            werte: &[
+                ("aus", Texte::de_en("Aus", "Off")),
+                ("nur_glas", Texte::de_en("Nur Glas", "Glass only")),
+                ("fernseher", Texte::de_en("Fernseher", "Television")),
+                ("monitor", Texte::de_en("Monitor", "Monitor")),
+                ("automat", Texte::de_en("Spielautomat", "Arcade cabinet")),
+            ],
+            standard: "aus",
+        },
+        kosten: Kosten::Gering,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "gehaeuse.zoom",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Nähe zum Bildschirm", "Closeness"),
+        beschreibung: Texte::de("0 zeigt das ganze Gehäuse, 1 rückt so nah heran, dass das Bild die Fensterhöhe füllt und das Gehäuse nur noch am Rand zu sehen ist."),
+        art: zahl(0.0, 1.0, 0.05, 0.3),
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("gehaeuse.typ", &["fernseher", "monitor", "automat"])),
+    },
+    OptionBeschreibung {
+        schluessel: "gehaeuse.spiegelung",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Spiegelung im Rahmen", "Reflection in the bezel"),
+        beschreibung: Texte::de("Wie stark sich das Bild unscharf in der Innenkante des Rahmens spiegelt."),
+        art: zahl(0.0, 1.0, 0.05, 0.5),
+        kosten: Kosten::Gering,
+        wirkt_wenn: Some(("gehaeuse.typ", &["fernseher", "monitor", "automat"])),
+    },
+    OptionBeschreibung {
+        schluessel: "gehaeuse.umgebungslicht",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Licht des Bildes im Raum", "Screen light in the room"),
+        beschreibung: Texte::de("Wie stark das Bild Rahmen und Wand in seiner Farbe beleuchtet."),
+        art: zahl(0.0, 1.0, 0.05, 0.5),
+        kosten: Kosten::Gering,
+        wirkt_wenn: Some(("gehaeuse.typ", &["fernseher", "monitor", "automat"])),
+    },
+    OptionBeschreibung {
+        schluessel: "gehaeuse.raumlicht",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Raumhelligkeit", "Room light"),
+        beschreibung: Texte::de("Grundhelligkeit des Raums: 0 ist ein dunkles Zimmer, in dem nur das Bild leuchtet."),
+        art: zahl(0.0, 1.0, 0.05, 0.3),
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("gehaeuse.typ", &["fernseher", "monitor", "automat"])),
+    },
+    OptionBeschreibung {
+        schluessel: "gehaeuse.glanz",
+        gruppe: Gruppe::Gehaeuse,
+        name: Texte::de_en("Glanz auf dem Glas", "Glass glare"),
+        beschreibung: Texte::de("Schwacher Widerschein einer Lichtquelle im Raum auf dem gewölbten Glas."),
+        art: zahl(0.0, 1.0, 0.05, 0.4),
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("gehaeuse.typ", &["nur_glas", "fernseher", "monitor", "automat"])),
     },
 ];
 

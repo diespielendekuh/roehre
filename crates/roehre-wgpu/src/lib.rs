@@ -44,6 +44,7 @@
 //! Programm eingebettet). Der Ordner wird mit dem Spiel ausgeliefert.
 
 pub mod bildschirmflaeche;
+pub mod gehaeuse;
 pub mod eichung;
 pub mod flaeche;
 
@@ -57,6 +58,7 @@ pub use roehre_modell::{self as modell, Einstellungen, Wert};
 
 pub use bildschirmflaeche::{FlaechenZiel, MaterialWerte};
 pub use flaeche::{Eingang, Rechteck};
+pub use gehaeuse::{Anordnung, Form};
 
 /// Fehler der wgpu-Schnittstelle.
 #[derive(Debug, thiserror::Error)]
@@ -121,31 +123,54 @@ pub fn empfohlene_features() -> wgpu::Features {
 
 pub(crate) const ZWISCHENFORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// Eine Zwischentextur mit Ansicht und Größe.
+/// Eine Zwischentextur mit Ansicht und Größe, auf Wunsch mit Mipmaps.
 struct Zwischen {
     textur: wgpu::Texture,
+    /// Oberste Stufe, roh (Ziel der Kette, Punkt-für-Punkt-Lesen)
     ansicht: wgpu::TextureView,
     groesse: (u32, u32),
+    /// Alle Stufen mit sRGB-Dekodierung (gefiltertes Lesen), nur mit Mipmaps
+    mip_ansicht: Option<wgpu::TextureView>,
+    /// Einzelne Stufen mit sRGB (zum Erzeugen der Mipmaps)
+    stufen: Vec<wgpu::TextureView>,
 }
 
 impl Zwischen {
-    /// Legt die Textur an, wenn sie fehlt oder die Größe nicht passt.
-    fn sichern(platz: &mut Option<Zwischen>, device: &wgpu::Device, groesse: (u32, u32), name: &str) {
-        if platz.as_ref().map(|z| z.groesse) == Some(groesse) {
+    /// Legt die Textur an, wenn sie fehlt oder Größe bzw. Mipmaps nicht passen.
+    fn sichern(platz: &mut Option<Zwischen>, device: &wgpu::Device, groesse: (u32, u32), name: &str, mips: bool) {
+        if platz.as_ref().map(|z| (z.groesse, z.mip_ansicht.is_some())) == Some((groesse, mips)) {
             return;
         }
+        let stufenzahl = if mips { 32 - groesse.0.max(groesse.1).max(1).leading_zeros() } else { 1 };
         let textur = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(name),
             size: wgpu::Extent3d { width: groesse.0, height: groesse.1, depth_or_array_layers: 1 },
-            mip_level_count: 1,
+            mip_level_count: stufenzahl,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: ZWISCHENFORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+            view_formats: if mips { &[wgpu::TextureFormat::Rgba8UnormSrgb] } else { &[] },
         });
-        let ansicht = textur.create_view(&Default::default());
-        *platz = Some(Zwischen { textur, ansicht, groesse });
+        let ansicht = textur.create_view(&wgpu::TextureViewDescriptor { mip_level_count: Some(1), ..Default::default() });
+        let (mip_ansicht, stufen) = if mips {
+            let srgb = Some(wgpu::TextureFormat::Rgba8UnormSrgb);
+            let alle = textur.create_view(&wgpu::TextureViewDescriptor { format: srgb, ..Default::default() });
+            let einzeln = (0..stufenzahl)
+                .map(|n| {
+                    textur.create_view(&wgpu::TextureViewDescriptor {
+                        format: srgb,
+                        base_mip_level: n,
+                        mip_level_count: Some(1),
+                        ..Default::default()
+                    })
+                })
+                .collect();
+            (Some(alle), einzeln)
+        } else {
+            (None, Vec::new())
+        };
+        *platz = Some(Zwischen { textur, ansicht, groesse, mip_ansicht, stufen });
     }
 
     fn viewport(&self) -> Viewport<'_, WgpuOutputView<'_>> {
@@ -181,6 +206,7 @@ pub struct Roehre {
     pub hintergrund: [f32; 3],
     ausgabe: Ausgabe,
     eichung: eichung::Eichung,
+    mip: bildschirmflaeche::MipErzeuger,
     letzter_plan: Option<roehre_kette::Plan>,
 }
 
@@ -219,6 +245,7 @@ impl Roehre {
             setzer: Zusammensetzer::neu(device, ausgabe.format),
             ausgabe,
             eichung: eichung::Eichung::neu(),
+            mip: bildschirmflaeche::MipErzeuger::neu(device),
             bild: 0,
             hintergrund: [0.0; 3],
             letzter_plan: None,
@@ -282,12 +309,17 @@ impl Roehre {
     /// Röhrenfläche für ein Ziel der angegebenen Größe (berücksichtigt die virtuelle
     /// Zeilenzahl, die bei ganzzahliger Skalierung zählt).
     pub fn flaeche(&self, eingang: &Eingang, ziel_groesse: (u32, u32)) -> Rechteck {
+        self.anordnung(eingang, ziel_groesse).inhalt
+    }
+
+    /// Anordnung von Bild, Glas und Gehäuse für ein Ziel der angegebenen Größe.
+    pub fn anordnung(&self, eingang: &Eingang, ziel_groesse: (u32, u32)) -> Anordnung {
         let seite = eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64;
         let wirksam = match roehre_kette::virtuelle_groesse(&self.einstellungen, (eingang.breite, eingang.hoehe), seite, ziel_groesse.1) {
             None => *eingang,
             Some((vb, vh)) => Eingang { breite: vb, hoehe: vh, pixel_seitenverhaeltnis: seite * vh as f64 / vb as f64 },
         };
-        flaeche::berechne(&self.einstellungen, &wirksam, ziel_groesse)
+        gehaeuse::anordnen(&self.einstellungen, &wirksam, ziel_groesse)
     }
 
     /// Zuletzt gemessene Transmission einer weißen Fläche (nur bei HDR-Ausgabe gemessen).
@@ -318,7 +350,7 @@ impl Roehre {
         match roehre_kette::virtuelle_groesse(&self.einstellungen, (eingang.breite, eingang.hoehe), seite, ziel_hoehe) {
             None => Ok((*eingang, false)),
             Some((vb, vh)) => {
-                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen");
+                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen", false);
                 let z = self.vorstufe_ziel.as_ref().expect("eben gesichert");
                 self.vorstufe.frame(eingang_textur, &z.viewport(), encoder, self.bild, None)?;
                 Ok((Eingang { breite: vb, hoehe: vh, pixel_seitenverhaeltnis: seite * vh as f64 / vb as f64 }, true))
@@ -388,7 +420,7 @@ impl Roehre {
         let (roehren_eingang, wirksam) = match virtuell {
             None => (eingang_textur, *eingang),
             Some((vb, vh)) => {
-                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen");
+                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen", false);
                 let z = self.vorstufe_ziel.as_ref().expect("eben gesichert");
                 self.vorstufe.frame(eingang_textur, &z.viewport(), encoder, self.bild, None)?;
                 let par = seite * vh as f64 / vb as f64;
@@ -396,8 +428,11 @@ impl Roehre {
             }
         };
 
-        let r = self.flaeche(&wirksam, ziel_groesse);
-        Zwischen::sichern(&mut self.zwischen, &self.device, (r.breite, r.hoehe), "roehre: Röhrenfläche");
+        let anordnung = gehaeuse::anordnen(&self.einstellungen, &wirksam, ziel_groesse);
+        let r = anordnung.inhalt;
+        // Mipmaps braucht nur ein Gehäuse mit Rahmen (Spiegelung, Licht des Bildes)
+        let mips = anordnung.form.is_some_and(|f| f.art >= 2);
+        Zwischen::sichern(&mut self.zwischen, &self.device, (r.breite, r.hoehe), "roehre: Röhrenfläche", mips);
         let zwischen = self.zwischen.as_ref().expect("eben gesichert");
 
         // Parameter setzen (Regler wirken sofort, auch während eine neue Kette gebaut wird)
@@ -438,7 +473,19 @@ impl Roehre {
             [2.2, weiss as f32]
         };
         let hdr_daten = [hdr_daten[0], hdr_daten[1], self.einstellungen.zahl("helligkeit.hdr_spitze") as f32, weiss as f32];
-        self.setzer.setze(&self.device, &self.queue, encoder, &zwischen.ansicht, ziel, r, self.hintergrund, self.ausgabe.raum, hdr_daten);
+        if mips {
+            for n in 1..zwischen.stufen.len() {
+                self.mip.stufe(&self.device, encoder, &zwischen.stufen[n - 1], &zwischen.stufen[n]);
+            }
+        }
+        let e = &self.einstellungen;
+        let licht = [
+            e.zahl("gehaeuse.spiegelung") as f32,
+            e.zahl("gehaeuse.umgebungslicht") as f32,
+            e.zahl("gehaeuse.raumlicht") as f32,
+            e.zahl("gehaeuse.glanz") as f32,
+        ];
+        self.setzer.setze(&self.device, &self.queue, encoder, zwischen, ziel, &anordnung, self.hintergrund, self.ausgabe.raum, hdr_daten, licht);
         Ok(r)
     }
 }
@@ -455,11 +502,14 @@ pub(crate) fn baue(device: &wgpu::Device, queue: &wgpu::Queue, ordner: &std::pat
     Ok(FilterChain::load_from_preset(preset, device, queue, Some(&optionen))?)
 }
 
-/// Eigener Pass: Röhrenfläche ins Ziel setzen, Rest mit Hintergrund füllen.
+/// Eigener Pass: Röhrenfläche ins Ziel setzen, Glas und Gehäuse zeichnen, Rest füllen.
 struct Zusammensetzer {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     puffer: Option<wgpu::Buffer>,
+    abtaster: wgpu::Sampler,
+    /// Ersatz für die Mip-Ansicht, wenn die Röhrentextur keine Mipmaps hat
+    leer: wgpu::TextureView,
     srgb: bool,
 }
 
@@ -469,6 +519,16 @@ impl Zusammensetzer {
             label: Some("roehre: zusammensetzen"),
             source: wgpu::ShaderSource::Wgsl(include_str!("zusammensetzen.wgsl").into()),
         });
+        let textur = |binding, filterable| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("roehre: zusammensetzen"),
             entries: &[
@@ -482,14 +542,12 @@ impl Zusammensetzer {
                     },
                     count: None,
                 },
+                textur(1, false),
+                textur(2, true),
                 wgpu::BindGroupLayoutEntry {
-                    binding: 1,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -520,7 +578,26 @@ impl Zusammensetzer {
             multiview_mask: None,
             cache: None,
         });
-        Self { pipeline, layout, puffer: None, srgb: format.is_srgb() }
+        let abtaster = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("roehre: zusammensetzen"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            ..Default::default()
+        });
+        let leer = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("roehre: leer"),
+                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+            .create_view(&Default::default());
+        Self { pipeline, layout, puffer: None, abtaster, leer, srgb: format.is_srgb() }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -529,12 +606,13 @@ impl Zusammensetzer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        quelle: &wgpu::TextureView,
+        quelle: &Zwischen,
         ziel: &wgpu::TextureView,
-        r: Rechteck,
+        an: &Anordnung,
         hintergrund: [f32; 3],
         raum: Ausgaberaum,
         hdr: [f32; 4],
+        licht: [f32; 4],
     ) {
         let art = match raum {
             Ausgaberaum::Sdr if self.srgb => 1.0,
@@ -542,19 +620,28 @@ impl Zusammensetzer {
             Ausgaberaum::ScRgb => 2.0,
             Ausgaberaum::Hdr10 => 3.0,
         };
-        let daten: [f32; 12] = [
-            r.x as f32,
-            r.y as f32,
-            r.breite as f32,
-            r.hoehe as f32,
-            hintergrund[0],
-            hintergrund[1],
-            hintergrund[2],
-            art,
-            hdr[0],
-            hdr[1],
-            hdr[2],
-            hdr[3],
+        let r = an.inhalt;
+        let f = an.form.unwrap_or(gehaeuse::Form {
+            art: 0,
+            radius_glas: 0.0,
+            fase: 0.0,
+            seite: 0.0,
+            oben: 0.0,
+            unten: 0.0,
+            radius_aussen: 0.0,
+            farbe: [0.0; 3],
+            rauheit: 1.0,
+        });
+        let mip_max = quelle.stufen.len().saturating_sub(1) as f32;
+        let daten: [f32; 32] = [
+            r.x as f32, r.y as f32, r.breite as f32, r.hoehe as f32,
+            an.glas[0], an.glas[1], an.glas[2], an.glas[3],
+            hintergrund[0], hintergrund[1], hintergrund[2], art,
+            hdr[0], hdr[1], hdr[2], hdr[3],
+            f.art as f32, f.radius_glas, f.fase, f.radius_aussen,
+            f.seite, f.oben, f.unten, f.rauheit,
+            f.farbe[0], f.farbe[1], f.farbe[2], mip_max,
+            licht[0], licht[1], licht[2], licht[3],
         ];
         let bytes: Vec<u8> = daten.iter().flat_map(|f| f.to_le_bytes()).collect();
         let puffer = self.puffer.get_or_insert_with(|| {
@@ -571,7 +658,12 @@ impl Zusammensetzer {
             layout: &self.layout,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: puffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(quelle) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&quelle.ansicht) },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(quelle.mip_ansicht.as_ref().unwrap_or(&self.leer)),
+                },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.abtaster) },
             ],
         });
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

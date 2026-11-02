@@ -121,7 +121,7 @@ impl MaterialWerte {
 }
 
 /// Verkleinert eine Mip-Stufe auf die nächste (bilinear, über sRGB-Ansichten also linear).
-struct MipErzeuger {
+pub(crate) struct MipErzeuger {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
@@ -141,7 +141,7 @@ struct Aus { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 "#;
 
 impl MipErzeuger {
-    fn neu(device: &wgpu::Device) -> Self {
+    pub(crate) fn neu(device: &wgpu::Device) -> Self {
         let modul = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("roehre: Mipmaps"),
             source: wgpu::ShaderSource::Wgsl(MIP_WGSL.into()),
@@ -197,7 +197,7 @@ impl MipErzeuger {
         Self { pipeline, layout, sampler }
     }
 
-    fn stufe(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, von: &wgpu::TextureView, nach: &wgpu::TextureView) {
+    pub(crate) fn stufe(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, von: &wgpu::TextureView, nach: &wgpu::TextureView) {
         let gruppe = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("roehre: Mipmaps"),
             layout: &self.layout,

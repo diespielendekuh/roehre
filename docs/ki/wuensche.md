@@ -41,4 +41,5 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
   eine Zieltextur, Flächen-Modus.
 - **Warum:** Der PC-Port von Mission: Impossible entsteht in C (Renderer noch offen).
 - **Vorschlag:** librashader hat Vulkan- und D3D12-Laufzeiten und eine C-API; die eigenen
-  Pässe (Zusammensetzen, Mipmaps) müssen dafür als slang-Pässe oder je Backend vorliegen.
+  Pässe (Zusammensetzen mit Gehäuse und HDR, Mipmaps, Eichung) liegen bisher nur als WGSL vor
+  und müssen dafür als slang-Pässe oder je Backend vorliegen.

@@ -66,6 +66,7 @@ static ALLE: &[Voreinstellung] = voreinstellungen![
     "bvm",
     "arcade",
     "pc-vga",
+    "breitbild-roehre",
 ];
 
 /// Alle Voreinstellungen in Menüreihenfolge.

@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 3 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 4 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -23,9 +23,9 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (50 Optionen, 10 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
-| Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
-| Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | **fehlt** (Etappe 4) | |
+| Einstellungsmodell (57 Optionen, 11 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
+| Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
 | Permissive Variante ohne GPL-Shader (crt-beans) | **fehlt** (Wunsch W-003) | |
 | Prüflauf: Referenzbilder, Moiré-, Helligkeitsgrenzen | fertig; GitHub-Workflow noch nie gelaufen | `roehre-pruefstand pruefe`, `.github/workflows/pruefung.yml` |
 | Rust-Schnittstelle für wgpu 30 | fertig | `crates/roehre-wgpu` |
@@ -34,7 +34,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | HDR (scRGB, HDR10) mit Helligkeitseichung | fertig, nur gemessen, nicht auf HDR-Bildschirm angesehen | `crates/roehre-wgpu/src/eichung.rs`, `zusammensetzen.wgsl` |
 | Flächen-Modus (Röhrenbildschirm als Objekt in einer 3D-Szene) | fertig; HLSL-Fassung ungeprüft | `bildschirmflaeche.rs`, `shader/eigen/flaeche/` |
 | Umschalten ohne Ruckeln (Kettenbau im Hintergrund) | fertig | `Roehre::uebernehme` |
-| Gehäuse/Bezel | **fehlt** (Etappe 4) | |
+| Gehäuse (nur Glas, Fernseher, Monitor, Automat), berechnet, mit Spiegelung und Licht des Bildes | fertig; nur wgpu (WGSL) | `gehaeuse.rs`, `zusammensetzen.wgsl` |
 | Strahlsimulation/BFI für 120–480 Hz | **fehlt** (Etappe 5); Shader liegt bereit: `shader/fremd/mit/crt-beam-simulator` | |
 | Vorschau-Programm mit Fenster | **fehlt** (Etappe 6); der Prüfstand rendert ohne Fenster | `crates/roehre-pruefstand` |
 | C-API (Vulkan, D3D12) für C/C++-Spiele | **fehlt** (Etappe 7) | |
@@ -67,8 +67,9 @@ roehre.uebernehme(neue_einstellungen);    // Regler sofort, Kettenwechsel im Hin
 
 - `spielbild_textur`: das unvergrößerte Spielbild (`Rgba8Unorm`, sRGB-kodierte Werte, wie sie
   das Spiel erzeugt), Verwendung `TEXTURE_BINDING`.
-- `zeichne` füllt das **ganze** Ziel (Röhrenfläche mittig, Rest Hintergrund `roehre.hintergrund`).
-  Ein Menü des Spiels wird danach darübergezeichnet.
+- `zeichne` füllt das **ganze** Ziel (Röhrenfläche mittig, Rest Hintergrund `roehre.hintergrund`,
+  linear; mit `gehaeuse.typ` zusätzlich Glas und Gehäuse). Ein Menü des Spiels wird danach
+  darübergezeichnet. `roehre.anordnung(…)` liefert Bildfläche, Glas und Gehäuseform.
 - Der Rückgabewert ist die Röhrenfläche in Pixeln (z. B. für Mauskoordinaten).
 - **Shader-Ordner:** `shader/` aus diesem Repository wird **als Ordner neben dem Spiel**
   ausgeliefert (GPL-Shader werden bewusst nicht eingebettet). Pfad bei `Roehre::neu` angeben.
@@ -116,13 +117,14 @@ Lizenzmerkmal).
 | `helligkeit.hdr_weiss`, `helligkeit.hdr_spitze` | HDR in nit |
 | `bildformat.seitenverhaeltnis`, `bildformat.ganzzahlig`, `bildformat.fuellung` | Einpassen |
 | `eingang.zeilen`, `eingang.waagerecht` | virtuelle Zeilenzahl (0 = automatisch) |
+| `gehaeuse.typ`, `gehaeuse.zoom`, `bildformat.roehrenformat` | Gehäuse, Nähe, 16:9-Glas |
 
 Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 ## 5. Bekannte Grenzen
 
-- 720p mit SNES-Bild: Zeilenschwebung bis 2 % (sichtbar auf großen Flächen); mit
-  `bildformat.ganzzahlig = true` behoben.
+- Bekommt eine Zeile weniger als 4 Pixel (z. B. 720p), rastet die Bildhöhe automatisch auf ein
+  ganzzahliges Vielfaches ein (Bild bis 30 % kleiner); sonst schweben die Zeilen.
 - PVM, BVM, VGA skalieren ganzzahlig (harte Zeilen schweben sonst); bei 1080p ist das Bild
   dadurch 896 Pixel hoch.
 - Composite: blaue Schrift auf Schwarz bleibt weich (wie am echten Gerät).
@@ -133,6 +135,7 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-02 | Etappe 4: Optionen `gehaeuse.*`, `bildformat.roehrenformat`; `Roehre::anordnung`; automatisches Einrasten unter 4 px je Zeile (Bildgröße bei kleinen Fenstern etwas kleiner als vorher). |
 | 2026-11-02 | Standard von `helligkeit.gamma_ausgang` 1,95 → 2,4 und von `maske.staerke_dunkel` 1,1 → 0,4 (Mitteltöne waren zu dunkel). Gespeicherte Einstellungen mit den alten Werten bleiben gültig. |
 | 2026-11-02 | Neue Optionen `strahl.zeilenverdopplung`, `signal.bandbreite`. |
 | 2026-11-02 | `Roehre::neu` nimmt `impl Into<Ausgabe>` statt `wgpu::TextureFormat` (ein Format allein heißt weiterhin SDR). |
