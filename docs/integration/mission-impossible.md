@@ -106,3 +106,9 @@ einhüllen kann. Das ist Arbeit im Code des Ports, nicht in RT64.
 * Der Vulkan-Weg mit geteilten Semaphoren ist auf echter Hardware nicht ausgeführt (unter
   Windows ist D3D12 der empfohlene Weg und geprüft).
 * Die Kosten (zwei Kopien je Bild, Röhre, Raum) sind auf echter Grafikkarte ungemessen (W-008).
+
+## Ohne GPL ausliefern (falls nötig)
+
+Der Port ist GPL-3.0, guest-advanced (GPL-2.0-or-later) passt also. Sollte sich das ändern:
+Ordner `shader/fremd/gpl/` weglassen, roehre nimmt dann automatisch die MIT-Kette crt-beans
+(`THIRD_PARTY.md`, Abschnitt „Ausliefern ohne GPL-Shader“).

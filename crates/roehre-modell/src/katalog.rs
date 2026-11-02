@@ -174,6 +174,24 @@ static KATALOG: &[OptionBeschreibung] = &[
         kosten: Kosten::Hoch,
         wirkt_wenn: None,
     },
+    OptionBeschreibung {
+        schluessel: "allgemein.lizenz",
+        gruppe: Gruppe::Allgemein,
+        name: Texte::de_en("Röhren-Shader", "CRT shader"),
+        beschreibung: Texte::de_en(
+            "Welche Shaderkette die Röhre rechnet. „Volle Auswahl“ ist crt-guest-advanced (GPL-2.0): alle Optionen wirken. „Nur MIT“ ist crt-beans (MIT-Lizenz) für Spiele, die keine GPL-Shader ausliefern dürfen: schöne Zeilen und Maske, aber kein gewölbtes Glas, keine Ecken und Vignette, keine Farbsäume oder Regenbogen bei Composite (nur weichere Farbe), keine Konvergenzfehler, kein Nachleuchten, kein Helligkeitsausgleich und keine Maskenstärke. Fehlt der GPL-Ordner, rechnet roehre automatisch mit „Nur MIT“.",
+            "Which shader chain renders the CRT. “Full choice” is crt-guest-advanced (GPL-2.0): every option works. “MIT only” is crt-beans (MIT licence) for games that must not ship GPL shaders: fine scanlines and mask, but no curved glass, no corners or vignette, no colour fringes or rainbows on composite (only softer colour), no convergence errors, no afterglow, no brightness compensation and no mask strength. If the GPL folder is missing, roehre automatically uses “MIT only”.",
+        ),
+        art: OptionsArt::Auswahl {
+            werte: &[
+                ("gpl", Texte::de_en("Volle Auswahl (guest-advanced, GPL)", "Full choice (guest-advanced, GPL)")),
+                ("permissiv", Texte::de_en("Nur MIT (crt-beans)", "MIT only (crt-beans)")),
+            ],
+            standard: "gpl",
+        },
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
     // ---------------------------------------------------------------- Signal
     OptionBeschreibung {
         schluessel: "signal.art",

@@ -23,10 +23,10 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (70 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Einstellungsmodell (71 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
 | Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
 | Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
-| Permissive Variante ohne GPL-Shader (crt-beans) | **fehlt** (Wunsch W-003) | |
+| GPL-freie Variante (crt-beans, MIT): Option `allgemein.lizenz`, Voreinstellungen `mit-rgb` und `mit-composite`, automatischer Rückfall ohne GPL-Ordner, eigener Helligkeitspass | fertig, Prüflauf (Referenzen, Moiré, Helligkeit) bestanden; Grenzen siehe Abschnitt 5 | `roehre-kette` (`plane_beans`), `shader/eigen/beans/` |
 | Prüflauf: Referenzbilder, Moiré-, Helligkeitsgrenzen | fertig; GitHub-Workflow noch nie gelaufen | `roehre-pruefstand pruefe`, `.github/workflows/pruefung.yml` |
 | Rust-Schnittstelle für wgpu 30 | fertig | `crates/roehre-wgpu` |
 | Seitenverhältnis, Pixel-Seitenverhältnis, ganzzahlige Skalierung, Füllung | fertig | `crates/roehre-wgpu/src/flaeche.rs` |
@@ -159,6 +159,13 @@ Erweiterungen. Für Mission: Impossible (RT64) steht die Einstiegsstelle in
 Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 ## 5. Bekannte Grenzen
+
+- **GPL-freie Variante (crt-beans):** kein gewölbtes Glas, keine Bildecken und Vignette, keine
+  Farbsäume oder Regenbogen bei Composite (nur weichere Farbe über die Bandbreite), keine
+  Konvergenzfehler, kein Nachleuchten, keine Maskenstärke, nur Streifenmaske (2–5 Pixel je
+  Tripel), PAL wie NTSC. Der Strahl ist weicher als bei crt-beans selbst, sonst schweben die
+  Zeilen bei 1080p (gemessen bis 3,25 %). Vergleich: `docs/bilder/gpl-frei/vergleich.jpg`
+  (oben scart-rgb / mit-rgb, unten Composite GPL / MIT).
 
 - Bekommt eine Zeile weniger als 4 Pixel (z. B. 720p), rastet die Bildhöhe automatisch auf ein
   ganzzahliges Vielfaches ein (Bild bis 30 % kleiner); sonst schweben die Zeilen.

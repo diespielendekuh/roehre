@@ -102,7 +102,10 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-003: Permissive Variante ohne GPL-Shader
 - **Von:** roehre (Planung), 2026-11-02
-- **Status:** offen
+- **Status:** erledigt (2026-11-02): crt-beans mit eigener Übersetzung der Optionen,
+  Option `allgemein.lizenz`, Voreinstellungen `mit-rgb` / `mit-composite`, automatischer Rückfall
+  ohne GPL-Ordner. Cathode Retro nicht benutzt: der Signalteil unserer Kopie ist fest auf
+  224 Zeilen eingestellt
 - **Was fehlt:** Eine Kette auf Basis von crt-beans (MIT) und Cathode Retro (MIT), auf die
   dieselben Optionen abgebildet werden, für Spiele, die keine GPL-Shader ausliefern wollen.
   Die Shader liegen bereits unter `shader/fremd/mit/`.

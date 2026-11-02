@@ -46,3 +46,12 @@ Crates unter MIT und/oder Apache-2.0; die genaue Liste ergibt `cargo tree`.
 ## Eigene Arbeiten
 
 `crates/` und `shader/eigen/` sind eigene Arbeit von roehre unter MIT OR Apache-2.0.
+
+## Ausliefern ohne GPL-Shader (Wunsch W-003)
+
+Wer keine GPL-Shader ausliefern darf, lässt den Ordner `shader/fremd/gpl/` weg. roehre rechnet
+dann automatisch mit der MIT-Kette crt-beans (Option `allgemein.lizenz` = „permissiv“, auch
+wenn die Einstellungen etwas anderes sagen); ausgeliefert werden dann nur `shader/eigen/`
+(MIT OR Apache-2.0, die Presets unter `shader/eigen/beans/` MIT) und `shader/fremd/mit/` (MIT,
+Lizenztexte liegen bei). Was die MIT-Kette nicht kann, steht in der Beschreibung von
+`allgemein.lizenz` und in `docs/ki/STAND.md`.

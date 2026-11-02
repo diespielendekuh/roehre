@@ -1,0 +1,41 @@
+# Voreinstellung „Wohnzimmer-Fernseher Composite (nur MIT)“
+# Composite über die MIT-Kette crt-beans: weiche Farbe durch beschnittene Bandbreite, aber
+# ohne Farbsäume und Regenbogen (die gibt es nur mit der GPL-Kette).
+version = 1
+
+[meta]
+name = "Wohnzimmer-Fernseher Composite (nur MIT)"
+beschreibung = "Röhre ohne GPL-Shader (crt-beans) am Cinch-Kabel: weiche, ausblutende Farbe, weichere Zeilen. Ohne Regenbogen und Farbsäume, flaches Glas."
+name_en = "Living-room TV composite (MIT only)"
+beschreibung_en = "CRT without GPL shaders (crt-beans) on the RCA cable: soft, bleeding colour, softer lines. No rainbows or fringes, flat glass."
+lizenz = "permissiv"
+
+[allgemein]
+lizenz = "permissiv"
+
+[signal]
+art = "composite"
+farbsaum = 0.7
+
+[strahl]
+form_hell = 0.8
+
+[maske]
+typ = "streifenmaske"
+triaden = 400
+
+[licht]
+glow = 0.1
+halation = 0.1
+
+# Die folgenden Gruppen wirken in der MIT-Kette nur teilweise (Profil, Wölbung, Ecken und
+# Helligkeitsausgleich kennt crt-beans nicht); sie stehen hier, damit die Voreinstellung
+# vollständig ist und beim Umschalten auf „Volle Auswahl“ sinnvoll aussieht.
+[leuchtstoff]
+profil = "ebu"
+
+[geometrie]
+overscan = 0.0
+
+[helligkeit]
+nachher = 1.0

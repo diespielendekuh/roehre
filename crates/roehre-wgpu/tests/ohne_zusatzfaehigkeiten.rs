@@ -48,3 +48,37 @@ fn alle_voreinstellungen_ohne_zusatzfaehigkeiten() {
     }
     device.poll(wgpu::PollType::wait_indefinitely()).expect("warten");
 }
+
+fn kopiere(von: &std::path::Path, nach: &std::path::Path) {
+    std::fs::create_dir_all(nach).expect("Ordner");
+    for e in std::fs::read_dir(von).expect("lesbar") {
+        let e = e.expect("Eintrag");
+        let ziel = nach.join(e.file_name());
+        if e.file_type().expect("Typ").is_dir() {
+            kopiere(&e.path(), &ziel);
+        } else {
+            std::fs::copy(e.path(), ziel).expect("kopiert");
+        }
+    }
+}
+
+/// Liefert ein Spiel den GPL-Ordner nicht mit, rechnet roehre mit der MIT-Kette (W-003),
+/// statt beim Laden abzubrechen.
+#[test]
+fn ohne_gpl_ordner_rechnet_die_mit_kette() {
+    let quelle = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shader");
+    let ordner = std::env::temp_dir().join(format!("roehre-ohne-gpl-{}", std::process::id()));
+    kopiere(&quelle.join("eigen"), &ordner.join("eigen"));
+    kopiere(&quelle.join("fremd/mit"), &ordner.join("fremd/mit"));
+    assert!(!roehre_kette::gpl_vorhanden(&ordner));
+    let (device, queue) = pollster::block_on(async {
+        let adapter = wgpu::Instance::default().request_adapter(&wgpu::RequestAdapterOptions::default()).await.expect("Adapter");
+        adapter.request_device(&Default::default()).await.expect("Gerät")
+    });
+    for v in ["scart-rgb", "wohnzimmer-90er-composite", "pc-vga"] {
+        let e = Einstellungen::voreinstellung(v).expect("Voreinstellung");
+        let r = Roehre::neu(&device, &queue, &ordner, e, wgpu::TextureFormat::Rgba8UnormSrgb).unwrap_or_else(|f| panic!("{v}: {f}"));
+        assert_eq!(r.einstellungen().auswahl("allgemein.lizenz"), "permissiv", "{v}");
+    }
+    let _ = std::fs::remove_dir_all(&ordner);
+}

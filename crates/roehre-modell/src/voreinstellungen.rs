@@ -83,6 +83,8 @@ static ALLE: &[Voreinstellung] = voreinstellungen![
     "arcade",
     "pc-vga",
     "breitbild-roehre",
+    "mit-rgb",
+    "mit-composite",
 ];
 
 /// Alle Voreinstellungen in Menüreihenfolge.

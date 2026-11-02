@@ -2,6 +2,16 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · GPL-freie Variante (W-003)
+- Neue Option `allgemein.lizenz` (gpl/permissiv), Ketten BeansRgb/BeansSignal/BeansSchnell
+  aus crt-beans (MIT) mit eigener Übersetzung (`plane_beans`), eigener Helligkeitspass
+  `shader/eigen/beans/helligkeit.slang`, Voreinstellungen `mit-rgb`, `mit-composite`.
+- Ohne `shader/fremd/gpl/` schaltet roehre selbst auf die MIT-Kette (Wache
+  `ohne_gpl_ordner_rechnet_die_mit_kette`).
+- Abstimmung gemessen: Fleck 1,00/0,80 statt 0,90/0,40 (sonst Zeilenschwebung bis 3,25 % bei
+  1080p), Verstärkung 1,15 (Weiß 100–102 %, Grau 97 %). Prüflauf bestanden.
+- Grenzen: kein gewölbtes Glas, keine Farbsäume/Regenbogen, kein Nachleuchten u. a.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 8 abgeschlossen
 - D3D12-Austausch beim Anwender (RTX 5070 Ti) in Ordnung, flach und Raum.
 - Alle geplanten Etappen 0–8 abgeschlossen. Offen bleiben: W-003 (permissive Variante ohne

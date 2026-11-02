@@ -1,0 +1,40 @@
+# Voreinstellung „Fernseher RGB (nur MIT)“
+# Wie „Fernseher mit Scart (RGB)“, aber mit der MIT-Kette crt-beans: für Spiele, die keine
+# GPL-Shader ausliefern dürfen. Flaches Glas, Streifenmaske (mehr kann crt-beans nicht).
+version = 1
+
+[meta]
+name = "Fernseher RGB (nur MIT)"
+beschreibung = "Röhre ohne GPL-Shader (crt-beans): klare Zeilen, feine Streifenmaske, sanftes Glühen. Flaches Glas, keine Ecken."
+name_en = "TV RGB (MIT only)"
+beschreibung_en = "CRT without GPL shaders (crt-beans): clear scanlines, fine aperture grille, soft glow. Flat glass, no corners."
+lizenz = "permissiv"
+
+[allgemein]
+lizenz = "permissiv"
+
+[signal]
+art = "rgb"
+
+[strahl]
+form_dunkel = 1.3
+form_hell = 1.0
+
+[maske]
+typ = "streifenmaske"
+triaden = 450
+
+[licht]
+glow = 0.08
+
+# Die folgenden Gruppen wirken in der MIT-Kette nur teilweise (Profil, Wölbung, Ecken und
+# Helligkeitsausgleich kennt crt-beans nicht); sie stehen hier, damit die Voreinstellung
+# vollständig ist und beim Umschalten auf „Volle Auswahl“ sinnvoll aussieht.
+[leuchtstoff]
+profil = "ebu"
+
+[geometrie]
+overscan = 0.0
+
+[helligkeit]
+nachher = 1.0

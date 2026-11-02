@@ -41,6 +41,12 @@ pub enum Kette {
     GuestNtsc,
     /// crt-guest-advanced mit PAL-Signalstufe.
     GuestPal,
+    /// crt-beans (MIT) mit RGB-Eingang.
+    BeansRgb,
+    /// crt-beans mit Signalstufe (YIQ-Bandbegrenzung für S-Video, Composite, Antenne).
+    BeansSignal,
+    /// crt-beans, schnelle Fassung (Leistungsstufe „leicht“).
+    BeansSchnell,
 }
 
 impl Kette {
@@ -52,13 +58,29 @@ impl Kette {
             Kette::GuestSchnell => "fremd/gpl/guest-advanced/crt-guest-advanced-fast.slangp",
             Kette::GuestNtsc => "fremd/gpl/guest-advanced/crt-guest-advanced-ntsc.slangp",
             Kette::GuestPal => "fremd/gpl/guest-advanced/crt-guest-advanced-pal.slangp",
+            // Presets von crt-beans mit eigenem Helligkeitspass dahinter (shader/eigen/beans)
+            Kette::BeansRgb => "eigen/beans/rgb.slangp",
+            Kette::BeansSignal => "eigen/beans/signal.slangp",
+            Kette::BeansSchnell => "eigen/beans/schnell.slangp",
         }
     }
 
     /// Braucht die Kette GPL-Shader?
     pub fn ist_gpl(self) -> bool {
-        !matches!(self, Kette::Sauber)
+        matches!(self, Kette::GuestRgb | Kette::GuestSchnell | Kette::GuestNtsc | Kette::GuestPal)
     }
+
+    /// Alle Ketten (für Prüfläufe).
+    pub const ALLE: [Kette; 8] = [
+        Kette::Sauber,
+        Kette::GuestRgb,
+        Kette::GuestSchnell,
+        Kette::GuestNtsc,
+        Kette::GuestPal,
+        Kette::BeansRgb,
+        Kette::BeansSignal,
+        Kette::BeansSchnell,
+    ];
 
     /// Lädt das Preset aus dem Shader-Ordner.
     pub fn lade(self, shader_ordner: &Path) -> Result<ShaderPreset, Fehler> {
@@ -200,10 +222,22 @@ pub fn overscan_pixel(e: &Einstellungen, eingang: (u32, u32)) -> (f32, f32) {
     ((os * eingang.0 as f32).round(), (os * eingang.1 as f32).round())
 }
 
+/// Ordner der GPL-Shader relativ zum Shader-Ordner. Ein Spiel, das keine GPL-Shader
+/// ausliefert, lässt ihn weg; roehre rechnet dann mit der MIT-Kette ([`gpl_vorhanden`]).
+pub const GPL_ORDNER: &str = "fremd/gpl";
+
+/// Sind die GPL-Shader mitgeliefert?
+pub fn gpl_vorhanden(shader_ordner: &Path) -> bool {
+    shader_ordner.join(Kette::GuestRgb.preset_pfad()).is_file()
+}
+
 /// Übersetzt Einstellungen in Kette und Parameter.
 pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     if !e.schalter("allgemein.roehre") {
         return Plan { kette: Kette::Sauber, parameter: Vec::new(), maske: None };
+    }
+    if e.auswahl("allgemein.lizenz") == "permissiv" {
+        return plane_beans(e, k);
     }
     let art = e.auswahl("signal.art");
     let pal = e.auswahl("signal.norm") == "pal";
@@ -375,6 +409,108 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     Plan { kette, parameter: p, maske }
 }
 
+/// Lineare Verstärkung hinter crt-beans, so dass die Helligkeit der guest-Voreinstellungen
+/// erreicht wird. Gemessen (roehre-pruefstand helligkeit, 1080p, Fleck 1,00 / 0,80):
+/// 1,32 → mit-rgb Weiß 107 %, Grau 111 %; 1,20 → 103 % / 101 %; 1,15 → 102 % / 97 %
+/// (mit-composite 100 % / 97 %). Grenzen des Prüflaufs: Weiß 95–105 %, Grau ≥ 85 %.
+const BEANS_GRUNDVERSTAERKUNG: f32 = 1.15;
+
+/// Pixel je Farbtripel, die crt-beans als Streifenmaske auf ganze Ausgabepixel legen kann.
+const BEANS_TRIADEN_PIXEL: std::ops::RangeInclusive<u32> = 2..=5;
+
+/// Übersetzung auf crt-beans (MIT). Was crt-beans nicht kennt, entfällt (siehe Beschreibung
+/// von `allgemein.lizenz`); was es kennt, wird so zugeordnet, dass die Standards des Modells
+/// den Standards von crt-beans entsprechen.
+fn plane_beans(e: &Einstellungen, k: &Kontext) -> Plan {
+    let art = e.auswahl("signal.art");
+    let leicht = e.auswahl("allgemein.leistung") == "leicht";
+    let kette = match (art, leicht) {
+        (_, true) => Kette::BeansSchnell,
+        ("rgb", false) => Kette::BeansRgb,
+        _ => Kette::BeansSignal,
+    };
+    let z = |s: &str| e.zahl(s) as f32;
+    let mut p: Vec<(&'static str, f32)> = Vec::new();
+
+    // --- Signal: Bandbreite in MHz. 1,0 im Modell = Signal einer Konsole am Fernseher:
+    // RGB 4,0 MHz (Standard von crt-beans-rgb), S-Video 3,6/0,8/0,8 (Preset crt-beans-s-video),
+    // Composite und Antenne mit kräftig beschnittener Farbe (Kammfilter-loser Fernseher).
+    let b = z("signal.bandbreite");
+    let (y, i, q, yiq) = match art {
+        "rgb" => (4.0, 0.6, 0.6, 0.0),
+        "svideo" => (3.6, 0.8, 0.8, 1.0),
+        "composite" => (3.0, 0.6, 0.6, 1.0),
+        _ => (2.6, 0.6, 0.6, 1.0), // Antenne
+    };
+    // Farbsaum: stärker heißt weniger Farbbandbreite
+    let saum = (1.0 - 0.4 * z("signal.farbsaum")).clamp(0.4, 1.0);
+    p.push(("YIQ", yiq));
+    p.push(("Cutoff", (y * b).clamp(0.6, 6.0)));
+    p.push(("ICutoff", (i * b * saum).clamp(0.6, 6.0)));
+    p.push(("QCutoff", (q * b * saum).clamp(0.6, 6.0)));
+
+    // --- Strahl: crt-beans beschreibt den Fleck als Anteil der Zeile (größer = breiter); im
+    // Modell heißt „Form“ größer = schmaler. Die Standards des Modells (form_hell 1,0 /
+    // form_dunkel 1,3) ergeben einen weicheren Fleck als die Standards von crt-beans
+    // (0,90 / 0,40), weil dessen harte Lücken bei nicht ganzzahligen Zeilen schweben.
+    // Gemessen (roehre-pruefstand moire, mit-rgb, schlechtester Fall je Zeile):
+    //   0,90 / 0,40: Zeilenschwebung 1080p bis 3,25 % (Grenze 1,2 %), Maske 720p 0,90 %
+    //   1,00 / 0,60: Zeilen ≤ 0,63 %, Maske 720p 0,56 % (Grenze 0,5 %)
+    //   1,00 / 0,80: Zeilen ≤ 0,60 %, Maske ≤ 0,43 %  ← Standard
+    p.push(("MaxSpotSize", (1.15 - 0.15 * z("strahl.form_hell")).clamp(0.6, 1.0)));
+    p.push(("MinSpotSize", (1.04 / z("strahl.form_dunkel")).clamp(0.3, 1.0)));
+    let verdoppelt = e.schalter("strahl.zeilenverdopplung");
+    p.push((
+        "OddFieldFirst",
+        match e.auswahl("strahl.zeilensprung") {
+            // Verdoppelte Zeilen (Vorstufe) sind fortlaufend; 4 = „aus“ kennen nur die
+            // analytischen Pässe, die anderen behandeln 240p ohnehin fortlaufend.
+            _ if verdoppelt => 4.0,
+            "geglaettet" => 2.0,
+            _ => 0.0,
+        },
+    ));
+
+    // --- Maske: immer die Streifenmaske auf ganzen Ausgabepixeln (2–5 px je Tripel), damit
+    // kein Moiré entsteht. Schlitz- und Lochmaske kennt crt-beans nicht.
+    let typ = if k.flaeche_modus { "aus" } else { e.auswahl("maske.typ") };
+    let maske = if typ == "aus" {
+        p.push(("MaskType", 0.0));
+        None
+    } else {
+        let wunsch = k.flaeche.0 as f64 / e.zahl("maske.triaden").max(1.0);
+        let px = (wunsch.round() as u32).clamp(*BEANS_TRIADEN_PIXEL.start(), *BEANS_TRIADEN_PIXEL.end());
+        p.push(("MaskType", 1.0));
+        p.push(("SubpixelMaskPattern", px as f32));
+        p.push(("SubpixelPattern", if e.auswahl("maske.subpixel") == "bgr" { 1.0 } else { 0.0 }));
+        Some(MaskenWahl { muster: 0, groesse: 1, pixel_je_triade: px as f64, triaden: k.flaeche.0 as f64 / px as f64 })
+    };
+
+    // --- Licht: ein gemeinsames Glühen. Standard licht.glow 0,08 → GlowAmount 0,04.
+    p.push(("GlowAmount", (0.5 * z("licht.glow") + 0.05 * z("licht.bloom") + 0.03 * z("licht.halation")).clamp(0.0, 0.1)));
+    p.push(("GlowSigma", (0.04 + 0.04 * z("licht.halation")).clamp(0.01, 0.1)));
+
+    // --- Rand: crt-beans beschneidet als Anteil beider Seiten zusammen.
+    let os = (2.0 * z("geometrie.overscan") / 100.0).clamp(0.0, 0.1);
+    p.push(("OverscanHorizontal", os));
+    p.push(("OverscanVertical", os));
+
+    // --- Ausgabe: 1 = Gamma 2,2 (für sRGB-Ziele passend), 0 = sRGB-Kurve
+    let kurve = if k.flaeche_modus || z("helligkeit.gamma_ausgang") < 2.3 { 1.0 } else { 0.0 };
+    p.push(("OutputGamma", kurve));
+    p.push(("roehre_kurve", kurve));
+    // --- Helligkeit (eigener Pass): crt-beans verdunkelt durch Maske und Zeilenlücken.
+    // Gemessen ohne Ausgleich (roehre-pruefstand helligkeit, 1080p, Fleck 0,90 / 0,40): mit
+    // Maske 75-%-Weiß 86 %, 40-%-Grau 76 % des sauberen Bilds. Grundverstärkung dafür, „helligkeit.nachher“ wirkt
+    // als Faktor darauf (Standard 1,0). Bei HDR und im Flächen-Modus stellt
+    // die Eichung die Helligkeit ein (Verstärkung 1, sonst würde an 1,0 abgeschnitten).
+    let verstaerkung = if k.hdr || k.flaeche_modus { 1.0 } else { BEANS_GRUNDVERSTAERKUNG * z("helligkeit.nachher") };
+    p.push(("roehre_verstaerkung", verstaerkung));
+
+    p.extend(rohparameter().iter().map(|(n, w)| (n.as_str(), *w)));
+    Plan { kette, parameter: p, maske }
+}
+
 fn rohparameter() -> &'static [(String, f32)] {
     static ROH: std::sync::OnceLock<Vec<(String, f32)>> = std::sync::OnceLock::new();
     ROH.get_or_init(|| {
@@ -426,13 +562,39 @@ mod tests {
         assert_eq!(plane(&e, &k).kette, Kette::GuestPal);
         let e = Einstellungen::voreinstellung("aus").unwrap();
         assert_eq!(plane(&e, &k).kette, Kette::Sauber);
+        // Nur MIT: nie eine GPL-Kette, bei keiner Kombination
+        let mut e = Einstellungen::voreinstellung("scart-rgb").unwrap();
+        e.setze("allgemein.lizenz", roehre_modell::Wert::Auswahl("permissiv".into()));
+        for art in ["rgb", "svideo", "composite", "antenne"] {
+            for leistung in ["voll", "leicht"] {
+                for norm in ["ntsc", "pal"] {
+                    e.setze("signal.art", roehre_modell::Wert::Auswahl(art.into()));
+                    e.setze("allgemein.leistung", roehre_modell::Wert::Auswahl(leistung.into()));
+                    e.setze("signal.norm", roehre_modell::Wert::Auswahl(norm.into()));
+                    let kette = plane(&e, &k).kette;
+                    assert!(!kette.ist_gpl(), "{art}/{leistung}/{norm}: {kette:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn beans_maske_auf_ganzen_pixeln() {
+        let mut e = Einstellungen::voreinstellung("scart-rgb").unwrap();
+        e.setze("allgemein.lizenz", roehre_modell::Wert::Auswahl("permissiv".into()));
+        for (breite, triaden, px) in [(1440u32, 450i64, 3.0), (2880, 450, 5.0), (960, 600, 2.0)] {
+            e.setze("maske.triaden", roehre_modell::Wert::Ganzzahl(triaden));
+            let k = Kontext { eingang: (256, 224), flaeche: (breite, 1080), hdr: false, flaeche_modus: false };
+            let m = plane(&e, &k).maske.expect("Maske");
+            assert_eq!(m.pixel_je_triade, px, "{breite}/{triaden}");
+        }
     }
 
     #[test]
     fn presets_laden() {
         let ordner = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shader");
         assert!(!lade_vorstufe(&ordner).unwrap().passes.is_empty());
-        for kette in [Kette::Sauber, Kette::GuestRgb, Kette::GuestSchnell, Kette::GuestNtsc, Kette::GuestPal] {
+        for kette in Kette::ALLE {
             let p = kette.lade(&ordner).unwrap_or_else(|e| panic!("{kette:?}: {e}"));
             assert!(!p.passes.is_empty());
         }

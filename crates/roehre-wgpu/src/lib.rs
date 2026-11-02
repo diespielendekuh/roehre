@@ -234,6 +234,7 @@ impl Roehre {
     ) -> Result<Self, Fehler> {
         let ausgabe = ausgabe.into();
         let shader_ordner = shader_ordner.into();
+        let einstellungen = wirksam(&shader_ordner, einstellungen);
         let kette = kette_fuer(&einstellungen);
         let filter = baue(device, queue, &shader_ordner, kette)?;
         let vorstufe = FilterChain::load_from_preset(
@@ -266,7 +267,8 @@ impl Roehre {
         })
     }
 
-    /// Aktuelle Einstellungen.
+    /// Aktuelle, wirksame Einstellungen (ohne GPL-Ordner steht `allgemein.lizenz` hier auf
+    /// „permissiv“, auch wenn anderes übergeben wurde).
     pub fn einstellungen(&self) -> &Einstellungen {
         &self.einstellungen
     }
@@ -274,7 +276,7 @@ impl Roehre {
     /// Übernimmt neue Einstellungen. Regler wirken ab dem nächsten Bild; braucht es eine
     /// andere Shaderkette, wird sie im Hintergrund gebaut.
     pub fn uebernehme(&mut self, einstellungen: Einstellungen) {
-        self.einstellungen = einstellungen;
+        self.einstellungen = wirksam(&self.shader_ordner, einstellungen);
         let gewuenscht = kette_fuer(&self.einstellungen);
         let schon_unterwegs = self.ausstehend.as_ref().map(|a| a.kette);
         if gewuenscht == self.aktiv.0 {
@@ -609,6 +611,15 @@ pub struct Takt {
 impl Takt {
     /// Ein Spielbild je Auffrischung (keine Strahlsimulation).
     pub const EIN_BILD: Takt = Takt { neues_spielbild: true, teilbilder_je_spielbild: 1.0 };
+}
+
+/// Liefert ein Spiel die GPL-Shader nicht mit (Ordner `shader/fremd/gpl` fehlt), rechnet
+/// roehre mit der MIT-Kette crt-beans, statt beim Laden abzubrechen.
+fn wirksam(ordner: &std::path::Path, mut e: Einstellungen) -> Einstellungen {
+    if e.auswahl("allgemein.lizenz") != "permissiv" && !roehre_kette::gpl_vorhanden(ordner) {
+        e.setze("allgemein.lizenz", Wert::Auswahl("permissiv".into()));
+    }
+    e
 }
 
 fn kette_fuer(e: &Einstellungen) -> Kette {
