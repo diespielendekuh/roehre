@@ -1,0 +1,20 @@
+[package]
+name = "roehre-c"
+description = "C-Schnittstelle von roehre (include/roehre.h): Katalog, Einstellungen, Vorschaubild, Austausch mit Vulkan und D3D12."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "roehre"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+roehre-modell.workspace = true
+roehre-wgpu.workspace = true
+roehre-raum.workspace = true
+roehre-testbilder.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+serde_json.workspace = true
