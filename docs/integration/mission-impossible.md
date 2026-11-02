@@ -103,8 +103,10 @@ einhüllen kann. Das ist Arbeit im Code des Ports, nicht in RT64.
   Testmuster flach und im 3D-Raum korrekt. Der erste Lauf war am Pipeline-Cache gescheitert
   (behoben, Wache `ohne_zusatzfaehigkeiten`). Bild: `docs/bilder/etappe-8/`.
 
-* Der Vulkan-Weg mit geteilten Semaphoren ist auf echter Hardware nicht ausgeführt (unter
-  Windows ist D3D12 der empfohlene Weg und geprüft).
+* **Vulkan-Austausch unter Windows auf RTX 5070 Ti geprüft** (2026-11-02, `vulkan_spiel.exe`):
+  Testmuster flach und im Raum korrekt. Ob der Lauf die geteilten Semaphoren benutzt hat (statt
+  des Notwegs über die CPU), steht in seiner letzten Ausgabezeile und ist noch zu bestätigen.
+  Unter Windows bleibt D3D12 der empfohlene Weg.
 * Die Kosten (zwei Kopien je Bild, Röhre, Raum) sind auf echter Grafikkarte ungemessen (W-008).
 
 ## Ohne GPL ausliefern (falls nötig)

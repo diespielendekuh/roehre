@@ -2,6 +2,11 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Vulkan unter Windows
+- `vulkan_spiel.c` jetzt auch für Windows (Win32-Handles, Vulkan zur Laufzeit geladen).
+- Lauf beim Anwender (RTX 5070 Ti): Bilder flach und Raum korrekt. Ob mit geteilten Semaphoren:
+  letzte Ausgabezeile noch nicht gesehen.
+
 ## 2026-11-02 · roehre-Hauptsitzung · GPL-freie Variante (W-003)
 - Neue Option `allgemein.lizenz` (gpl/permissiv), Ketten BeansRgb/BeansSignal/BeansSchnell
   aus crt-beans (MIT) mit eigener Übersetzung (`plane_beans`), eigener Helligkeitspass
