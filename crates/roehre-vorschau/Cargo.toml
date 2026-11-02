@@ -1,0 +1,17 @@
+[package]
+name = "roehre-vorschau"
+description = "Vorschau-Programm von roehre: alle Voreinstellungen und Optionen, Vergleich mit Schieber, Lupe, Bildschirmfotos, 3D-Raum."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roehre-modell.workspace = true
+roehre-wgpu.workspace = true
+roehre-raum.workspace = true
+roehre-testbilder.workspace = true
+wgpu.workspace = true
+image.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+egui-wgpu = "0.37"

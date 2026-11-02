@@ -7,6 +7,7 @@ members = [
     "crates/roehre-testbilder",
     "crates/roehre-pruefstand",
     "crates/roehre-raum",
+    "crates/roehre-vorschau",
 ]
 
 [workspace.package]
