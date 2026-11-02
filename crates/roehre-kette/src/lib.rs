@@ -126,6 +126,10 @@ pub struct Kontext {
     /// (nichts wird an der Grenze 1,0 abgeschnitten), die Maske ist kräftiger; die
     /// Helligkeit stellt der Zusammensetz-Pass nach der Eichung ein.
     pub hdr: bool,
+    /// Flächen-Modus (Bildschirm in einer 3D-Szene): Röhre ohne Maske, die Maske rechnet das
+    /// Material der Szene (`shader/eigen/flaeche/roehre_maske.*`). Helligkeit wie bei HDR,
+    /// Ausgabegamma 2,2 (passend zum sRGB-Lesen der Textur).
+    pub flaeche_modus: bool,
 }
 
 /// Ergebnis der Übersetzung.
@@ -259,7 +263,7 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     p.push(("dctypey", z("strahl.konvergenz_rand")));
 
     // --- Maske
-    let typ = e.auswahl("maske.typ");
+    let typ = if k.flaeche_modus { "aus" } else { e.auswahl("maske.typ") };
     let maske = if typ == "aus" {
         p.push(("shadowMask", -1.0));
         None
@@ -332,7 +336,7 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
     p.push(("overscanY", osy));
 
     // --- Helligkeit
-    if k.hdr {
+    if k.hdr || k.flaeche_modus {
         // Dunkle Bildteile weiter anheben (formt die Mitteltöne), helle nicht: Sie würden an
         // der Grenze 1,0 abgeschnitten, und die Gesamthelligkeit stellt die Eichung ein.
         p.push(("brightboost", z("helligkeit.ausgleich_dunkel")));
@@ -343,7 +347,7 @@ pub fn plane(e: &Einstellungen, k: &Kontext) -> Plan {
         p.push(("brightboost1", z("helligkeit.ausgleich_hell")));
         p.push(("post_br", z("helligkeit.nachher")));
     }
-    p.push(("gamma_out", z("helligkeit.gamma_ausgang")));
+    p.push(("gamma_out", if k.flaeche_modus { 2.2 } else { z("helligkeit.gamma_ausgang") }));
 
     // Entwicklerhilfe zum Abstimmen: ROEHRE_ROHPARAMETER="name=wert,name=wert" setzt
     // Parameter der Kette direkt (nach allen anderen, überschreibt sie).
@@ -396,7 +400,7 @@ mod tests {
 
     #[test]
     fn kettenwahl() {
-        let k = Kontext { eingang: (256, 224), flaeche: (1440, 1080), hdr: false };
+        let k = Kontext { eingang: (256, 224), flaeche: (1440, 1080), hdr: false, flaeche_modus: false };
         let mut e = Einstellungen::voreinstellung("wohnzimmer-90er-composite").unwrap();
         assert_eq!(plane(&e, &k).kette, Kette::GuestNtsc);
         e.setze("signal.norm", roehre_modell::Wert::Auswahl("pal".into()));

@@ -10,3 +10,4 @@ Alle Dateien in diesem Ordner sind eigene Arbeit von roehre und stehen unter
 | `sauber.slangp` | Kette der Voreinstellung „Sauber/aus“ |
 | `virtuelle-zeilen.slang` | Flächentreues Verkleinern hochaufgelöster Bilder auf die Zeilenzahl der Röhre |
 | `virtuelle-zeilen.slangp` | Kette der Vorstufe |
+| `flaeche/roehre_maske.wgsl` (`.glsl`, `.hlsl`) | Bandbegrenzte Maske als Materialfunktion für Röhrenbildschirme in 3D-Szenen |

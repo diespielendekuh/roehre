@@ -15,6 +15,7 @@
 
 mod gpu;
 mod moire;
+mod szene3d;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -45,6 +46,10 @@ fn main() {
         "testbilder" => testbilder(Path::new(&opt("-o").unwrap_or("testbilder".into()))),
         "umschalten" => umschalten(),
         "moire" => moire_messen(opt("-v")),
+        "flaeche" => flaeche_vorfuehren(
+            &opt("-v").unwrap_or("scart-rgb".into()),
+            Path::new(&opt("-o").unwrap_or("flaeche.png".into())),
+        ),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!("Befehle: foto, bogen, testbilder, umschalten (Einzelheiten in der Quelltext-Doku)");
@@ -357,5 +362,47 @@ fn hdr_messen(g: (u32, u32)) -> Ergebnis {
             v.schluessel, transmission, werte[0].0, werte[1].0, werte[0].1, werte[0].2
         );
     }
+    Ok(())
+}
+
+/// Vorführung des Flächen-Modus: Bildschirm als Viereck in einer 3D-Szene, nah, schräg und
+/// fern; obere Reihe naive Maske, untere Reihe bandbegrenzte Maske (roehre_maske).
+fn flaeche_vorfuehren(v: &str, aus: &Path) -> Ergebnis {
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::pixelszene();
+    let eingang = gpu.eingang(&bild);
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
+    let mut werte = None;
+    for _ in 0..3 {
+        let mut enc = gpu.device.create_command_encoder(&Default::default());
+        werte = Some(roehre.zeichne_flaeche(&mut enc, &eingang, &eingang_von(&bild), &flaeche)?);
+        gpu.queue.submit([enc.finish()]);
+    }
+    let werte = werte.expect("gezeichnet");
+    eprintln!("Materialwerte: {werte:?}");
+    let szene = szene3d::Szene::neu(&gpu.device, &shader_ordner(), gpu::ZIELFORMAT);
+    let (b, h) = (640u32, 360u32);
+    let seite = werte.seitenverhaeltnis;
+    let ansichten = [
+        ("nah", szene3d::kamera(b as f32 / h as f32, 0.22, 0.0, [0.12, -0.2])),
+        ("schräg", szene3d::kamera(b as f32 / h as f32, 1.9, 62.0, [0.0, 0.0])),
+        ("fern", szene3d::kamera(b as f32 / h as f32, 5.5, 0.0, [0.0, 0.0])),
+    ];
+    let mut bogen = image::RgbaImage::from_pixel(3 * b, 2 * (h + 24), image::Rgba([24, 24, 28, 255]));
+    for (zeile, naiv) in [true, false].into_iter().enumerate() {
+        for (spalte, (name, mvp)) in ansichten.iter().enumerate() {
+            let ziel = gpu.ziel(b, h);
+            szene.zeichne(&gpu.device, &gpu.queue, &ziel.create_view(&Default::default()), &flaeche, &werte, mvp, naiv);
+            let foto = gpu.lies(&ziel);
+            let (x0, y0) = (spalte as u32 * b, zeile as u32 * (h + 24));
+            image::imageops::overlay(&mut bogen, &foto, x0 as i64, (y0 + 24) as i64);
+            let titel = format!("{} · {}", if naiv { "naive Maske" } else { "bandbegrenzt" }, name);
+            beschrifte(&mut bogen, x0 + 4, y0 + 6, &titel);
+        }
+    }
+    let _ = seite;
+    bogen.save(aus)?;
+    eprintln!("→ {}", aus.display());
     Ok(())
 }

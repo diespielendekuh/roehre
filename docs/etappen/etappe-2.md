@@ -12,6 +12,8 @@ Stand: 2026-11-02
 | HDR | `Ausgabe::scrgb()` (Rgba16Float, 1,0 = 80 nit) und `Ausgabe::hdr10()` (BT.2020 nach ITU-R BT.2087, PQ nach SMPTE ST 2084), eigene Formeln. **Helligkeitseichung**: Eine zweite Kette (damit Nachglühen und Verlauf des Spielbilds unberührt bleiben) zeichnet bei jeder Einstellungsänderung eine weiße Fläche und misst die Transmission. Der Zusammensetz-Pass skaliert so, dass Weiß im Mittel `helligkeit.hdr_weiss` erreicht; die Leuchtstreifen werden heller, weich begrenzt bei `helligkeit.hdr_spitze`. In HDR ist die Maske etwa 55 % kräftiger, helle Bildteile werden nicht angehoben (nichts wird bei 1,0 abgeschnitten). |
 | Prüfstand | `roehre-pruefstand hdr`: Leuchtdichten in nit aus scRGB und HDR10. Entwicklerhilfe `ROEHRE_ROHPARAMETER="name=wert,…"` für Abstimmversuche. |
 
+| Flächen-Modus (3D-Monitor) | `Roehre::zeichne_flaeche` zeichnet das Röhrenbild **ohne Maske** in ein `FlaechenZiel` (Rgba8Unorm mit sRGB-Ansicht, Mipmaps in linearem Licht) und liefert `MaterialWerte`. Die Maske rechnet das Material des Spiels mit `shader/eigen/flaeche/roehre_maske.wgsl` (dazu `.glsl` und `.hlsl`): Streifen und Schlitze als wenige Wellen, jede wird über die Ableitungen der UV-Koordinaten weich ausgeblendet, bevor sie die Abtastgrenze erreicht. Mittelwert 1, die Helligkeit bleibt. Vorführung: `roehre-pruefstand flaeche`. |
+
 ## Messwerte
 
 ### Moiré (Zeilen- und Maskenschwebung, Faustregel: unter 1 % unsichtbar)
@@ -75,6 +77,16 @@ Randabdunklung kostet dort etwas. Die Leuchtstreifen der Maske erreichen 300 bis
 - 1:1-Ausschnitte: `docs/bilder/etappe-2/*_1zu1.png`. Die 3D-Szene (1920×1080 Eingang) zeigt jetzt
   echte Röhrenzeilen: 240 bei 1080p, 480 bei 4K.
 
+### Flächen-Modus
+
+![Naive gegen bandbegrenzte Maske](../bilder/etappe-2/flaeche_3d_naiv_gegen_bandbegrenzt.png)
+
+Obere Reihe: dieselbe Maske ohne Bandbegrenzung. Schräg betrachtet entstehen kräftige
+Regenbogenbänder, aus der Ferne flimmert die Farbe. Untere Reihe: `roehre_maske`. Aus der
+Nähe sind Farbstreifen, Schlitze und Zeilen zu sehen, schräg und fern bleibt die Fläche
+ruhig. Geprüft: WGSL und GLSL mit naga validiert. **HLSL ist ungeprüft** (hier gibt es keinen
+DXC); die Fassung ist eine wörtliche Übertragung.
+
 ## Fehler, die in dieser Etappe gefunden und behoben wurden
 
 1. **Voreinstellungen beschädigt (seit Etappe 1).** Beim Helligkeitsabgleich in Etappe 1 hat ein
@@ -102,6 +114,7 @@ Randabdunklung kostet dort etwas. Die Leuchtstreifen der Maske erreichen 300 bis
 
 ## Offen
 
-- Flächen-Modus für den 3D-Monitor (Röhrenbild ohne Maske als Textur, Maske als Materialfunktion
-  mit Bandbegrenzung): als nächster Teil.
+- Flächen-Modus: Wölbung des Glases und Spiegelungen liefert das 3D-Modell des Spiels; eine
+  passende Glasformel und Spiegelung kommen mit dem Gehäuse (Etappe 4). Die Helligkeit ohne
+  Maske ist noch nicht gegen die SDR-Darstellung abgeglichen.
 - Abstimmung der Composite-Signalstufe, restliche Voreinstellungen, Referenzbilder in CI: Etappe 3.

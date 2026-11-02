@@ -43,6 +43,7 @@
 //! Die Shader liegen als Dateien im Ordner `shader/` (GPL-Shader werden bewusst nicht ins
 //! Programm eingebettet). Der Ordner wird mit dem Spiel ausgeliefert.
 
+pub mod bildschirmflaeche;
 pub mod eichung;
 pub mod flaeche;
 
@@ -54,6 +55,7 @@ use librashader::runtime::{FilterChainParameters, Viewport};
 pub use roehre_kette::{Kette, MaskenWahl};
 pub use roehre_modell::{self as modell, Einstellungen, Wert};
 
+pub use bildschirmflaeche::{FlaechenZiel, MaterialWerte};
 pub use flaeche::{Eingang, Rechteck};
 
 /// Fehler der wgpu-Schnittstelle.
@@ -303,6 +305,71 @@ impl Roehre {
         self.letzter_plan.as_ref()
     }
 
+    /// Vorstufe „virtuelle Zeilen“: zeichnet bei Bedarf das verkleinerte Bild und liefert
+    /// den Eingang, den die Röhre sieht (`true`, wenn die Vorstufe gezeichnet hat).
+    fn vorstufe(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        eingang_textur: &wgpu::Texture,
+        eingang: &Eingang,
+        ziel_hoehe: u32,
+    ) -> Result<(Eingang, bool), Fehler> {
+        let seite = eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64;
+        match roehre_kette::virtuelle_groesse(&self.einstellungen, (eingang.breite, eingang.hoehe), seite, ziel_hoehe) {
+            None => Ok((*eingang, false)),
+            Some((vb, vh)) => {
+                Zwischen::sichern(&mut self.vorstufe_ziel, &self.device, (vb, vh), "roehre: virtuelle Zeilen");
+                let z = self.vorstufe_ziel.as_ref().expect("eben gesichert");
+                self.vorstufe.frame(eingang_textur, &z.viewport(), encoder, self.bild, None)?;
+                Ok((Eingang { breite: vb, hoehe: vh, pixel_seitenverhaeltnis: seite * vh as f64 / vb as f64 }, true))
+            }
+        }
+    }
+
+    fn setze_parameter(&mut self, kontext: &roehre_kette::Kontext) -> roehre_kette::Plan {
+        let plan = roehre_kette::plane(&self.einstellungen, kontext);
+        let parameter = self.aktiv.1.parameters();
+        for (name, wert) in &plan.parameter {
+            parameter.set_parameter_value(name, *wert);
+        }
+        plan
+    }
+
+    /// Flächen-Modus: zeichnet das Röhrenbild **ohne Maske** in `ziel` (mit Mipmaps) und
+    /// liefert die Werte für die Materialfunktion `roehre_maske` (siehe
+    /// [`bildschirmflaeche`]). Für einen Bildschirm als Objekt in einer 3D-Szene.
+    pub fn zeichne_flaeche(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        eingang_textur: &wgpu::Texture,
+        eingang: &Eingang,
+        ziel: &FlaechenZiel,
+    ) -> Result<MaterialWerte, Fehler> {
+        self.tausche_wenn_fertig(false)?;
+        let seite = eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64;
+        let (wirksam, verkleinert) = self.vorstufe(encoder, eingang_textur, eingang, ziel.hoehe)?;
+        let kontext = roehre_kette::Kontext {
+            eingang: (wirksam.breite, wirksam.hoehe),
+            flaeche: (ziel.breite, ziel.hoehe),
+            hdr: false,
+            flaeche_modus: true,
+        };
+        let plan = self.setze_parameter(&kontext);
+        self.letzter_plan = Some(plan);
+        let ausgabe = WgpuOutputView::new_from_raw(
+            &ziel.ansicht_roh,
+            librashader::runtime::Size::new(ziel.breite, ziel.hoehe),
+            wgpu::TextureFormat::Rgba8Unorm,
+        );
+        let viewport = Viewport::new_render_target_sized_origin(ausgabe, None).expect("Größe bekannt");
+        let optionen = FrameOptions { aspect_ratio: seite as f32, ..Default::default() };
+        let quelle = if verkleinert { &self.vorstufe_ziel.as_ref().expect("Vorstufe gezeichnet").textur } else { eingang_textur };
+        self.aktiv.1.frame(quelle, &viewport, encoder, self.bild, Some(&optionen))?;
+        self.bild = self.bild.wrapping_add(1);
+        ziel.mipmaps(&self.device, encoder);
+        Ok(MaterialWerte::aus(&self.einstellungen, seite))
+    }
+
     /// Zeichnet ein Bild. `eingang_textur` ist das Spielbild (mit `TEXTURE_BINDING`), `ziel`
     /// eine Ansicht der Zieltextur im bei [`Roehre::neu`] genannten Format.
     pub fn zeichne(
@@ -335,7 +402,7 @@ impl Roehre {
 
         // Parameter setzen (Regler wirken sofort, auch während eine neue Kette gebaut wird)
         let hdr = self.ausgabe.ist_hdr();
-        let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe), hdr };
+        let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe), hdr, flaeche_modus: false };
         let plan = roehre_kette::plane(&self.einstellungen, &kontext);
         let roehre_an = self.einstellungen.schalter("allgemein.roehre");
         if hdr && roehre_an {
@@ -378,7 +445,7 @@ impl Roehre {
 
 fn kette_fuer(e: &Einstellungen) -> Kette {
     // Die Kettenwahl hängt nicht von den Größen ab.
-    let k = roehre_kette::Kontext { eingang: (1, 1), flaeche: (1, 1), hdr: false };
+    let k = roehre_kette::Kontext { eingang: (1, 1), flaeche: (1, 1), hdr: false, flaeche_modus: false };
     roehre_kette::plane(e, &k).kette
 }
 
