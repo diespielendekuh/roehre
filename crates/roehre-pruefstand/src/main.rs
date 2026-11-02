@@ -639,7 +639,9 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
     let eingang = gpu.eingang(&bild);
     let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
     let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
-    let raum = Raum::neu(&gpu.device, &shader_ordner(), gpu::ZIELFORMAT)?;
+    let t = Instant::now();
+    let mut raum = Raum::neu(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT)?;
+    eprintln!("Raum aufgebaut: {} Dreiecke, {:.1} s", raum.dreiecke(), t.elapsed().as_secs_f64());
     let mut werte = None;
     for _ in 0..3 {
         let mut enc = gpu.device.create_command_encoder(&Default::default());
@@ -647,15 +649,18 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
         gpu.queue.submit([enc.finish()]);
     }
     let werte = werte.expect("gezeichnet");
-    let mut seitlich = Ansicht::sitzplatz(0.0, 1.6, 0.0);
-    seitlich.auge = [-0.9, 1.25, -1.0];
-    let mut nah = Ansicht::sitzplatz(0.0, 0.45, 0.0);
-    nah.ziel = [0.1, 0.95, 0.0];
+    let mut seitlich = Ansicht::sitzplatz(0.0, 0.45, 0.0);
+    seitlich.auge = [-1.1, 1.35, -1.4];
+    seitlich.ziel = [-0.1, 0.95, 0.0];
+    let mut detail = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    detail.auge = [0.55, 1.15, -0.75];
+    detail.ziel = [0.12, 0.92, -0.1];
     let ansichten = [
-        ("sitzplatz", Ansicht::sitzplatz(3.0, 1.7, 1.0)),
+        ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
+        ("mittel", Ansicht::sitzplatz(2.0, 0.5, 1.0)),
+        ("ueberblick", Ansicht::sitzplatz(1.0, 0.0, 0.0)),
         ("seitlich", seitlich),
-        ("nah", nah),
-        ("fern", Ansicht::sitzplatz(1.0, 3.2, 0.0)),
+        ("detail", detail),
     ];
     for (name, a) in ansichten {
         let t = Instant::now();

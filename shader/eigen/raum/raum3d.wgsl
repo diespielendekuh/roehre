@@ -1,0 +1,262 @@
+// roehre – 3D-Vorführraum: Wohnzimmer bei Nacht mit Röhrenfernseher (Rasterung).
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+// Diese Datei wird hinter shader/eigen/flaeche/roehre_maske.wgsl gehängt. Drei Pässe:
+// 1. `schatten_*`: Tiefe aus Sicht der Lampe (Schattenkarte).
+// 2. `haupt_*`: Szene in linearem Licht (HDR), 4-fach kantengeglättet.
+// 3. `nach_*`: Tonwert, Farbstimmung, Filmkorn, Vignette.
+//
+// Stil: späte PS2-Zeit (Silent Hill 2): wenige Polygone, dichte Materialien, Nebel, Korn,
+// warmes Lampenlicht gegen kühle Nacht, das Bild des Fernsehers als Lichtquelle im Raum.
+
+struct Szene {
+    ansicht: mat4x4<f32>,
+    licht: mat4x4<f32>,
+    // Kamera (xyz), Zeit in Sekunden
+    auge: vec4<f32>,
+    // Lampe (xyz), Helligkeit
+    lampe: vec4<f32>,
+    // Mitte des Bildschirms (xyz), Helligkeit des Bildschirms
+    bild_mitte: vec4<f32>,
+    // halbe Breite/Höhe der Bildröhre, höchste Mip-Stufe des Röhrenbilds, Flackern der Lampe
+    bild_halb: vec4<f32>,
+    // Nebeldichte, Filmkorn, Ausgabe (1 = Ziel mit sRGB), Belichtung
+    nachbild: vec4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> szene: Szene;
+@group(0) @binding(1) var<uniform> maske: RoehreMaske;
+@group(0) @binding(2) var farben: texture_2d_array<f32>;
+@group(0) @binding(3) var eigenschaften: texture_2d_array<f32>;
+@group(0) @binding(4) var kachel: sampler;
+@group(0) @binding(5) var bildschirm: texture_2d<f32>;
+@group(0) @binding(6) var rand: sampler;
+@group(0) @binding(7) var schattenkarte: texture_depth_2d;
+@group(0) @binding(8) var vergleich: sampler_comparison;
+
+// Materialnummern (wie texturen.rs)
+const M_KUNSTSTOFF_SCHWARZ: u32 = 1u;
+const M_CHROM: u32 = 2u;
+const M_BLATT: u32 = 10u;
+const M_LAMPENSCHIRM: u32 = 17u;
+const M_NACHT: u32 = 19u;
+const M_GLUEHBIRNE: u32 = 20u;
+const M_LED: u32 = 21u;
+const M_BILDROEHRE: u32 = 26u;
+
+struct Ecke {
+    @location(0) lage: vec3<f32>,
+    @location(1) normale: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) material: u32,
+    @location(4) wind: f32,
+};
+
+fn bewegt(e: Ecke) -> vec3<f32> {
+    // Vorhang: sachte Wellen im Luftzug, unten stärker
+    let t = szene.auge.w;
+    let w = e.wind * (0.018 * sin(t * 0.7 + e.lage.x * 4.0) + 0.008 * sin(t * 1.3 + e.lage.y * 6.0));
+    return e.lage + vec3<f32>(0.0, 0.0, w);
+}
+
+// ---------------------------------------------------------------- 1. Schatten
+@vertex
+fn schatten_ecke(e: Ecke) -> @builtin(position) vec4<f32> {
+    if (e.material == M_LAMPENSCHIRM || e.material == M_GLUEHBIRNE) {
+        return vec4<f32>(0.0, 0.0, -2.0, 1.0);    // wirft keinen Schatten (Licht sitzt darin)
+    }
+    return szene.licht * vec4<f32>(bewegt(e), 1.0);
+}
+
+// ---------------------------------------------------------------- 2. Szene
+struct Zwischen {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) welt: vec3<f32>,
+    @location(1) normale: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) @interpolate(flat) material: u32,
+};
+
+@vertex
+fn haupt_ecke(e: Ecke) -> Zwischen {
+    let p = bewegt(e);
+    return Zwischen(szene.ansicht * vec4<f32>(p, 1.0), p, e.normale, e.uv, e.material);
+}
+
+fn schatten(welt: vec3<f32>, n: vec3<f32>) -> f32 {
+    let p = szene.licht * vec4<f32>(welt + n * 0.01, 1.0);
+    let ndc = p.xyz / p.w;
+    if (ndc.z > 1.0 || any(abs(ndc.xy) > vec2<f32>(1.0))) { return 1.0; }
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    let pixel = 1.0 / 2048.0;
+    var s = 0.0;
+    for (var y = -1; y <= 1; y++) {
+        for (var x = -1; x <= 1; x++) {
+            s += textureSampleCompareLevel(schattenkarte, vergleich, uv + vec2<f32>(f32(x), f32(y)) * pixel * 1.5, ndc.z - 0.0015);
+        }
+    }
+    return s / 9.0;
+}
+
+fn lampe_farbe() -> vec3<f32> {
+    let t = szene.auge.w;
+    let flackern = 1.0 - szene.bild_halb.w * (0.05 * sin(t * 7.3) * sin(t * 2.1) + 0.03 * fract(sin(floor(t * 14.0) * 91.7) * 4375.5));
+    return vec3<f32>(1.0, 0.70, 0.42) * szene.lampe.w * flackern;
+}
+
+fn bildlicht() -> vec3<f32> {
+    // mittlere Farbe des Bildes (kleinste Mip-Stufe) als Leuchtdichte des Bildschirms
+    return textureSampleLevel(bildschirm, rand, vec2<f32>(0.5), szene.bild_halb.z).rgb * szene.bild_mitte.w;
+}
+
+// Grobe Umgebung für Spiegelungen (Chrom, Glas, Lack): Raum, Lampe, Fenster, Bildschirm
+fn umgebung(r: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+    var c = mix(vec3<f32>(0.004, 0.0035, 0.003), vec3<f32>(0.012, 0.012, 0.014), r.y * 0.5 + 0.5);
+    let zur_lampe = normalize(szene.lampe.xyz - p);
+    c += lampe_farbe() * (pow(max(dot(r, zur_lampe), 0.0), 400.0) * 3.0 + pow(max(dot(r, zur_lampe), 0.0), 8.0) * 0.03);
+    let zum_bild = normalize(szene.bild_mitte.xyz - p);
+    c += bildlicht() * pow(max(dot(r, zum_bild), 0.0), 30.0) * 0.4;
+    let zum_fenster = normalize(vec3<f32>(-1.35, 1.55, 1.1) - p);
+    c += vec3<f32>(0.02, 0.025, 0.04) * pow(max(dot(r, zum_fenster), 0.0), 20.0);
+    return c;
+}
+
+fn umgebungslicht(n: vec3<f32>) -> vec3<f32> {
+    // Himmel durch das Fenster (kühl) gegen warmen Widerschein vom Boden
+    return mix(vec3<f32>(0.012, 0.010, 0.008), vec3<f32>(0.020, 0.024, 0.034), n.y * 0.5 + 0.5);
+}
+
+fn sd_rund(q: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
+    let d = abs(q) - b + vec2<f32>(r);
+    return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0) - r;
+}
+
+@fragment
+fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
+    let blick = normalize(e.welt - szene.auge.xyz);
+    // Zweiseitige Flächen (Blätter, Vorhang): Normale immer zum Betrachter ausrichten.
+    // Nicht über front_facing, das hängt vom Umlaufsinn der Dreiecke ab.
+    var n = normalize(e.normale);
+    if (dot(n, blick) > 0.0) { n = -n; }
+    let entfernung = length(e.welt - szene.auge.xyz);
+    var c: vec3<f32>;
+
+    if (e.material == M_BILDROEHRE) {
+        // Bildröhre: abgerundete Ecken, Bild mit bandbegrenzter Maske, Glas mit Spiegelung
+        let a = szene.bild_halb.x / szene.bild_halb.y;
+        if (sd_rund((e.uv - 0.5) * vec2<f32>(a, 1.0) * 2.0, vec2<f32>(a, 1.0), 0.12) > 0.0) { discard; }
+        let bild = textureSample(bildschirm, rand, e.uv).rgb * roehre_maske(e.uv, maske) * szene.bild_mitte.w;
+        let rand_dunkel = smoothstep(0.0, 0.06, min(min(e.uv.x, 1.0 - e.uv.x) * a, min(e.uv.y, 1.0 - e.uv.y)));
+        let cos_t = clamp(dot(-blick, n), 0.0, 1.0);
+        let fresnel = 0.04 + 0.96 * pow(1.0 - cos_t, 5.0);
+        c = bild * mix(0.55, 1.0, rand_dunkel) + umgebung(reflect(blick, n), e.welt) * fresnel + vec3<f32>(0.003, 0.0035, 0.004);
+    } else {
+        let farbe = textureSample(farben, kachel, e.uv, e.material);
+        if (farbe.a < 0.5) { discard; }
+        let eig = textureSample(eigenschaften, kachel, e.uv, e.material);
+        let albedo = farbe.rgb;
+        let rauheit = eig.g;
+        let metall = eig.b;
+
+        // Relief ohne Tangenten (Ableitungen der Höhe in Bildschirmrichtung)
+        let dpx = dpdx(e.welt);
+        let dpy = dpdy(e.welt);
+        let dhx = dpdx(eig.r);
+        let dhy = dpdy(eig.r);
+        let r1 = cross(dpy, n);
+        let r2 = cross(n, dpx);
+        let det = dot(dpx, r1);
+        // Relieftiefe in Metern (Höhe 0 … 1 der Eigenschaftstextur)
+        let tiefe = select(0.0015, 0.0004, e.material == M_BLATT);
+        let grad = sign(det) * (dhx * r1 + dhy * r2) * tiefe;
+        let nb = abs(det) * n - grad;
+        if (abs(det) > 1e-12) { n = normalize(nb); }
+
+        let glanz = exp2(10.0 * (1.0 - rauheit) + 1.0);
+        let f0 = mix(vec3<f32>(0.04), albedo, metall);
+        let diffus = albedo * (1.0 - metall);
+
+        // Lampe: Licht durch den Schirm nach oben und unten stärker als zur Seite
+        let zur_lampe = szene.lampe.xyz - e.welt;
+        let dl = length(zur_lampe);
+        let l = zur_lampe / dl;
+        let schirm = mix(0.3, 1.0, smoothstep(0.25, 0.65, abs(l.y)));
+        let ll = lampe_farbe() * schirm / (dl * dl) * schatten(e.welt, n);
+        let h = normalize(l - blick);
+        c = diffus * ll * max(dot(n, l), 0.0) + f0 * ll * pow(max(dot(n, h), 0.0), glanz) * (glanz + 2.0) / 8.0 * max(dot(n, l), 0.0);
+
+        // Bildschirm als Flächenlicht nach vorn (−z)
+        let zum_bild = szene.bild_mitte.xyz - vec3<f32>(0.0, 0.0, 0.03) - e.welt;
+        let db = length(zum_bild);
+        let lb = zum_bild / db;
+        // Der Bildschirm strahlt nach −z: Flächen davor sehen ihn in Richtung +z
+        let nach_vorn = max(lb.z, 0.0);
+        let flaeche = 4.0 * szene.bild_halb.x * szene.bild_halb.y;
+        let bl = bildlicht() * nach_vorn * flaeche / (db * db + flaeche);
+        let hb = normalize(lb - blick);
+        c += diffus * bl * max(dot(n, lb), 0.0) * 8.0 + f0 * bl * pow(max(dot(n, hb), 0.0), glanz) * 0.5 * nach_vorn;
+
+        // Umgebung und Spiegelung
+        c += diffus * umgebungslicht(n);
+        let spiegel_staerke = (1.0 - rauheit) * (1.0 - rauheit);
+        c += f0 * umgebung(reflect(blick, n), e.welt) * spiegel_staerke * 1.5;
+
+        // Selbstleuchten
+        var leuchten = eig.a;
+        if (e.material == M_LAMPENSCHIRM) { leuchten *= szene.lampe.w * 0.9; }
+        if (e.material == M_GLUEHBIRNE) { leuchten *= szene.lampe.w * 4.0; }
+        if (e.material == M_LED) { leuchten *= 1.5; }
+        if (e.material == M_NACHT) { leuchten *= 0.8; }
+        c += albedo * leuchten;
+    }
+
+    // Nebel: dichter Dunst, leicht grünlich-grau, vom Lampenlicht etwas aufgehellt
+    let nebel = 1.0 - exp(-entfernung * szene.nachbild.x);
+    let nebelfarbe = vec3<f32>(0.010, 0.012, 0.011) + lampe_farbe() * 0.004;
+    c = mix(c, nebelfarbe, nebel);
+    return vec4<f32>(c, 1.0);
+}
+
+// ---------------------------------------------------------------- 3. Nachbearbeitung
+@group(0) @binding(0) var<uniform> nach_szene: Szene;
+@group(0) @binding(1) var hdr: texture_2d<f32>;
+
+struct NachAus { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+
+@vertex
+fn nach_ecke(@builtin(vertex_index) i: u32) -> NachAus {
+    let p = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+    return NachAus(vec4<f32>(p * 2.0 - 1.0, 0.0, 1.0), vec2<f32>(p.x, 1.0 - p.y));
+}
+
+fn zufall(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
+fn linear_zu_srgb(c: vec3<f32>) -> vec3<f32> {
+    let c2 = max(c, vec3<f32>(0.0));
+    return select(1.055 * pow(c2, vec3<f32>(1.0 / 2.4)) - 0.055, c2 * 12.92, c2 <= vec3<f32>(0.0031308));
+}
+
+@fragment
+fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
+    let groesse = vec2<f32>(textureDimensions(hdr));
+    var c = textureLoad(hdr, vec2<i32>(e.uv * groesse), 0).rgb * nach_szene.nachbild.w;
+    // Filmischer Tonwert (sanfte Schulter)
+    c = c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14);
+    // Farbstimmung: etwas entsättigt, Schatten leicht grünlich-kühl
+    let grau = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+    c = mix(vec3<f32>(grau), c, 0.88);
+    c += vec3<f32>(-0.004, 0.003, 0.002) * (1.0 - smoothstep(0.0, 0.25, grau));
+    // Vignette
+    let d = e.uv - 0.5;
+    c *= 1.0 - 0.55 * dot(d, d) * 1.6;
+    // Filmkorn, im Dunkeln stärker, ändert sich je Bild
+    let k = zufall(e.pos.xy + vec2<f32>(fract(nach_szene.auge.w * 7.0) * 1000.0, 0.0)) - 0.5;
+    c += k * nach_szene.nachbild.y * (0.02 + 0.06 * (1.0 - smoothstep(0.0, 0.3, grau)));
+    c = max(c, vec3<f32>(0.0));
+    if (nach_szene.nachbild.z > 0.5) {
+        return vec4<f32>(c, 1.0);
+    }
+    return vec4<f32>(linear_zu_srgb(c), 1.0);
+}

@@ -101,11 +101,11 @@ struct Vorschau {
     ansicht: Ansicht,
     raum: roehre_raum::Raum,
     flaeche: FlaechenZiel,
-    raum_abstand: f32,
+    raum_naehe: f32,
     raum_schwenk: f32,
     raum_licht: f32,
     raum_flackern: f32,
-    raum_woelbung: f32,
+    raum_korn: f32,
     foto_groesse: usize,
     meldung: String,
     start: Instant,
@@ -120,7 +120,7 @@ impl Vorschau {
         let e_b = Einstellungen::voreinstellung("aus")?;
         let roehre_a = Roehre::neu(&device, &queue, shader_ordner(), e_a.clone(), FORMAT)?;
         let roehre_b = Roehre::neu(&device, &queue, shader_ordner(), e_b.clone(), FORMAT)?;
-        let raum = roehre_raum::Raum::neu(&device, &shader_ordner(), FORMAT)?;
+        let raum = roehre_raum::Raum::neu(&device, &queue, &shader_ordner(), FORMAT)?;
         let flaeche = FlaechenZiel::neu(&device, 1440, 1080);
         let mut v = Self {
             device,
@@ -147,11 +147,11 @@ impl Vorschau {
             ansicht: Ansicht::Flach,
             raum,
             flaeche,
-            raum_abstand: 1.7,
+            raum_naehe: 0.8,
             raum_schwenk: 1.0,
-            raum_licht: 0.35,
-            raum_flackern: 0.5,
-            raum_woelbung: 0.6,
+            raum_licht: 0.9,
+            raum_flackern: 0.4,
+            raum_korn: 0.6,
             foto_groesse: 0,
             meldung: String::new(),
             start: Instant::now(),
@@ -295,10 +295,10 @@ impl Vorschau {
                 }
             }
             Ansicht::Raum => self.roehre_a.zeichne_flaeche(&mut enc, quelle, &eingang, &self.flaeche).map(|werte| {
-                let mut a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_abstand, self.raum_schwenk);
-                a.raumlicht = self.raum_licht;
+                let mut a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_naehe, self.raum_schwenk);
+                a.lampe = self.raum_licht;
                 a.flackern = self.raum_flackern;
-                a.woelbung = self.raum_woelbung;
+                a.korn = self.raum_korn;
                 let z = self.ziel_a.as_ref().expect("gesichert");
                 self.raum.zeichne(&self.device, &self.queue, &mut enc, &z.ansicht, groesse, &self.flaeche, &werte, &a);
             }),
@@ -324,7 +324,7 @@ impl Vorschau {
         let ok = match self.ansicht {
             Ansicht::Flach => self.roehre_a.zeichne(&mut enc, quelle, &eingang, &ziel.ansicht, groesse).map(|_| ()),
             Ansicht::Raum => self.roehre_a.zeichne_flaeche(&mut enc, quelle, &eingang, &self.flaeche).map(|werte| {
-                let a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_abstand, self.raum_schwenk);
+                let a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_naehe, self.raum_schwenk);
                 self.raum.zeichne(&self.device, &self.queue, &mut enc, &ziel.ansicht, groesse, &self.flaeche, &werte, &a);
             }),
         };
@@ -518,11 +518,11 @@ impl eframe::App for Vorschau {
                         ui.add_enabled(self.lupe, egui::Slider::new(&mut self.lupe_faktor, 2.0..=16.0).text("fach"));
                     });
                 } else {
-                    ui.add(egui::Slider::new(&mut self.raum_abstand, 0.35..=3.5).text("Abstand (m)"));
+                    ui.add(egui::Slider::new(&mut self.raum_naehe, 0.0..=1.0).text("Nähe zum Fernseher"));
                     ui.add(egui::Slider::new(&mut self.raum_schwenk, 0.0..=1.0).text("Kameraschwenk"));
-                    ui.add(egui::Slider::new(&mut self.raum_licht, 0.0..=1.0).text("Lampe"));
+                    ui.add(egui::Slider::new(&mut self.raum_licht, 0.0..=2.0).text("Lampe"));
                     ui.add(egui::Slider::new(&mut self.raum_flackern, 0.0..=1.0).text("Flackern"));
-                    ui.add(egui::Slider::new(&mut self.raum_woelbung, 0.0..=1.0).text("Wölbung der Röhre"));
+                    ui.add(egui::Slider::new(&mut self.raum_korn, 0.0..=1.0).text("Filmkorn"));
                 }
                 ui.separator();
                 ui.horizontal(|ui| {

@@ -11,4 +11,4 @@ Alle Dateien in diesem Ordner sind eigene Arbeit von roehre und stehen unter
 | `virtuelle-zeilen.slang` | Flächentreues Verkleinern hochaufgelöster Bilder auf die Zeilenzahl der Röhre |
 | `virtuelle-zeilen.slangp` | Kette der Vorstufe |
 | `flaeche/roehre_maske.wgsl` (`.glsl`, `.hlsl`) | Bandbegrenzte Maske als Materialfunktion für Röhrenbildschirme in 3D-Szenen |
-| `raum/raum.wgsl` | 3D-Vorführraum: Röhrenfernseher auf einem Tisch, Raymarching (crate `roehre-raum`) |
+| `raum/raum3d.wgsl` | 3D-Vorführraum: Wohnzimmer mit Röhrenfernseher, Rasterung mit Schatten, Relief, Nebel, Filmkorn (crate `roehre-raum`) |
