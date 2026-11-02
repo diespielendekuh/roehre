@@ -2,6 +2,15 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 8 (Teil 1 und 2)
+- Messbefehl `roehre-pruefstand leistung` (GPU-Zeitstempel; Filter je Voreinstellung, 3D-Raum,
+  Kosten je Regler, 1080p/4K, Anteil am 60-Hz-Budget). Auf lavapipe nur auf Funktion geprüft.
+- Windows-Paket (MinGW-Querbau) mit Prüfstand, Vorschau, DLL und Beispielen für den Anwender.
+- Englische Texte für alle Optionen und Voreinstellungen, mit Wachen; Clippy sauber.
+- 3D-Raum: Konsole im Stil des Super Famicom mit Controller (Wunsch des Anwenders, ohne Logo).
+- Mission: Impossible kann mit dem Einbau beginnen; Schnittstelle wird nur noch ergänzt.
+- Offen: Messwerte und D3D12-Lauf vom Rechner des Anwenders.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 7
 - Neue Kiste `roehre-c` mit `include/roehre.h`: Katalog als JSON, Einstellungen (laden, setzen,
   speichern), Vorschaubild als RGBA für Launcher (W-007), Austausch mit Vulkan- und

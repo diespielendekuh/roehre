@@ -40,10 +40,18 @@ das Vorgänger-Repository und „Renderer offen“).
 | W-005 | Kamera: Nähe, Blickwinkel, Schwenk, Lage im Fenster (Lens Shift), 4:3–32:9 | **fertig in Rust/wgpu (Etappe 6)**, Bilder: `docs/bilder/etappe-6/kamera_bogen.jpg` |
 | W-006 | Kamera-Optionen im Katalog, speicherbar | **fertig (Etappe 6)**: Gruppe `raum`, Festwerte über `festwerte()` |
 | W-007 | Filtervorschau im Launcher (Software-Zeichnung) | **gebaut (Etappe 7)**: `roehre_vorschau_zeichnen` liefert ein RGBA-Bild, flach oder Raum |
-| W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | offen, **Etappe 8**: Messbefehl im Prüfstand, Messung auf dem Rechner des Anwenders |
+| W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | **Messbefehl fertig** (`roehre-pruefstand leistung`); Zahlen von der Grafikkarte des Anwenders stehen aus |
 
 
 ## Einbau über die C-API (Etappe 7)
+
+**Der Einbau kann beginnen (Stand 2026-11-02).** Die Schnittstelle in `roehre.h` gilt als fest:
+Änderungen daran werden nur noch ergänzt (neue Funktionen, neue Felder am Ende von
+`RoehreAustauschParameter`, erkennbar an `struktur_groesse`), nicht umgebaut. Was noch aussteht –
+der D3D12-Lauf und die Messung auf echter Hardware –, kann nur Fehler im Inneren von roehre
+aufdecken; die werden dort behoben, ohne dass sich der Einbau ändert. Empfohlene Reihenfolge:
+Launcher (Katalog-JSON, Einstellungen speichern, Vorschaubild) zuerst, weil er unabhängig von
+RT64 ist; danach der Austausch in `rt64_present_queue.cpp`.
 
 Schnittstelle: `crates/roehre-c/include/roehre.h`, Überblick `crates/roehre-c/LIESMICH.md`.
 roehre rechnet auf einem eigenen Gerät derselben Grafikkarte; RT64 und roehre teilen zwei Bilder
