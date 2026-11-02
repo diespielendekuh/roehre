@@ -6,15 +6,66 @@
  *
  * Bauen und starten (Linux, ohne Grafikkarte geht es mit Mesa lavapipe):
  *   cargo build --release -p roehre-c
- *   cc crates/roehre-c/beispiele/vulkan_spiel.c -Icrates/roehre-c/include -Ltarget/release -lroehre -lvulkan -o vulkan_spiel
+ *   cc crates/roehre-c/beispiele/vulkan_spiel.c -Icrates/roehre-c/include -Ltarget/release -lroehre -ldl -o vulkan_spiel
  *   LD_LIBRARY_PATH=target/release ./vulkan_spiel shader ausgabe
+ * Windows (MinGW, Vulkan wird zur Laufzeit aus vulkan-1.dll geladen, kein SDK nötig):
+ *   x86_64-w64-mingw32-gcc -O2 -I/usr/include -Icrates/roehre-c/include crates/roehre-c/beispiele/vulkan_spiel.c
+ *       target/x86_64-pc-windows-gnu/release/libroehre.dll.a -o vulkan_spiel.exe
+ *   vulkan_spiel.exe shader vulkan
  * Schreibt ausgabe_flach.ppm und ausgabe_raum.ppm. Rückgabe 0, wenn das Bild plausibel ist.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define VK_NO_PROTOTYPES
+#ifdef _WIN32
+#include <windows.h>
+#define VK_USE_PLATFORM_WIN32_KHR
+#else
+#include <dlfcn.h>
+#endif
 #include <vulkan/vulkan.h>
 #include "roehre.h"
+
+/* Vulkan-Funktionen, zur Laufzeit geladen (Windows: vulkan-1.dll, Linux: libvulkan.so.1) */
+#define VK_FUNKTIONEN(X) \
+    X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties2) X(vkGetPhysicalDeviceProperties) \
+    X(vkGetPhysicalDeviceQueueFamilyProperties) X(vkEnumerateDeviceExtensionProperties) \
+    X(vkGetPhysicalDeviceMemoryProperties) X(vkCreateDevice) X(vkGetDeviceQueue) X(vkCreateCommandPool) \
+    X(vkAllocateCommandBuffers) X(vkCreateFence) X(vkCreateBuffer) X(vkGetBufferMemoryRequirements) \
+    X(vkAllocateMemory) X(vkBindBufferMemory) X(vkMapMemory) X(vkCreateImage) X(vkBindImageMemory) \
+    X(vkCreateSemaphore) X(vkCmdPipelineBarrier) X(vkBeginCommandBuffer) X(vkCmdCopyBufferToImage) \
+    X(vkEndCommandBuffer) X(vkQueueSubmit) X(vkWaitForFences) X(vkResetFences) X(vkCmdCopyImageToBuffer) \
+    X(vkDeviceWaitIdle) X(vkGetDeviceProcAddr)
+#define VK_DEKL(f) static PFN_##f f;
+VK_FUNKTIONEN(VK_DEKL)
+static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+static PFN_vkCreateInstance vkCreateInstance;
+
+static void vulkan_laden(void) {
+#ifdef _WIN32
+    HMODULE b = LoadLibraryA("vulkan-1.dll");
+    if (b) vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)(void (*)(void))GetProcAddress(b, "vkGetInstanceProcAddr");
+#else
+    void *b = dlopen("libvulkan.so.1", RTLD_NOW);
+    if (b) vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(b, "vkGetInstanceProcAddr");
+#endif
+    if (!vkGetInstanceProcAddr) { fprintf(stderr, "Vulkan nicht gefunden (Treiber installiert?)\n"); exit(1); }
+    vkCreateInstance = (PFN_vkCreateInstance)vkGetInstanceProcAddr(NULL, "vkCreateInstance");
+}
+
+static void vulkan_funktionen(VkInstance i) {
+#define VK_LADE(f) f = (PFN_##f)vkGetInstanceProcAddr(i, #f); if (!f) { fprintf(stderr, "fehlt: %s\n", #f); exit(1); }
+    VK_FUNKTIONEN(VK_LADE)
+}
+
+#ifdef _WIN32
+#define SPEICHER_ERW "VK_KHR_external_memory_win32"
+#define SEMAPHOREN_ERW "VK_KHR_external_semaphore_win32"
+#else
+#define SPEICHER_ERW "VK_KHR_external_memory_fd"
+#define SEMAPHOREN_ERW "VK_KHR_external_semaphore_fd"
+#endif
 
 #define PRUEFE(x) do { VkResult r_ = (x); if (r_ != VK_SUCCESS) { fprintf(stderr, "%s: %d (Zeile %d)\n", #x, r_, __LINE__); exit(1); } } while (0)
 #define ROEHRE(x) do { if ((x) < 0) { fprintf(stderr, "%s: %s\n", #x, roehre_letzter_fehler()); exit(1); } } while (0)
@@ -52,8 +103,13 @@ static VkImage bild_oeffnen(const RoehreVulkanBild *g) {
     VkImage bild;
     PRUEFE(vkCreateImage(geraet, &ii, NULL, &bild));
     VkMemoryDedicatedAllocateInfo ded = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, NULL, bild, VK_NULL_HANDLE };
+#ifdef _WIN32
+    VkImportMemoryWin32HandleInfoKHR imp = { VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR, g->dediziert ? &ded : NULL,
+                                             (VkExternalMemoryHandleTypeFlagBits)g->handle_art, (HANDLE)(intptr_t)g->handle, NULL };
+#else
     VkImportMemoryFdInfoKHR imp = { VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR, g->dediziert ? &ded : NULL,
                                     (VkExternalMemoryHandleTypeFlagBits)g->handle_art, (int)g->handle };
+#endif
     VkMemoryAllocateInfo ai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, &imp, g->speicher_groesse, g->speicher_typ };
     VkDeviceMemory m;
     PRUEFE(vkAllocateMemory(geraet, &ai, NULL, &m));
@@ -70,8 +126,14 @@ static VkSemaphore semaphore_oeffnen(RoehreAustausch *a, int welches) {
     VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, NULL, 0 };
     VkSemaphore s;
     PRUEFE(vkCreateSemaphore(geraet, &si, NULL, &s));
+#ifdef _WIN32
+    PFN_vkImportSemaphoreWin32HandleKHR imp = (PFN_vkImportSemaphoreWin32HandleKHR)vkGetDeviceProcAddr(geraet, "vkImportSemaphoreWin32HandleKHR");
+    VkImportSemaphoreWin32HandleInfoKHR ii = { VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR, NULL, s, 0,
+                                               (VkExternalSemaphoreHandleTypeFlagBits)art, (HANDLE)(intptr_t)h, NULL };
+#else
     PFN_vkImportSemaphoreFdKHR imp = (PFN_vkImportSemaphoreFdKHR)vkGetDeviceProcAddr(geraet, "vkImportSemaphoreFdKHR");
     VkImportSemaphoreFdInfoKHR ii = { VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR, NULL, s, 0, (VkExternalSemaphoreHandleTypeFlagBits)art, (int)h };
+#endif
     PRUEFE(imp(geraet, &ii));
     return s;
 }
@@ -89,22 +151,37 @@ int main(int argc, char **argv) {
     const uint32_t EB = 320, EH = 240, ZB = 960, ZH = 720;
 
     /* --- das Gerät des Spiels --- */
+    vulkan_laden();
     VkApplicationInfo app = { VK_STRUCTURE_TYPE_APPLICATION_INFO, NULL, "vulkan_spiel", 1, NULL, 0, VK_API_VERSION_1_2 };
     VkInstanceCreateInfo ici = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, NULL, 0, &app, 0, NULL, 0, NULL };
     VkInstance instanz;
     PRUEFE(vkCreateInstance(&ici, NULL, &instanz));
-    uint32_t n = 1;
-    vkEnumeratePhysicalDevices(instanz, &n, &karte);
+    vulkan_funktionen(instanz);
+    /* Grafikkarte: die erste eigenständige, sonst die erste überhaupt */
+    VkPhysicalDevice karten[8];
+    uint32_t n = 8;
+    vkEnumeratePhysicalDevices(instanz, &n, karten);
     if (n == 0) { fprintf(stderr, "keine Vulkan-Grafikkarte\n"); return 1; }
+    karte = karten[0];
+    for (uint32_t i = 0; i < n; i++) {
+        VkPhysicalDeviceProperties pp;
+        vkGetPhysicalDeviceProperties(karten[i], &pp);
+        if (pp.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) { karte = karten[i]; break; }
+    }
     VkPhysicalDeviceIDProperties id = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES };
     VkPhysicalDeviceProperties2 p2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &id };
     vkGetPhysicalDeviceProperties2(karte, &p2);
     printf("Grafikkarte des Spiels: %s\n", p2.properties.deviceName);
-    uint32_t familie = 0;
+    /* Warteschlangenfamilie mit Grafik */
+    uint32_t familie = 0, nf = 16;
+    VkQueueFamilyProperties fam[16];
+    vkGetPhysicalDeviceQueueFamilyProperties(karte, &nf, fam);
+    for (uint32_t i = 0; i < nf; i++)
+        if (fam[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { familie = i; break; }
     float prio = 1.0f;
     VkDeviceQueueCreateInfo qi = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, NULL, 0, familie, 1, &prio };
     /* Geteilte Semaphoren nur, wenn der Treiber sie anbietet (lavapipe nicht) */
-    const char *erw[2] = { "VK_KHR_external_memory_fd", "VK_KHR_external_semaphore_fd" };
+    const char *erw[2] = { SPEICHER_ERW, SEMAPHOREN_ERW };
     uint32_t anzahl_erw = 1, m = 0;
     vkEnumerateDeviceExtensionProperties(karte, NULL, &m, NULL);
     VkExtensionProperties *vorhanden = malloc(m * sizeof *vorhanden);
@@ -148,6 +225,7 @@ int main(int argc, char **argv) {
     if (anzahl_erw == 2) { bereit = semaphore_oeffnen(a, 0); fertig = semaphore_oeffnen(a, 1); }
     int notweg = (bereit == VK_NULL_HANDLE || fertig == VK_NULL_HANDLE);
     if (notweg) printf("Notweg: Ordnung über die CPU\n");
+    else printf("Geteilte Semaphoren geöffnet: Ordnung auf der Grafikkarte\n");
     printf("EINGANG %ux%u Format %u, ZIEL %ux%u Format %u geöffnet\n", ge.breite, ge.hoehe, ge.vk_format, gz.breite, gz.hoehe, gz.vk_format);
 
     /* Testmuster: Farbbalken oben, Schachbrett unten, weißer Rahmen */
@@ -211,6 +289,6 @@ int main(int argc, char **argv) {
     roehre_austausch_freigeben(a);
     roehre_einstellungen_freigeben(e);
     vkDeviceWaitIdle(geraet);
-    printf("Austausch mit Vulkan in Ordnung\n");
+    printf("Austausch mit Vulkan in Ordnung (%s)\n", notweg ? "Notweg über die CPU" : "mit geteilten Semaphoren");
     return 0;
 }
