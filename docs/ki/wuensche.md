@@ -46,7 +46,8 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-006: Kamera-Optionen im Katalog, speicherbar
 - **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
-- **Status:** offen (geplant Etappe 6, Abschluss)
+- **Status:** erledigt (Etappe 6): Gruppe `raum` mit zehn Optionen, Festwerte über
+  `roehre_modell::festwerte(schluessel)`; über die C-API erreichbar ab Etappe 7
 - **Was fehlt:** Die Kamera des 3D-Raums (W-005) als gewöhnliche Optionen im Katalog
   (Schlüssel, deutscher Name, Beschreibung, Grenzen, Standard), speicherbar in TOML/JSON wie
   die übrigen Einstellungen. Die Oberfläche baut der Launcher selbst.
@@ -56,7 +57,8 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-005: Kamera im 3D-Raum (Nähe, Blickwinkel, Schwenk, Lage im Fenster, alle Formate)
 - **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
-- **Status:** offen (geplant Etappe 6, Abschluss)
+- **Status:** erledigt (Etappe 6) in Rust/wgpu: `roehre_raum::Kamera`, `Ansicht::aus_einstellungen`;
+  Kontaktbogen `docs/bilder/etappe-6/kamera_bogen.jpg`; für C++ ab Etappe 7
 - **Was fehlt:** frei kombinierbar:
   - **Nähe** stufenlos mit Festwerten Nah (Fernseher füllt das Fenster weitgehend, oben und
     unten bleibt Rand, Gerät sichtbar), Mittel (etwas Tisch), Weit (mehr Raum).
@@ -86,7 +88,7 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-004: 3D-Vorführraum mit einem berechneten Röhrenfernseher
 - **Von:** Anwender, 2026-11-02 (Frage nach einer 3D-Szene mit Bildschirmgerät)
-- **Status:** in Arbeit (Etappe 6): `crates/roehre-raum`, in der Vorschau unter „3D-Raum“
+- **Status:** erledigt in Rust/wgpu (Etappe 6): `crates/roehre-raum`, in der Vorschau unter „3D-Raum“; für D3D12/Vulkan mit der C-API (Etappe 7)
 - **Was fehlt:** Eine 3D-Szene mit einem selbst erzeugten Fernseher (gewölbtes Glas als
   Kugelkappe, Gehäuse als Körper), Kamera frei beweglich, Bild über den Flächen-Modus.
 - **Warum:** Prüfstein und Vorlage für das „TV-Erlebnis“ im Mission:-Impossible-Port

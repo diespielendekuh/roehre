@@ -51,6 +51,10 @@ fn main() {
             Path::new(&opt("-o").unwrap_or("flaeche.png".into())),
         ),
         "helligkeit" => helligkeit_messen().map(|_| ()),
+        "kamera" => kamera_bogen(
+            &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
+            Path::new(&opt("-o").unwrap_or("kamera.png".into())),
+        ),
         "raum" => raum_fotos(
             &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
             groesse(&opt("-g").unwrap_or("1920x1080".into())),
@@ -629,6 +633,51 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
     }
     bogen.save(aus)?;
     Ok(groesste_abweichung)
+}
+
+/// Kontaktbogen der Raumkamera: Spalten 4:3, 16:9, 32:9; Zeilen weit, mittel, nah, nah links,
+/// nah rechts, mittel leicht von links mit Gerät rechts.
+fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
+    use roehre_raum::{Ansicht, Kamera, Raum};
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::pixelszene();
+    let eingang = gpu.eingang(&bild);
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
+    let mut raum = Raum::neu(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT)?;
+    let mut werte = None;
+    for _ in 0..3 {
+        let mut enc = gpu.device.create_command_encoder(&Default::default());
+        werte = Some(roehre.zeichne_flaeche(&mut enc, &eingang, &eingang_von(&bild), &flaeche)?);
+        gpu.queue.submit([enc.finish()]);
+    }
+    let werte = werte.expect("gezeichnet");
+    let h = 270u32;
+    let formate = [(4u32, 3u32), (16, 9), (32, 9)];
+    let zeilen = [(0.0, 0.0, 0.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 0.0, -1.0), (1.0, 0.0, 1.0), (0.5, -0.5, 1.0)];
+    let breiten: Vec<u32> = formate.iter().map(|(a, b)| h * a / b).collect();
+    let rand = 12u32;
+    let gesamt_b = breiten.iter().sum::<u32>() + rand * (formate.len() as u32 + 1);
+    let gesamt_h = zeilen.len() as u32 * (h + rand) + rand;
+    let mut bogen = image::RgbaImage::from_pixel(gesamt_b, gesamt_h, image::Rgba([40, 40, 44, 255]));
+    for (zi, (naehe, blick, lage)) in zeilen.iter().enumerate() {
+        let mut x = rand;
+        for (fi, b) in breiten.iter().enumerate() {
+            let k = Kamera { naehe: *naehe, blickwinkel: *blick, lage: *lage, schwenk: false, ..Kamera::default() };
+            let a = Ansicht::aus_kamera(&k, 0.0, *b as f32 / h as f32);
+            let ziel = gpu.ziel(*b, h);
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), (*b, h), &flaeche, &werte, &a);
+            gpu.queue.submit([enc.finish()]);
+            let foto = gpu.lies(&ziel);
+            image::imageops::overlay(&mut bogen, &foto, x as i64, (rand + zi as u32 * (h + rand)) as i64);
+            x += b + rand;
+            let _ = fi;
+        }
+    }
+    bogen.save(pfad)?;
+    eprintln!("{}", pfad.display());
+    Ok(())
 }
 
 /// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.

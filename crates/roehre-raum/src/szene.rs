@@ -29,11 +29,12 @@ pub fn bauen() -> Netz {
     gummibaum(&mut n);
     kabel(&mut n);
     stehlampe(&mut n);
+    regal(&mut n);
     n
 }
 
 fn zimmer(n: &mut Netz) {
-    let (links, rechts, hinten, vorn, decke) = (-2.4, 2.4, 1.05, -3.6, 2.6);
+    let (links, rechts, hinten, vorn, decke) = (-2.4, 2.4, 1.05, -4.6, 2.6);
     // Boden (Dielen), Teppich darauf
     let boden = Trafo::bei([0.0, 0.0, (hinten + vorn) / 2.0]).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
     n.flaeche(&boden, [(rechts - links) / 2.0, (hinten - vorn) / 2.0], Dielen, [0.0, 0.0, (rechts - links) / 1.6, (hinten - vorn) / 1.6]);
@@ -445,4 +446,38 @@ fn stehlampe(n: &mut Netz) {
     // Schirm (Kegelstumpf, leuchtet von innen) und Birne
     n.drehkoerper(&Trafo::bei([LAMPE[0], LAMPE[1] - 0.14, LAMPE[2]]), &[(0.24, 0.0), (0.235, 0.004), (0.13, 0.30), (0.125, 0.304)], 32, Lampenschirm, 4.0);
     n.drehkoerper(&Trafo::bei([LAMPE[0], LAMPE[1] - 0.05, LAMPE[2]]), &[(0.0, 0.0), (0.03, 0.03), (0.035, 0.06), (0.02, 0.09), (0.0, 0.095)], 16, Gluehbirne, 1.0);
+}
+
+/// Bücherregal an der linken Wand: Seiten, Rückwand, fünf Böden, Bücher als Textur auf
+/// schmalen Blöcken (Buchrücken zeigen in den Raum), dazu ein paar liegende Stapel.
+fn regal(n: &mut Netz) {
+    let (x, z0, z1, hoehe, tiefe) = (-2.4, -1.35, -0.35, 1.9, 0.3);
+    let zm = (z0 + z1) / 2.0;
+    let xm = x + tiefe / 2.0;
+    let halb_z = (z1 - z0) / 2.0;
+    let brett = 0.012;
+    for z in [z0, z1] {
+        n.quader(&Trafo::bei([xm, hoehe / 2.0, z]), [tiefe / 2.0, hoehe / 2.0, brett], 0.002, Furnier, 2.0);
+    }
+    n.quader(&Trafo::bei([x + 0.006, hoehe / 2.0, zm]), [0.004, hoehe / 2.0, halb_z], 0.0, Furnier, 2.0);
+    let boeden = [0.05, 0.42, 0.79, 1.16, 1.53, hoehe - brett];
+    for y in boeden {
+        n.quader(&Trafo::bei([xm, y, zm]), [tiefe / 2.0, brett, halb_z - brett], 0.002, Furnier, 2.0);
+    }
+    // Bücher: je Fach eine Reihe; die Fläche liegt in der Ebene der Buchrücken, die Textur
+    // schneidet die oberen Kanten unterschiedlich hoch ab
+    for (i, y) in boeden.iter().take(5).enumerate() {
+        let fach = boeden[i + 1] - y - 2.0 * brett;
+        let h = fach * 0.92;
+        let reihe = Trafo::bei([x + tiefe - 0.03, y + brett + h / 2.0, zm]).nach(&Trafo::dreh_y(-std::f32::consts::FRAC_PI_2));
+        let breite = halb_z - brett - 0.03 * (i % 2) as f32;
+        n.flaeche(&reihe, [breite, h / 2.0], Buecher, [i as f32 * 0.37, 0.0, breite * 2.0 / 0.6, 1.0]);
+        // Dunkler Block dahinter, damit über kurzen Büchern nicht die Wand durchscheint
+        n.quader(&Trafo::bei([x + tiefe / 2.0 - 0.01, y + brett + h * 0.3, zm]), [tiefe / 2.0 - 0.03, h * 0.3, breite], 0.0, KunststoffSchwarz, 1.0);
+    }
+    // liegender Stapel und eine Kassette obenauf
+    for k in 0..3 {
+        let t = Trafo::bei([xm + 0.02, hoehe + 0.012 + k as f32 * 0.024, zm + 0.2]).nach(&Trafo::dreh_y(0.1 * k as f32));
+        n.quader(&t, [0.11, 0.011, 0.08], 0.003, Furnier, 1.0);
+    }
 }

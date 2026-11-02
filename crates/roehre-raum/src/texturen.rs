@@ -50,9 +50,10 @@ pub enum Material {
     Fernbedienung,
     Triebhuelle,
     Rinde,
+    Buecher,
 }
 
-pub const ANZAHL: u32 = Material::Rinde as u32 + 1;
+pub const ANZAHL: u32 = Material::Buecher as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -61,7 +62,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
-        Triebhuelle, Rinde,
+        Triebhuelle, Rinde, Buecher,
     ]
 };
 
@@ -424,6 +425,34 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
         Triebhuelle => {
             let c = mische([0.28, 0.05, 0.04], [0.12, 0.06, 0.03], v + 0.2 * fbm(u, v, 4, 2, 261));
             ([c[0], c[1], c[2], 1.0], [0.5, 0.35, 0.0, 0.0])
+        }
+        Buecher => {
+            // Buchrücken: unterschiedlich breite Bücher in gedeckten Farben, verblichen, mit
+            // Querbändern und Titelfeldern (ohne Schrift); oben ungleiche Höhen (Alpha)
+            let x = u * 20.0;
+            let mut kante = 0.0;
+            let mut nr = 0i32;
+            let mut a = 0.0;
+            while a <= x {
+                let w = 0.5 + 1.0 * zufall(nr, 281);
+                if a + w > x {
+                    kante = ((x - a) / w).min((a + w - x) / w);
+                    break;
+                }
+                a += w;
+                nr += 1;
+            }
+            let hoehe = 0.62 + 0.38 * zufall(nr, 282);
+            let farben = [[0.16, 0.05, 0.04], [0.05, 0.08, 0.05], [0.05, 0.06, 0.11], [0.2, 0.15, 0.08], [0.1, 0.09, 0.08], [0.22, 0.2, 0.17], [0.12, 0.03, 0.06]];
+            let mut c = farben[(zufall(nr, 283) * 7.0) as usize % 7];
+            let y = 1.0 - v;
+            let band = glatt(0.0, 0.01, (y - hoehe * 0.85).abs() - 0.015) * glatt(0.0, 0.01, (y - hoehe * 0.15).abs() - 0.01);
+            c = mische([0.25, 0.2, 0.08], c, band);
+            let titel = (1.0 - glatt(0.3, 0.32, ((y / hoehe) - 0.6).abs())) * glatt(0.15, 0.3, kante);
+            c = mische(c, [0.3, 0.28, 0.22], titel * 0.35);
+            c = mal(c, (0.75 + 0.5 * glatt(0.0, 0.15, kante)) * (0.85 + 0.3 * fbm(u, v, 8, 3, 284)));
+            let alpha = if y < hoehe { 1.0 } else { 0.0 };
+            ([c[0], c[1], c[2], alpha], [0.4 + 0.4 * glatt(0.0, 0.2, kante), 0.8, 0.0, 0.0])
         }
         Rinde => {
             let n = fbm(u, v, 8, 3, 271);

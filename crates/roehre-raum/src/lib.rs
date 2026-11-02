@@ -29,6 +29,9 @@ pub struct Ansicht {
     pub ziel: [f32; 3],
     /// Senkrechter Blickwinkel in Grad
     pub blickwinkel: f32,
+    /// Verschiebung des Bildausschnitts in normierten Bildkoordinaten (außermittige
+    /// Projektion; 1 = halbe Fensterbreite bzw. -höhe)
+    pub verschiebung: [f32; 2],
     /// Zeit in Sekunden (Vorhang, Flackern, Korn, Schwenk)
     pub zeit: f32,
     /// Helligkeit des Bildschirms (1 = Röhrenbild unverändert)
@@ -43,23 +46,127 @@ pub struct Ansicht {
     pub korn: f32,
     /// Belichtung
     pub belichtung: f32,
+    /// Tiefenunschärfe 0 … 1 (scharf ist der Fernseher)
+    pub unschaerfe: f32,
+    /// Glühen heller Stellen 0 … 1
+    pub gluehen: f32,
+}
+
+/// Kamera des Raums, wie sie die Optionen der Gruppe `raum` beschreiben (W-005).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Kamera {
+    /// 0 = weit (viel Raum), 0,5 = mittel (etwas Tisch), 1 = nah (Gerät füllt das Fenster)
+    pub naehe: f32,
+    /// −1 … 1: von links (−30°) über vorn bis von rechts (30°)
+    pub blickwinkel: f32,
+    /// Leichter, langsamer Schwenk an
+    pub schwenk: bool,
+    /// Stärke des Schwenks 0 … 1 (1 ≈ 6° zu jeder Seite)
+    pub schwenk_staerke: f32,
+    /// Lage des Geräts im Fenster: −1 am linken Rand, 0 Mitte, 1 am rechten Rand
+    pub lage: f32,
+}
+
+impl Default for Kamera {
+    fn default() -> Self {
+        Self { naehe: 0.75, blickwinkel: 0.0, schwenk: true, schwenk_staerke: 0.35, lage: 0.0 }
+    }
+}
+
+impl Kamera {
+    /// Liest die Optionen `raum.*` (fehlende Werte haben im Katalog ihre Standards).
+    pub fn aus_einstellungen(e: &roehre_wgpu::Einstellungen) -> Self {
+        Self {
+            naehe: e.zahl("raum.naehe") as f32,
+            blickwinkel: e.zahl("raum.blickwinkel") as f32,
+            schwenk: e.auswahl("raum.schwenk") == "an",
+            schwenk_staerke: e.zahl("raum.schwenk_staerke") as f32,
+            lage: e.zahl("raum.lage") as f32,
+        }
+    }
+}
+
+/// Senkrechter Blickwinkel der Raumkamera in Grad.
+const BLICKWINKEL: f32 = 38.0;
+/// Rand links/rechts, der bei voller Verschiebung zum Fensterrand bleibt (Anteil der halben Breite).
+const RAND_SEITE: f32 = 0.015;
+
+/// Hüllquader des Fernsehers samt Füßen (Mitte, halbe Größe) – daran richtet sich die Kamera.
+fn geraet() -> ([f32; 3], [f32; 3]) {
+    let h = 0.2625;
+    ([0.0, szene::TISCH_HOEHE + h, 0.0], [0.33, h, 0.205])
+}
+
+/// Projiziert einen Punkt (Spaltenmatrix wie im Shader) in normierte Bildkoordinaten.
+fn projiziere(m: &Mat, p: [f32; 3]) -> [f32; 2] {
+    let c = |r: usize| m[0][r] * p[0] + m[1][r] * p[1] + m[2][r] * p[2] + m[3][r];
+    let w = c(3).max(1e-4);
+    [c(0) / w, c(1) / w]
+}
+
+/// Grenzen des Geräts im Bild (xmin, xmax, ymin, ymax) ohne Verschiebung.
+fn grenzen(auge: [f32; 3], ziel: [f32; 3], seite: f32) -> [f32; 4] {
+    let m = mal(&perspektive(BLICKWINKEL, seite, 0.03, 20.0), &blick(auge, ziel));
+    let (mitte, halb) = geraet();
+    let mut g = [f32::MAX, f32::MIN, f32::MAX, f32::MIN];
+    for i in 0..8 {
+        let p = [
+            mitte[0] + if i & 1 == 0 { -halb[0] } else { halb[0] },
+            mitte[1] + if i & 2 == 0 { -halb[1] } else { halb[1] },
+            mitte[2] + if i & 4 == 0 { -halb[2] } else { halb[2] },
+        ];
+        let q = projiziere(&m, p);
+        g = [g[0].min(q[0]), g[1].max(q[0]), g[2].min(q[1]), g[3].max(q[1])];
+    }
+    g
 }
 
 impl Ansicht {
-    /// Blick vom Sofa auf den Fernseher. `naehe` 0 = Überblick über den Raum, 1 = so nah,
-    /// dass das Bild den Großteil des Fensters füllt. `schwenk` 0 … 1: sachte Bewegung der
-    /// Kamera (lässt die Spiegelungen im Glas wandern).
-    pub fn sitzplatz(zeit: f32, naehe: f32, schwenk: f32) -> Self {
-        let b = szene::BILD_MITTE;
-        let naehe = naehe.clamp(0.0, 1.0);
-        let abstand = 2.9 + (0.52 - 2.9) * naehe.powf(0.7);
-        let hoehe = 0.10 + 0.25 * (1.0 - naehe);
-        let seite = schwenk * (0.05 + 0.15 * (1.0 - naehe)) * (zeit * 0.13).sin();
-        let auf = schwenk * 0.012 * (zeit * 0.09).sin();
+    /// Ansicht aus der Kamera für ein Fenster mit Seitenverhältnis `seite` (Breite/Höhe).
+    ///
+    /// Die Nähe legt fest, welchen Anteil der Fensterhöhe das Gerät einnimmt (weit 24 %,
+    /// mittel 45 %, nah 80 %); ist das Fenster dafür zu schmal, wird so weit zurückgenommen,
+    /// dass das Gerät in der Breite passt. Die Lage im Fenster entsteht durch Verschieben des
+    /// Bildausschnitts (außermittige Projektion), nicht durch Drehen der Kamera: Blickwinkel
+    /// und Form des Geräts bleiben gleich. Der Schwenk kreist um das Gerät und blickt immer auf
+    /// seine Mitte; Abstand und Verschiebung bleiben dabei fest, das Gerät steht still im Bild.
+    pub fn aus_kamera(k: &Kamera, zeit: f32, seite: f32) -> Self {
+        let seite = seite.max(0.1);
+        let naehe = k.naehe.clamp(0.0, 1.0);
+        let anteil = if naehe < 0.5 { 0.24 + (0.45 - 0.24) * naehe * 2.0 } else { 0.45 + (0.80 - 0.45) * (naehe - 0.5) * 2.0 };
+        let gier = k.blickwinkel.clamp(-1.0, 1.0) * 30f32.to_radians();
+        let hoehe = (14.0 + (5.0 - 14.0) * naehe).to_radians();
+        let (mitte, halb) = geraet();
+        let lage_auge = |d: f32, gier: f32, hoehe: f32| {
+            [mitte[0] + d * gier.sin() * hoehe.cos(), mitte[1] + d * hoehe.sin(), mitte[2] - d * gier.cos() * hoehe.cos()]
+        };
+        // Abstand so wählen, dass das Gerät den gewünschten Anteil hat und in die Breite passt
+        let t = (BLICKWINKEL.to_radians() / 2.0).tan();
+        let mut d = halb[1] / (anteil * t);
+        for _ in 0..6 {
+            let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite);
+            let (h, b) = ((g[3] - g[2]) / 2.0, (g[1] - g[0]) / 2.0);
+            d *= (h / anteil).max(b / (1.0 - RAND_SEITE));
+        }
+        // im Zimmer bleiben (vordere Wand bei z = −4,6, Seitenwände bei ±2,4)
+        let d_max = ((mitte[2] + 4.3) / (gier.cos() * hoehe.cos()).max(0.1)).min(2.1 / (gier.sin().abs() * hoehe.cos()).max(1e-3));
+        d = d.min(d_max);
+        let g = grenzen(lage_auge(d, gier, hoehe), mitte, seite);
+        let b = (g[1] - g[0]) / 2.0;
+        let spiel = (1.0 - RAND_SEITE - b).max(0.0);
+        let verschiebung = [k.lage.clamp(-1.0, 1.0) * spiel - (g[0] + g[1]) / 2.0, -(g[2] + g[3]) / 2.0];
+        // Schwenk: nur die Lage des Auges ändert sich, der Blick bleibt auf der Gerätemitte
+        let (gs, hs) = if k.schwenk {
+            let s = k.schwenk_staerke.clamp(0.0, 1.0);
+            (gier + s * 0.105 * (zeit * std::f32::consts::TAU / 40.0).sin(), hoehe + s * 0.012 * (zeit * std::f32::consts::TAU / 57.0).sin())
+        } else {
+            (gier, hoehe)
+        };
         Self {
-            auge: [b[0] + seite + 0.25 * (1.0 - naehe), b[1] + hoehe + auf, b[2] - abstand],
-            ziel: [b[0] + 0.15 * (1.0 - naehe), b[1] - 0.05 * (1.0 - naehe), b[2]],
-            blickwinkel: 38.0,
+            auge: lage_auge(d, gs, hs),
+            ziel: mitte,
+            blickwinkel: BLICKWINKEL,
+            verschiebung,
             zeit,
             bildschirm: 1.0,
             lampe: 2.6,
@@ -67,7 +174,26 @@ impl Ansicht {
             nebel: 0.10,
             korn: 0.35,
             belichtung: 2.6,
+            unschaerfe: 0.3,
+            gluehen: 0.5,
         }
+    }
+
+    /// Ansicht aus allen Optionen der Gruppe `raum` (Kamera, Licht, Flackern, Korn).
+    pub fn aus_einstellungen(e: &roehre_wgpu::Einstellungen, zeit: f32, seite: f32) -> Self {
+        let mut a = Self::aus_kamera(&Kamera::aus_einstellungen(e), zeit, seite);
+        a.lampe *= e.zahl("raum.licht") as f32;
+        a.flackern = e.zahl("raum.flackern") as f32;
+        a.korn = e.zahl("raum.korn") as f32;
+        a.unschaerfe = e.zahl("raum.unschaerfe") as f32;
+        a.gluehen = e.zahl("raum.gluehen") as f32;
+        a
+    }
+
+    /// Kurzform: Kamera von vorn, mittig, für 16:9. `schwenk` 0 = still, sonst Stärke.
+    pub fn sitzplatz(zeit: f32, naehe: f32, schwenk: f32) -> Self {
+        let k = Kamera { naehe, schwenk: schwenk > 0.0, schwenk_staerke: schwenk.min(1.0), ..Kamera::default() };
+        Self::aus_kamera(&k, zeit, 16.0 / 9.0)
     }
 }
 
@@ -118,6 +244,8 @@ struct Ziele {
     farbe: wgpu::TextureView,
     aufgeloest: wgpu::TextureView,
     tiefe: wgpu::TextureView,
+    /// helle Anteile auf 1/8 verkleinert (Glühen)
+    glanz: wgpu::TextureView,
 }
 
 /// Der Raum.
@@ -137,6 +265,8 @@ pub struct Raum {
     schatten_pipeline: wgpu::RenderPipeline,
     haupt_pipeline: wgpu::RenderPipeline,
     nach_pipeline: wgpu::RenderPipeline,
+    glanz_pipeline: wgpu::RenderPipeline,
+    glanz_layout: wgpu::BindGroupLayout,
     schatten_layout: wgpu::BindGroupLayout,
     haupt_layout: wgpu::BindGroupLayout,
     nach_layout: wgpu::BindGroupLayout,
@@ -262,7 +392,7 @@ impl Raum {
         let index_bytes: Vec<u8> = netz.indizes.iter().flat_map(|i| i.to_le_bytes()).collect();
         let ecken = bytes(&ecken_bytes, wgpu::BufferUsages::VERTEX);
         let indizes = bytes(&index_bytes, wgpu::BufferUsages::INDEX);
-        let uniform = bytes(&[0u8; 208], wgpu::BufferUsages::UNIFORM);
+        let uniform = bytes(&[0u8; 224], wgpu::BufferUsages::UNIFORM);
         let material_puffer = bytes(&[0u8; 32], wgpu::BufferUsages::UNIFORM);
 
         // Abtaster
@@ -329,7 +459,20 @@ impl Raum {
         });
         let nach_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("roehre-raum: Nachbearbeitung"),
-            entries: &[eintrag(0, UNIFORM, f), eintrag(1, textur(wgpu::TextureViewDimension::D2, false), f)],
+            entries: &[
+                eintrag(0, UNIFORM, f),
+                eintrag(1, textur(wgpu::TextureViewDimension::D2, false), f),
+                eintrag(2, textur(wgpu::TextureViewDimension::D2, true), f),
+                eintrag(3, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), f),
+            ],
+        });
+        let glanz_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("roehre-raum: Glanz"),
+            entries: &[
+                eintrag(0, UNIFORM, f),
+                eintrag(1, textur(wgpu::TextureViewDimension::D2, true), f),
+                eintrag(2, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), f),
+            ],
         });
         let ecken_layout = wgpu::VertexBufferLayout {
             array_stride: 40,
@@ -373,6 +516,17 @@ impl Raum {
             multiview_mask: None,
             cache: None,
         });
+        let glanz_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("roehre-raum: Glanz"),
+            layout: Some(&pl(&glanz_layout)),
+            vertex: wgpu::VertexState { module: &modul, entry_point: Some("nach_ecke"), compilation_options: Default::default(), buffers: &[] },
+            fragment: Some(wgpu::FragmentState { module: &modul, entry_point: Some("glanz_farbe"), compilation_options: Default::default(), targets: &[Some(HDR.into())] }),
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: Default::default(),
+            multiview_mask: None,
+            cache: None,
+        });
         let nach_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("roehre-raum: Nachbearbeitung"),
             layout: Some(&pl(&nach_layout)),
@@ -400,6 +554,8 @@ impl Raum {
             schatten_pipeline,
             haupt_pipeline,
             nach_pipeline,
+            glanz_pipeline,
+            glanz_layout,
             schatten_layout,
             haupt_layout,
             nach_layout,
@@ -449,11 +605,12 @@ impl Raum {
         if self.ziele.as_ref().map(|z| z.groesse) == Some(groesse) {
             return;
         }
-        let textur = |format, proben, usage| {
+        let glanz_groesse = (groesse.0.div_ceil(8).max(1), groesse.1.div_ceil(8).max(1));
+        let textur_in = |g: (u32, u32), format, proben, usage| {
             device
                 .create_texture(&wgpu::TextureDescriptor {
                     label: Some("roehre-raum: Ziel"),
-                    size: wgpu::Extent3d { width: groesse.0, height: groesse.1, depth_or_array_layers: 1 },
+                    size: wgpu::Extent3d { width: g.0, height: g.1, depth_or_array_layers: 1 },
                     mip_level_count: 1,
                     sample_count: proben,
                     dimension: wgpu::TextureDimension::D2,
@@ -463,11 +620,13 @@ impl Raum {
                 })
                 .create_view(&Default::default())
         };
+        let textur = |format, proben, usage| textur_in(groesse, format, proben, usage);
         self.ziele = Some(Ziele {
             groesse,
             farbe: textur(HDR, PROBEN, wgpu::TextureUsages::RENDER_ATTACHMENT),
             aufgeloest: textur(HDR, 1, wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING),
             tiefe: textur(TIEFE, PROBEN, wgpu::TextureUsages::RENDER_ATTACHMENT),
+            glanz: textur_in(glanz_groesse, HDR, 1, wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING),
         });
     }
 
@@ -487,7 +646,11 @@ impl Raum {
         self.ziele_sichern(device, groesse);
         let ziele = self.ziele.as_ref().expect("gesichert");
         let seite = groesse.0 as f32 / groesse.1.max(1) as f32;
-        let ansicht = mal(&perspektive(a.blickwinkel, seite, 0.03, 20.0), &blick(a.auge, a.ziel));
+        let mut projektion = perspektive(a.blickwinkel, seite, 0.03, 20.0);
+        // außermittig: x_ndc += verschiebung (w = −z_Ansicht)
+        projektion[2][0] = -a.verschiebung[0];
+        projektion[2][1] = -a.verschiebung[1];
+        let ansicht = mal(&projektion, &blick(a.auge, a.ziel));
         let licht = mal(&perspektive(125.0, 1.0, 0.08, 8.0), &blick(szene::LAMPE, [-0.2, 0.75, -0.1]));
         let stufen = flaeche.textur.mip_level_count() as f32 - 1.0;
         let mut w: Vec<f32> = Vec::with_capacity(52);
@@ -498,6 +661,8 @@ impl Raum {
         w.extend([szene::BILD_MITTE[0], szene::BILD_MITTE[1], szene::BILD_MITTE[2], a.bildschirm]);
         w.extend([szene::BILD_HALB[0], szene::BILD_HALB[1], stufen, a.flackern]);
         w.extend([a.nebel, a.korn, if self.srgb { 1.0 } else { 0.0 }, a.belichtung]);
+        let fokus = geometrie::sub(szene::BILD_MITTE, a.auge);
+        w.extend([geometrie::dot(fokus, fokus).sqrt(), a.unschaerfe, a.gluehen, 0.0]);
         let bytes: Vec<u8> = w.iter().flat_map(|f| f.to_le_bytes()).collect();
         queue.write_buffer(&self.uniform, 0, &bytes);
         let mut mw = *material;
@@ -571,13 +736,44 @@ impl Raum {
             pass.draw_indexed(0..self.anzahl, 0, 0..1);
         }
 
-        // 3. Nachbearbeitung
+        // 3. Glanz: helle Anteile verkleinert (für das Glühen)
+        let gg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("roehre-raum: Glanz"),
+            layout: &self.glanz_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.uniform.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&ziele.aufgeloest) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.rand) },
+            ],
+        });
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("roehre-raum: Glanz"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &ziele.glanz,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&self.glanz_pipeline);
+            pass.set_bind_group(0, &gg, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        // 4. Nachbearbeitung
         let ng = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("roehre-raum: Nachbearbeitung"),
             layout: &self.nach_layout,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: self.uniform.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&ziele.aufgeloest) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&ziele.glanz) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.rand) },
             ],
         });
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -596,5 +792,81 @@ impl Raum {
         pass.set_pipeline(&self.nach_pipeline);
         pass.set_bind_group(0, &ng, &[]);
         pass.draw(0..3, 0..1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Grenzen des Geräts im fertigen Bild (mit Verschiebung).
+    fn im_bild(a: &Ansicht, seite: f32) -> [f32; 4] {
+        let g = grenzen(a.auge, a.ziel, seite);
+        [g[0] + a.verschiebung[0], g[1] + a.verschiebung[0], g[2] + a.verschiebung[1], g[3] + a.verschiebung[1]]
+    }
+
+    const FORMATE: [f32; 6] = [4.0 / 3.0, 16.0 / 10.0, 16.0 / 9.0, 21.0 / 9.0, 2.4, 32.0 / 9.0];
+
+    #[test]
+    fn geraet_wird_nie_abgeschnitten() {
+        for seite in FORMATE {
+            for naehe in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                for blick in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+                    for lage in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+                        let k = Kamera { naehe, blickwinkel: blick, lage, schwenk: false, ..Kamera::default() };
+                        let g = im_bild(&Ansicht::aus_kamera(&k, 0.0, seite), seite);
+                        assert!(g[0] >= -1.0 + 1e-3 && g[1] <= 1.0 - 1e-3 && g[2] >= -1.0 && g[3] <= 1.0, "{seite} {naehe} {blick} {lage}: {g:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn naehe_bestimmt_den_anteil_der_hoehe() {
+        // bei 16:9 von vorn: weit 24 %, mittel 45 %, nah 80 % der Fensterhöhe
+        for (naehe, soll) in [(0.0, 0.24), (0.5, 0.45), (1.0, 0.80)] {
+            let k = Kamera { naehe, schwenk: false, ..Kamera::default() };
+            let g = im_bild(&Ansicht::aus_kamera(&k, 0.0, 16.0 / 9.0), 16.0 / 9.0);
+            let anteil = (g[3] - g[2]) / 2.0;
+            assert!((anteil - soll).abs() < 0.01, "{naehe}: {anteil}");
+            assert!(((g[2] + g[3]) / 2.0).abs() < 1e-3, "senkrecht mittig");
+        }
+    }
+
+    #[test]
+    fn lage_schiebt_bis_an_den_rand_ohne_blickwinkel_zu_aendern() {
+        for seite in [16.0 / 9.0, 32.0 / 9.0] {
+            let mitte = Ansicht::aus_kamera(&Kamera { naehe: 1.0, schwenk: false, ..Kamera::default() }, 0.0, seite);
+            for lage in [-1.0f32, 1.0] {
+                let a = Ansicht::aus_kamera(&Kamera { naehe: 1.0, lage, schwenk: false, ..Kamera::default() }, 0.0, seite);
+                assert_eq!(a.auge, mitte.auge, "Kamera bleibt, nur der Ausschnitt wandert");
+                let g = im_bild(&a, seite);
+                let rand = if lage < 0.0 { g[0] + 1.0 } else { 1.0 - g[1] };
+                assert!((rand - RAND_SEITE).abs() < 1e-3, "{seite} {lage}: {g:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn schwenk_haelt_das_geraet_an_seiner_stelle() {
+        let k = Kamera { naehe: 0.8, lage: 0.6, schwenk: true, schwenk_staerke: 1.0, ..Kamera::default() };
+        let seite = 16.0 / 9.0;
+        let m = |a: &Ansicht| {
+            let p = mal(&perspektive(BLICKWINKEL, seite, 0.03, 20.0), &blick(a.auge, a.ziel));
+            let q = projiziere(&p, geraet().0);
+            [q[0] + a.verschiebung[0], q[1] + a.verschiebung[1]]
+        };
+        let ruhe = m(&Ansicht::aus_kamera(&k, 0.0, seite));
+        let mut auge_bewegt = 0.0f32;
+        for zeit in [5.0, 10.0, 20.0, 31.0] {
+            let a = Ansicht::aus_kamera(&k, zeit, seite);
+            let q = m(&a);
+            assert!((q[0] - ruhe[0]).abs() < 1e-4 && (q[1] - ruhe[1]).abs() < 1e-4, "Mitte wandert: {q:?} {ruhe:?}");
+            auge_bewegt = auge_bewegt.max((a.auge[0] - Ansicht::aus_kamera(&k, 0.0, seite).auge[0]).abs());
+        }
+        assert!(auge_bewegt > 0.05, "Schwenk wirkt");
+        let still = Kamera { schwenk: false, ..k };
+        assert_eq!(Ansicht::aus_kamera(&still, 0.0, seite).auge, Ansicht::aus_kamera(&still, 17.0, seite).auge);
     }
 }

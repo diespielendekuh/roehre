@@ -16,7 +16,7 @@ pub mod voreinstellungen;
 mod wert;
 
 pub use einstellungen::{Einstellungen, Fehler, Hinweis, AKTUELLE_VERSION};
-pub use katalog::{katalog, option, Gruppe, Kosten, OptionBeschreibung, OptionsArt};
+pub use katalog::{festwerte, katalog, option, Gruppe, Kosten, OptionBeschreibung, OptionsArt};
 pub use texte::{Sprache, Texte};
 pub use voreinstellungen::{voreinstellung, voreinstellungen, Lizenzmerkmal, Voreinstellung};
 pub use wert::Wert;

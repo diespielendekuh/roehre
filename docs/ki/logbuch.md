@@ -2,6 +2,18 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 6 abgeschlossen
+- Kamera des Raums (W-005) als Optionen der neuen Gruppe `raum` (W-006): Nähe als Anteil der
+  Fensterhöhe (weit 24 %, mittel 45 %, nah 80 %), Blickwinkel ±30°, Schwenk um das Gerät,
+  Lage im Fenster per außermittiger Projektion (Lens Shift), passt bei 4:3 bis 32:9.
+  Prüfläufe ohne GPU: Gerät nie abgeschnitten, Anteil stimmt, Schwenk hält das Gerät fest.
+- Tiefenunschärfe (Abstand im Alphakanal, gedrehtes Muster) und Glühen (1/8-Zwischenstufe).
+- Bücherregal, Straßenlicht durchs Fenster, vordere Wand weiter weg (Weitwinkel bei 32:9).
+- Fehler behoben: die Eckenverschattung dunkelte jede Wand ganz ab (Abstand zur eigenen Fläche).
+- Wünsche W-005 bis W-008 des Mission:-Impossible-Ports eingeplant (C-API Etappe 7,
+  Messung Etappe 8); nichts vorgezogen.
+- Ungeprüft: Wirkung und Leistung auf echter GPU; Vorschau-Fenster nur gestartet, nicht bedient.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 6, Teil 4 (3D-Raum nach Rückmeldung)
 - Rückmeldung des Anwenders umgesetzt: Gummibaum als Ficus elastica (drei Triebe, große
   gefaltete Blätter mit Stiel, durchscheinend im Gegenlicht, rote Triebhülle), Stehlampe in

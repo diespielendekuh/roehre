@@ -25,10 +25,12 @@ pub enum Gruppe {
     Eingang,
     Gehaeuse,
     Bewegung,
+    /// Kamera und Stimmung des 3D-Vorführraums (`roehre-raum`); wirkt nicht auf die Röhre.
+    Raum,
 }
 
 impl Gruppe {
-    pub const ALLE: [Gruppe; 12] = [
+    pub const ALLE: [Gruppe; 13] = [
         Gruppe::Allgemein,
         Gruppe::Signal,
         Gruppe::Strahl,
@@ -41,6 +43,7 @@ impl Gruppe {
         Gruppe::Eingang,
         Gruppe::Gehaeuse,
         Gruppe::Bewegung,
+        Gruppe::Raum,
     ];
 
     /// Schlüssel der Gruppe, zugleich Tabellenname in TOML.
@@ -58,6 +61,7 @@ impl Gruppe {
             Gruppe::Eingang => "eingang",
             Gruppe::Gehaeuse => "gehaeuse",
             Gruppe::Bewegung => "bewegung",
+            Gruppe::Raum => "raum",
         }
     }
 
@@ -75,6 +79,7 @@ impl Gruppe {
             Gruppe::Eingang => Texte::de_en("Eingangsbild", "Input picture"),
             Gruppe::Gehaeuse => Texte::de_en("Gehäuse", "Cabinet"),
             Gruppe::Bewegung => Texte::de_en("Bewegungsschärfe", "Motion clarity"),
+            Gruppe::Raum => Texte::de_en("3D-Raum", "3D room"),
         }
     }
 }
@@ -772,7 +777,127 @@ static KATALOG: &[OptionBeschreibung] = &[
         kosten: Kosten::Keine,
         wirkt_wenn: Some(("bewegung.modus", &["strahl", "schwarzbilder"])),
     },
+    // ---------------------------------------------------------------- 3D-Raum
+    OptionBeschreibung {
+        schluessel: "raum.naehe",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Nähe", "Distance"),
+        beschreibung: Texte::de("Wie groß der Fernseher im Fenster erscheint. Weit (0): viel vom Raum; Mittel (0,5): etwas vom Tisch; Nah (1): das Gerät füllt das Fenster weitgehend, oben und unten bleibt ein Rand. Bei schmalen Fenstern wird so weit zurückgenommen, dass das Gerät in der Breite passt."),
+        art: zahl(0.0, 1.0, 0.01, 0.75),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.blickwinkel",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Blickwinkel", "Viewing angle"),
+        beschreibung: Texte::de("Von wo die Kamera auf den Fernseher schaut: −1 deutlich von links (30°), −0,5 leicht von links, 0 von vorn, 0,5 leicht von rechts, 1 deutlich von rechts."),
+        art: zahl(-1.0, 1.0, 0.01, 0.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.schwenk",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Kameraschwenk", "Camera sway"),
+        beschreibung: Texte::de("Aus: die Kamera steht völlig still. An: eine ganz leichte, langsame Bewegung nach links und rechts; die Kamera bleibt auf den Fernseher gerichtet, er bleibt an seiner Stelle im Fenster, nur Perspektive und Spiegelungen im Glas ändern sich."),
+        art: OptionsArt::Auswahl {
+            werte: &[("aus", Texte::de_en("Aus", "Off")), ("an", Texte::de_en("An", "On"))],
+            standard: "an",
+        },
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.schwenk_staerke",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Stärke des Schwenks", "Sway strength"),
+        beschreibung: Texte::de("Wie weit die Kamera beim Schwenk ausweicht (1 = etwa 6° zu jeder Seite)."),
+        art: zahl(0.0, 1.0, 0.01, 0.35),
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("raum.schwenk", &["an"])),
+    },
+    OptionBeschreibung {
+        schluessel: "raum.lage",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Lage des Fernsehers im Fenster", "TV position in the window"),
+        beschreibung: Texte::de("Verschiebt den Fernseher nach links (−1, bis an den Fensterrand) oder rechts (1), z. B. um beim Streamen daneben Platz für das Webcam-Bild zu lassen. Der Bildausschnitt wird verschoben, nicht die Kamera gedreht: Blickwinkel und Form des Geräts bleiben gleich, abgeschnitten wird nichts."),
+        art: zahl(-1.0, 1.0, 0.01, 0.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.licht",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Licht der Stehlampe", "Floor lamp"),
+        beschreibung: Texte::de("Helligkeit der Stehlampe in der Zimmerecke; 0 = nur der Fernseher leuchtet."),
+        art: zahl(0.0, 2.0, 0.05, 1.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.flackern",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Flackern der Lampe", "Lamp flicker"),
+        beschreibung: Texte::de("Leichtes, unregelmäßiges Flackern der Glühbirne."),
+        art: zahl(0.0, 1.0, 0.05, 0.4),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.korn",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Filmkorn", "Film grain"),
+        beschreibung: Texte::de("Körnung über dem ganzen Bild, im Dunkeln stärker."),
+        art: zahl(0.0, 1.0, 0.05, 0.35),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.unschaerfe",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Tiefenunschärfe", "Depth of field"),
+        beschreibung: Texte::de("Der Fernseher bleibt scharf, was davor und dahinter liegt, verschwimmt leicht wie bei einer Kamera. 0 = alles scharf."),
+        art: zahl(0.0, 1.0, 0.05, 0.3),
+        kosten: Kosten::Gering,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "raum.gluehen",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Glühen", "Glow"),
+        beschreibung: Texte::de("Helle Stellen wie Bildschirm und Lampe strahlen leicht in den Raum ab."),
+        art: zahl(0.0, 1.0, 0.05, 0.5),
+        kosten: Kosten::Gering,
+        wirkt_wenn: None,
+    },
 ];
+
+/// Benannte Festwerte einer stufenlosen Option (für Menüs mit Stufen): Schlüssel, Name, Wert.
+/// Stufen und Regler stellen dieselbe Option ein.
+pub fn festwerte(schluessel: &str) -> &'static [(&'static str, Texte, f64)] {
+    static NAEHE: [(&str, Texte, f64); 3] = [
+        ("weit", Texte::de_en("Weit", "Wide"), 0.0),
+        ("mittel", Texte::de_en("Mittel", "Medium"), 0.5),
+        ("nah", Texte::de_en("Nah", "Close"), 1.0),
+    ];
+    static BLICK: [(&str, Texte, f64); 3] = [
+        ("links", Texte::de_en("Leicht von links", "Slightly from the left"), -0.5),
+        ("vorn", Texte::de_en("Von vorn", "Front"), 0.0),
+        ("rechts", Texte::de_en("Leicht von rechts", "Slightly from the right"), 0.5),
+    ];
+    static LAGE: [(&str, Texte, f64); 3] = [
+        ("links", Texte::de_en("Links", "Left"), -1.0),
+        ("mitte", Texte::de_en("Mitte", "Centre"), 0.0),
+        ("rechts", Texte::de_en("Rechts", "Right"), 1.0),
+    ];
+    match schluessel {
+        "raum.naehe" => &NAEHE,
+        "raum.blickwinkel" => &BLICK,
+        "raum.lage" => &LAGE,
+        _ => &[],
+    }
+}
 
 /// Alle Optionen in Menüreihenfolge.
 pub fn katalog() -> &'static [OptionBeschreibung] {

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use eframe::egui;
-use roehre_modell::{katalog, Gruppe, OptionsArt, Wert};
+use roehre_modell::{festwerte, katalog, Gruppe, OptionsArt, Wert};
 use roehre_testbilder::Bild;
 use roehre_wgpu::{Eingang, Einstellungen, FlaechenZiel, Roehre};
 
@@ -101,11 +101,6 @@ struct Vorschau {
     ansicht: Ansicht,
     raum: roehre_raum::Raum,
     flaeche: FlaechenZiel,
-    raum_naehe: f32,
-    raum_schwenk: f32,
-    raum_licht: f32,
-    raum_flackern: f32,
-    raum_korn: f32,
     foto_groesse: usize,
     meldung: String,
     start: Instant,
@@ -154,11 +149,6 @@ impl Vorschau {
             ansicht: Ansicht::Flach,
             raum,
             flaeche,
-            raum_naehe: 0.8,
-            raum_schwenk: 1.0,
-            raum_licht: 0.9,
-            raum_flackern: 0.4,
-            raum_korn: 0.6,
             foto_groesse: 0,
             meldung: String::new(),
             start: Instant::now(),
@@ -302,10 +292,7 @@ impl Vorschau {
                 }
             }
             Ansicht::Raum => self.roehre_a.zeichne_flaeche(&mut enc, quelle, &eingang, &self.flaeche).map(|werte| {
-                let mut a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_naehe, self.raum_schwenk);
-                a.lampe = self.raum_licht;
-                a.flackern = self.raum_flackern;
-                a.korn = self.raum_korn;
+                let a = roehre_raum::Ansicht::aus_einstellungen(&self.e_a, self.start.elapsed().as_secs_f32(), groesse.0 as f32 / groesse.1.max(1) as f32);
                 let z = self.ziel_a.as_ref().expect("gesichert");
                 self.raum.zeichne(&self.device, &self.queue, &mut enc, &z.ansicht, groesse, &self.flaeche, &werte, &a);
             }),
@@ -331,7 +318,7 @@ impl Vorschau {
         let ok = match self.ansicht {
             Ansicht::Flach => self.roehre_a.zeichne(&mut enc, quelle, &eingang, &ziel.ansicht, groesse).map(|_| ()),
             Ansicht::Raum => self.roehre_a.zeichne_flaeche(&mut enc, quelle, &eingang, &self.flaeche).map(|werte| {
-                let a = roehre_raum::Ansicht::sitzplatz(self.start.elapsed().as_secs_f32(), self.raum_naehe, self.raum_schwenk);
+                let a = roehre_raum::Ansicht::aus_einstellungen(&self.e_a, self.start.elapsed().as_secs_f32(), groesse.0 as f32 / groesse.1.max(1) as f32);
                 self.raum.zeichne(&self.device, &self.queue, &mut enc, &ziel.ansicht, groesse, &self.flaeche, &werte, &a);
             }),
         };
@@ -391,9 +378,9 @@ fn lies(device: &wgpu::Device, queue: &wgpu::Queue, t: &wgpu::Texture) -> image:
 }
 
 /// Regler für alle Optionen einer Einstellung, nach Gruppen. Liefert true bei Änderung.
-fn optionen_ui(ui: &mut egui::Ui, e: &mut Einstellungen, kennung: &str) -> bool {
+fn optionen_ui(ui: &mut egui::Ui, e: &mut Einstellungen, kennung: &str, gruppen: &[Gruppe]) -> bool {
     let mut geaendert = false;
-    for gruppe in Gruppe::ALLE {
+    for &gruppe in gruppen {
         egui::CollapsingHeader::new(gruppe.name().de).id_salt((kennung, gruppe.schluessel())).show(ui, |ui| {
             for o in katalog().iter().filter(|o| o.gruppe == gruppe) {
                 let wirkt = o.wirkt_wenn.is_none_or(|(s, werte)| werte.contains(&e.auswahl(s)));
@@ -405,7 +392,18 @@ fn optionen_ui(ui: &mut egui::Ui, e: &mut Einstellungen, kennung: &str) -> bool 
                             if let Some(einheit) = einheit {
                                 s = s.suffix(format!(" {einheit}"));
                             }
-                            let a = ui.add(s);
+                            let mut a = ui.add(s);
+                            let stufen = festwerte(o.schluessel);
+                            if !stufen.is_empty() {
+                                ui.horizontal(|ui| {
+                                    for (_, name, wert) in stufen {
+                                        if ui.small_button(name.de).clicked() {
+                                            z = *wert;
+                                            a.mark_changed();
+                                        }
+                                    }
+                                });
+                            }
                             if a.changed() {
                                 e.setze(o.schluessel, Wert::Zahl(z));
                             }
@@ -504,7 +502,11 @@ impl eframe::App for Vorschau {
 
                 ui.label("A");
                 if voreinstellung_ui(ui, "a", &mut self.vorein_a) {
-                    if let Ok(e) = Einstellungen::voreinstellung(&self.vorein_a) {
+                    if let Ok(mut e) = Einstellungen::voreinstellung(&self.vorein_a) {
+                        // Kamera und Stimmung des Raums gehören nicht zur Röhre: behalten
+                        for (k, w) in self.e_a.alle().filter(|(k, _)| k.starts_with("raum.")) {
+                            e.setze(k, w.clone());
+                        }
                         self.e_a = e;
                         self.roehre_a.uebernehme(self.e_a.clone());
                     }
@@ -525,11 +527,8 @@ impl eframe::App for Vorschau {
                         ui.add_enabled(self.lupe, egui::Slider::new(&mut self.lupe_faktor, 2.0..=16.0).text("fach"));
                     });
                 } else {
-                    ui.add(egui::Slider::new(&mut self.raum_naehe, 0.0..=1.0).text("Nähe zum Fernseher"));
-                    ui.add(egui::Slider::new(&mut self.raum_schwenk, 0.0..=1.0).text("Kameraschwenk"));
-                    ui.add(egui::Slider::new(&mut self.raum_licht, 0.0..=2.0).text("Lampe"));
-                    ui.add(egui::Slider::new(&mut self.raum_flackern, 0.0..=1.0).text("Flackern"));
-                    ui.add(egui::Slider::new(&mut self.raum_korn, 0.0..=1.0).text("Filmkorn"));
+                    // Kamera und Stimmung sind gewöhnliche Optionen der Gruppe „3D-Raum“
+                    optionen_ui(ui, &mut self.e_a, "raum", &[Gruppe::Raum]);
                 }
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -558,13 +557,13 @@ impl eframe::App for Vorschau {
                 }
                 ui.separator();
                 ui.label("Optionen A");
-                if optionen_ui(ui, &mut self.e_a, "oa") {
+                if optionen_ui(ui, &mut self.e_a, "oa", &Gruppe::ALLE) {
                     self.roehre_a.uebernehme(self.e_a.clone());
                 }
                 if self.vergleich && self.ansicht == Ansicht::Flach {
                     ui.separator();
                     ui.label("Optionen B");
-                    if optionen_ui(ui, &mut self.e_b, "ob") {
+                    if optionen_ui(ui, &mut self.e_b, "ob", &Gruppe::ALLE) {
                         self.roehre_b.uebernehme(self.e_b.clone());
                     }
                 }

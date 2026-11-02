@@ -38,9 +38,9 @@ das Vorgänger-Repository und „Renderer offen“).
 | Wunsch | Was | Stand |
 |---|---|---|
 | W-001 | C-API (Vulkan/D3D12) mit Flächen-Modus **und** 3D-Raum, „Textur + Ziel je Bild“ | offen, **Etappe 7** (nächste nach Etappe 6) |
-| W-004 | 3D-Vorführraum, TV-Erlebnis | **in Arbeit (Etappe 6)**: Raum, Fernseher, Licht, Nebel, Rohpixel-Texturen, eigenes Wandbild gehen in Rust/wgpu (`crates/roehre-raum`, Vorschau „3D-Raum“) |
-| W-005 | Kamera: Nähe, Blickwinkel, Schwenk, Lage im Fenster (Lens Shift), 4:3–32:9 | offen, **Abschluss Etappe 6**; heute gibt es nur Nähe und Schwenk als Regler in der Vorschau, ohne Festwerte und ohne Lens Shift |
-| W-006 | Kamera-Optionen im Katalog, speicherbar | offen, **Abschluss Etappe 6** |
+| W-004 | 3D-Vorführraum, TV-Erlebnis | **fertig in Rust/wgpu (Etappe 6)**: Raum, Fernseher, Licht, Nebel, Rohpixel-Texturen, eigenes Wandbild, Tiefenunschärfe, Glühen (`crates/roehre-raum`, Vorschau „3D-Raum“); für RT64 mit der C-API |
+| W-005 | Kamera: Nähe, Blickwinkel, Schwenk, Lage im Fenster (Lens Shift), 4:3–32:9 | **fertig in Rust/wgpu (Etappe 6)**, Bilder: `docs/bilder/etappe-6/kamera_bogen.jpg` |
+| W-006 | Kamera-Optionen im Katalog, speicherbar | **fertig (Etappe 6)**: Gruppe `raum`, Festwerte über `festwerte()` |
 | W-007 | Filtervorschau im Launcher (Software-Zeichnung) | offen, **Etappe 7**: Vorschaubild als RGBA-Puffer aus der C-API, Rückfall fertige PNGs je Voreinstellung |
 | W-008 | Leistung nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler | offen, **Etappe 8**: Messbefehl im Prüfstand, Messung auf dem Rechner des Anwenders |
 

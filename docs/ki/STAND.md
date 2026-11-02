@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, Etappe 6 (Teil 4) · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 6 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -23,7 +23,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (60 Optionen, 12 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Einstellungsmodell (70 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
 | Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
 | Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
 | Permissive Variante ohne GPL-Shader (crt-beans) | **fehlt** (Wunsch W-003) | |
@@ -37,9 +37,10 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | Gehäuse (nur Glas, Fernseher, Monitor, Automat), berechnet, mit Spiegelung und Licht des Bildes | fertig; nur wgpu (WGSL) | `gehaeuse.rs`, `zusammensetzen.wgsl` |
 | Bewegungsschärfe für 120–480 Hz: Strahlsimulation (Blur Busters, mit echtem Vorgängerbild) und Schwarzbilder | fertig; am echten Bildschirm ungeprüft | `Roehre::zeichne_im_takt`, `zusammensetzen.wgsl` |
 | Vorschau-Programm mit Fenster (Testbild/PNG/Folge, A/B-Vergleich, Lupe, Bildschirmfoto, alle Optionen) | fertig | `crates/roehre-vorschau` |
-| 3D-Vorführraum (Wohnzimmer der 80er, Röhrenfernseher auf Tisch, späte PS2-Optik, Rohpixel-Texturen 256², eigenes Wandbild) | in Arbeit (Etappe 6, Rückmeldungen des Anwenders eingearbeitet) | `crates/roehre-raum`, `shader/eigen/raum/raum3d.wgsl` |
-| C-API (Vulkan, D3D12) für C/C++-Spiele | **fehlt** (Etappe 7) | |
-| Leistungsmessung auf echter GPU | **fehlt** (Etappe 8) | |
+| 3D-Vorführraum (Wohnzimmer der 80er, Röhrenfernseher auf Tisch, späte PS2-Optik, Rohpixel-Texturen 256², eigenes Wandbild, Tiefenunschärfe, Glühen) | fertig in Rust/wgpu; am echten Bildschirm und in der Leistung ungeprüft | `crates/roehre-raum`, `shader/eigen/raum/raum3d.wgsl` |
+| Kamera des Raums (Nähe weit/mittel/nah, Blickwinkel, Schwenk, Lage im Fenster per Lens Shift, 4:3–32:9) als Optionen der Gruppe `raum` mit Festwerten (`festwerte()`) | fertig, mit Prüfläufen (nie abgeschnitten, Anteil, Schwenk hält das Gerät fest) | `Kamera`, `Ansicht::aus_einstellungen`, `roehre-pruefstand kamera` |
+| C-API (Vulkan, D3D12) für C/C++-Spiele, auch für den 3D-Raum; Launcher-Vorschaubild | **fehlt** (Etappe 7, W-001/W-007) | |
+| Leistungsmessung auf echter GPU (Filter / 3D-Raum, 1080p / 4K, Kosten je Regler) | **fehlt** (Etappe 8, W-008) | |
 
 ## 3. Einbauen (Rust, wgpu)
 
