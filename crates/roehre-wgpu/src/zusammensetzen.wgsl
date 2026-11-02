@@ -25,6 +25,12 @@ struct Daten {
     farbe: vec4<f32>,
     // Spiegelung, Licht des Bildes, Raumlicht, Glanz
     licht: vec4<f32>,
+    // Bewegung: Art (0 = aus, 1 = Strahl, 2 = Schwarzbilder), Teilbilder je Spielbild N,
+    //           Lage des Strahls zu Beginn dieser Auffrischung (0 … N, auch Bruchteile),
+    //           Helligkeit gegen Schärfe
+    strahl: vec4<f32>,
+    // Bewegung: Gamma der Röhrenwerte, Phasenverschiebung (LCD-Schutz) in Teilbildern
+    strahl2: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> daten: Daten;
@@ -33,6 +39,87 @@ struct Daten {
 // … und mit Mipmaps über eine sRGB-Ansicht (für Spiegelung und Umgebungslicht, gefiltert)
 @group(0) @binding(2) var roehre_mip: texture_2d<f32>;
 @group(0) @binding(3) var abtaster: sampler;
+// Vorheriges Röhrenbild, roh (für das Nachleuchten der Strahlsimulation)
+@group(0) @binding(4) var roehre_vorher: texture_2d<f32>;
+
+// ---------------------------------------------------------------------------------------
+// Strahlsimulation nach dem Blur Busters CRT Beam Simulator
+// (Mark Rejhon, Timothy Lottes, MIT-Lizenz, shader/fremd/mit/crt-beam-simulator).
+// Bitte Blur Busters und Timothy Lottes nennen, wenn dieser Algorithmus genutzt wird.
+// Dieser Abschnitt (bis zum Ende von `roehre_roh`) steht unter der MIT-Lizenz der Vorlage:
+//
+// // MIT License
+// // 
+// // Copyright 2024 Mark Rejhon (@BlurBusters) & Timothy Lottes (@NOTimothyLottes)
+// //
+// // Permission is hereby granted, free of charge, to any person obtaining a copy
+// // of this software and associated documentation files (the “Software”), to deal
+// // in the Software without restriction, including without limitation the rights
+// // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// // copies of the Software, and to permit persons to whom the Software is
+// // furnished to do so, subject to the following conditions:
+// //
+// // The above copyright notice and this permission notice shall be included in
+// // all copies or substantial portions of the Software.
+// //
+// // THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// // THE SOFTWARE.
+//
+// Übernommen ist der Kern: Jeder Bildpunkt hat ein „Photonenbudget“ (lineare Helligkeit ×
+// Teilbilder × Verstärkung), das ab dem Zeitpunkt, an dem der Strahl seine Zeile erreicht,
+// so früh wie möglich abgegeben wird; was in ein Teilbild nicht passt, leuchtet im nächsten
+// nach. Abweichung von der Vorlage: Die Vorlage liest für die beiden vorherigen
+// Auffrischungen das aktuelle Bild noch einmal (Demo-Fassung); roehre gibt das echte
+// vorherige Spielbild. Für ganzzahlige Verhältnisse überlappt das Fenster des „nächsten“
+// Bildes nie, deshalb genügen zwei Bilder und es entsteht keine zusätzliche Latenz.
+
+fn strahl_dekodieren(c: f32, g: f32) -> f32 {
+    return select(c / 12.92, pow((c + 0.055) / 1.055, g), c > 0.04045);
+}
+
+fn strahl_kodieren(c: f32, g: f32) -> f32 {
+    return select(c * 12.92, 1.055 * pow(c, 1.0 / g) - 0.055, c > 0.0031308);
+}
+
+fn ueberlappung(a0: f32, a1: f32, b0: f32, b1: f32) -> f32 {
+    return max(0.0, min(a1, b1) - max(a0, b0));
+}
+
+// Röhrenwert (roh, wie ihn die Kette schreibt) an Pixel `ip` der Bildfläche
+fn roehre_roh(ip: vec2<i32>) -> vec3<f32> {
+    let c = textureLoad(roehre, ip, 0).rgb;
+    let art = u32(daten.strahl.x + 0.5);
+    if (art == 0u) {
+        return c;
+    }
+    let n = daten.strahl.y;
+    let k = daten.strahl.z + daten.strahl2.y;
+    if (art == 2u) {
+        // Schwarzbilder: nur in der ersten Auffrischung eines Zyklus leuchten
+        return select(vec3<f32>(0.0), c, daten.strahl.z < 1.0);
+    }
+    let g = daten.strahl2.x;
+    let vorher = textureLoad(roehre_vorher, ip, 0).rgb;
+    let rohre_lage = (f32(ip.y) + 0.5) / daten.inhalt.w;   // 0 oben … 1 unten
+    let zeile = rohre_lage * n;
+    let von = k;
+    let bis = k + 1.0;
+    var aus = vec3<f32>(0.0);
+    for (var ch = 0; ch < 3; ch++) {
+        let l_jetzt = strahl_dekodieren(c[ch], g) * n * daten.strahl.w;
+        let l_vorher = strahl_dekodieren(vorher[ch], g) * n * daten.strahl.w;
+        let summe = ueberlappung(zeile - n, zeile - n + l_vorher, von, bis)
+            + ueberlappung(zeile, zeile + l_jetzt, von, bis)
+            + ueberlappung(zeile + n, zeile + n + l_jetzt, von, bis);
+        aus[ch] = strahl_kodieren(clamp(summe, 0.0, 1.0), g);
+    }
+    return aus;
+}
 
 @vertex
 fn ecke(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -104,7 +191,7 @@ fn zufall(p: vec2<f32>) -> f32 {
 
 // Röhrenbild an einem Pixel, linear relativ zu Weiß = 1
 fn roehre_linear(p: vec2<f32>) -> vec3<f32> {
-    let c = textureLoad(roehre, vec2<i32>(p - daten.inhalt.xy), 0).rgb;
+    let c = roehre_roh(vec2<i32>(p - daten.inhalt.xy));
     if (daten.hintergrund.a >= 1.5) {
         return pow(c, vec3<f32>(daten.hdr.x)) * daten.hdr.y / daten.hdr.w;
     }
@@ -149,7 +236,7 @@ fn ohne_gehaeuse(pos: vec2<f32>) -> vec4<f32> {
         if (!innen) {
             return vec4<f32>(daten.hintergrund.rgb, 1.0);
         }
-        var c = textureLoad(roehre, vec2<i32>(p), 0).rgb;
+        var c = roehre_roh(vec2<i32>(p));
         if (art == 1u) {
             c = srgb_zu_linear(c);
         }
@@ -157,7 +244,7 @@ fn ohne_gehaeuse(pos: vec2<f32>) -> vec4<f32> {
     }
     var nit: vec3<f32>;
     if (innen) {
-        let c = textureLoad(roehre, vec2<i32>(p), 0).rgb;
+        let c = roehre_roh(vec2<i32>(p));
         nit = pow(c, vec3<f32>(daten.hdr.x)) * daten.hdr.y;
     } else {
         nit = daten.hintergrund.rgb * daten.hdr.w;

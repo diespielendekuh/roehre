@@ -17,3 +17,20 @@
 ## Änderungen
 
 Keine.
+
+## Weiterverwendung in eigenem Code
+
+Der Kern des Algorithmus (Photonenbudget je Bildpunkt, Überlappung mit dem Strahlfenster,
+Nachleuchten über zwei Auffrischungszyklen) ist nach `crates/roehre-wgpu/src/zusammensetzen.wgsl`
+(Funktionen `strahl_*`, `ueberlappung`, `roehre_roh`) übertragen, mit dem MIT-Lizenztext im
+Kommentar. Abweichungen von der Vorlage:
+
+| Was | Vorlage | roehre | Warum |
+|---|---|---|---|
+| Vorherige Bilder | liest das aktuelle Bild noch einmal (Demo-Fassung) | echtes vorheriges Spielbild | richtiges Nachleuchten bei Bewegung |
+| Drittes Bild („Curr“) | eigenes Bild | aktuelles Bild | überlappt bei ganzzahligem Verhältnis nie; keine zusätzliche Latenz |
+| Strahllage | Auffrischung mod N | ebenso; bei ganzzahligem N beim neuen Spielbild auf den Zyklusanfang eingerastet | ausgelassene Spielbilder verschieben den Strahl nicht |
+| LCD-Schutz | N + 0,001 bei geradem N | Phase wandert um 0,001 Teilbilder je Spielbild | gleiche Wirkung, passt zum eingerasteten Strahl |
+
+Gemessen: Das Mittel der Teilbilder ist bei N = 2; 2,4; 2,75; 4; 8 auf 0,005 genau
+Original × Verstärkung (`roehre-pruefstand bewegung`, Teil von `pruefe`).

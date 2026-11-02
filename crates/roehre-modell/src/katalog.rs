@@ -24,10 +24,11 @@ pub enum Gruppe {
     Bildformat,
     Eingang,
     Gehaeuse,
+    Bewegung,
 }
 
 impl Gruppe {
-    pub const ALLE: [Gruppe; 11] = [
+    pub const ALLE: [Gruppe; 12] = [
         Gruppe::Allgemein,
         Gruppe::Signal,
         Gruppe::Strahl,
@@ -39,6 +40,7 @@ impl Gruppe {
         Gruppe::Bildformat,
         Gruppe::Eingang,
         Gruppe::Gehaeuse,
+        Gruppe::Bewegung,
     ];
 
     /// Schlüssel der Gruppe, zugleich Tabellenname in TOML.
@@ -55,6 +57,7 @@ impl Gruppe {
             Gruppe::Bildformat => "bildformat",
             Gruppe::Eingang => "eingang",
             Gruppe::Gehaeuse => "gehaeuse",
+            Gruppe::Bewegung => "bewegung",
         }
     }
 
@@ -71,6 +74,7 @@ impl Gruppe {
             Gruppe::Bildformat => Texte::de_en("Bildformat", "Picture format"),
             Gruppe::Eingang => Texte::de_en("Eingangsbild", "Input picture"),
             Gruppe::Gehaeuse => Texte::de_en("Gehäuse", "Cabinet"),
+            Gruppe::Bewegung => Texte::de_en("Bewegungsschärfe", "Motion clarity"),
         }
     }
 }
@@ -732,6 +736,41 @@ static KATALOG: &[OptionBeschreibung] = &[
         art: zahl(0.0, 1.0, 0.05, 0.4),
         kosten: Kosten::Keine,
         wirkt_wenn: Some(("gehaeuse.typ", &["nur_glas", "fernseher", "monitor", "automat"])),
+    },
+    // ---------------------------------------------------------------- Bewegung
+    OptionBeschreibung {
+        schluessel: "bewegung.modus",
+        gruppe: Gruppe::Bewegung,
+        name: Texte::de_en("Bewegungsschärfe", "Motion clarity"),
+        beschreibung: Texte::de("Nur für Bildschirme mit mehr Hertz als das Spiel (120, 240, 480 Hz). Eine Röhre zeigt jeden Bildpunkt nur kurz, deshalb wirken Bewegungen auf ihr scharf; ein gewöhnlicher Bildschirm hält das Bild und verwischt sie. „Strahl“ bildet den wandernden Elektronenstrahl samt Nachleuchten nach (Blur Busters CRT Beam Simulator), „Schwarzbilder“ schiebt einfach dunkle Bilder ein. Je mehr Hertz, desto besser; auf manchen LCDs kann es flimmern."),
+        art: OptionsArt::Auswahl {
+            werte: &[
+                ("aus", Texte::de_en("Aus", "Off")),
+                ("strahl", Texte::de_en("Strahl (empfohlen)", "Beam (recommended)")),
+                ("schwarzbilder", Texte::de_en("Schwarzbilder", "Black frames")),
+            ],
+            standard: "aus",
+        },
+        kosten: Kosten::Gering,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
+        schluessel: "bewegung.helligkeit",
+        gruppe: Gruppe::Bewegung,
+        name: Texte::de_en("Helligkeit gegen Schärfe", "Brightness vs. clarity"),
+        beschreibung: Texte::de("Höher heißt heller, aber helle Bildteile leuchten länger nach und verwischen etwas mehr. Empfohlen: 0,7 ab 240 Hz, 0,5 bei 120 Hz."),
+        art: zahl(0.1, 1.0, 0.025, 0.7),
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("bewegung.modus", &["strahl"])),
+    },
+    OptionBeschreibung {
+        schluessel: "bewegung.lcd_schutz",
+        gruppe: Gruppe::Bewegung,
+        name: Texte::de_en("Schutz für LCD-Bildschirme", "LCD protection"),
+        beschreibung: Texte::de("Verschiebt den Strahl langsam, damit sich auf LCD-Bildschirmen bei geraden Verhältnissen (120 zu 60, 240 zu 60) kein Muster einbrennt. Bei OLED nicht nötig."),
+        art: OptionsArt::Schalter { standard: true },
+        kosten: Kosten::Keine,
+        wirkt_wenn: Some(("bewegung.modus", &["strahl", "schwarzbilder"])),
     },
 ];
 

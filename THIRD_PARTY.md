@@ -14,7 +14,7 @@ eingebettet) und werden mit dem Spiel als Ordner `shader/` ausgeliefert.
 | crt-guest-advanced (inkl. ntsc, pal, hd, fast) | guest(r) | GPL-2.0-or-later | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/gpl/guest-advanced/` |
 | crt-beans | Andrew Duffey | MIT (`blue_noise.png`: CC0) | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/crt-beans/` |
 | Cathode Retro (slang-Portierung) | Joshua Jersild / DeadlyRedCube (Original), hunterk (Portierung) | MIT (Stand aus der MIT-Zeit des Originals, siehe HERKUNFT.md; das Original steht seit 2025-12-01 unter BSL-1.0) | https://github.com/libretro/slang-shaders, Original https://github.com/DeadlyRedCube/Cathode-Retro | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/cathode-retro/` |
-| CRT Beam Simulator | Mark Rejhon (Blur Busters), Timothy Lottes | MIT | https://github.com/blurbusters/crt-beam-simulator | `734786a6c48f954af11cb390e38a9e06107ffdd9` | `shader/fremd/mit/crt-beam-simulator/` |
+| CRT Beam Simulator (Shaderdatei; Algorithmus zusätzlich übertragen nach `crates/roehre-wgpu/src/zusammensetzen.wgsl`, mit Lizenztext) | Mark Rejhon (Blur Busters), Timothy Lottes | MIT | https://github.com/blurbusters/crt-beam-simulator | `734786a6c48f954af11cb390e38a9e06107ffdd9` | `shader/fremd/mit/crt-beam-simulator/` |
 
 ## Abhängigkeiten über Cargo (nicht im Repository)
 

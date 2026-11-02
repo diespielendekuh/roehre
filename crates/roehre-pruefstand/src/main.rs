@@ -51,6 +51,11 @@ fn main() {
             Path::new(&opt("-o").unwrap_or("flaeche.png".into())),
         ),
         "helligkeit" => helligkeit_messen().map(|_| ()),
+        "bewegung" => bewegung_messen(
+            opt("-n").and_then(|n| n.parse().ok()).unwrap_or(4.0),
+            Path::new(&opt("-o").unwrap_or("bewegung.png".into())),
+        )
+        .map(|_| ()),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
@@ -517,6 +522,14 @@ fn pruefe(neu: bool) -> Ergebnis {
     verstoesse.extend(moire_messen(None)?);
     verstoesse.extend(helligkeit_messen()?);
 
+    // 4. Strahlsimulation: Lichtsumme der Teilbilder = Original × Verstärkung
+    for n in [2.0f32, 2.4, 4.0] {
+        let abw = bewegung_messen(n, &diff_ordner.join(format!("bewegung_{n}.png")))?;
+        if abw > 0.01 {
+            verstoesse.push(format!("Strahlsimulation n = {n}: Lichtsumme weicht um {abw:.3} ab (Soll ≤ 0,01)"));
+        }
+    }
+
     if verstoesse.is_empty() {
         eprintln!("Prüflauf bestanden.");
         Ok(())
@@ -527,4 +540,87 @@ fn pruefe(neu: bool) -> Ergebnis {
         eprintln!("Differenzbilder: {}", diff_ordner.display());
         Err(format!("{} Verstöße", verstoesse.len()).into())
     }
+}
+
+/// Strahlsimulation: Lichtsumme der Teilbilder gegen das Bild ohne Simulation, dazu ein Foto
+/// der Teilbilder nebeneinander.
+fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>> {
+    use roehre_wgpu::Takt;
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::graukeil(320, 240);
+    let eingang = gpu.eingang(&bild);
+    let g = (1280u32, 720u32);
+    let lin = |v: u8| {
+        let c = v as f64 / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    let mut e = Einstellungen::voreinstellung("scart-rgb")?;
+    // Bezug: ohne Simulation
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e.clone(), gpu::ZIELFORMAT)?;
+    let bezug = rendere(&gpu, &mut roehre, &bild, g, 3)?;
+    let r = roehre.flaeche(&eingang_von(&bild), g);
+    e.setze("bewegung.modus", roehre_modell::Wert::Auswahl("strahl".into()));
+    e.setze("bewegung.lcd_schutz", roehre_modell::Wert::Schalter(false));
+    let gewinn = e.zahl("bewegung.helligkeit");
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e, gpu::ZIELFORMAT)?;
+    let ziel = gpu.ziel(g.0, g.1);
+    let ansicht = ziel.create_view(&Default::default());
+    // Echter Takt: Auffrischung r zeigt Spielbild floor(r / n). Bei nicht ganzzahligem n
+    // wechseln sich lange und kurze Spielbilder ab (2,4: 3, 2, 3, 2, 2 …). Ausgewertet werden
+    // so viele Auffrischungen, dass eine ganze Zahl von Spielbildern hineinpasst.
+    let mut periode = 1usize;
+    while ((periode as f64 * n as f64).round() - periode as f64 * n as f64).abs() > 1e-6 && periode < 100 {
+        periode += 1;
+    }
+    let auswertung = (periode as f64 * n as f64).round() as usize;
+    let vorlauf = 3 * auswertung;
+    let mut fotos = Vec::new();
+    for r in 0..vorlauf + auswertung {
+        let neu = r == 0 || (r as f64 / n as f64).floor() != ((r - 1) as f64 / n as f64).floor();
+        let mut enc = gpu.device.create_command_encoder(&Default::default());
+        let takt = Takt { neues_spielbild: neu, teilbilder_je_spielbild: n };
+        roehre.zeichne_im_takt(&mut enc, &eingang, &eingang_von(&bild), &ansicht, g, takt)?;
+        gpu.queue.submit([enc.finish()]);
+        if r >= vorlauf {
+            fotos.push(gpu.lies(&ziel));
+        }
+    }
+    eprintln!("{} Auffrischungen ausgewertet ({} Spielbilder)", auswertung, periode);
+    // Lichtsumme je Graustufe (oberer Streifen: 16 Stufen), Mitte jeder Stufe
+    println!("| Stufe | ohne Simulation | Mittel der Teilbilder | Verhältnis | Soll |");
+    println!("|---:|---:|---:|---:|---:|");
+    let y0 = r.y + r.hoehe / 10;
+    let y1 = r.y + r.hoehe * 3 / 10;
+    let mut groesste_abweichung: f64 = 0.0;
+    for stufe in 0..16u32 {
+        let x0 = r.x + r.breite * (4 * stufe + 1) / 64;
+        let x1 = r.x + r.breite * (4 * stufe + 3) / 64;
+        let mittel = |b: &image::RgbaImage| {
+            let mut s = 0.0;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    s += lin(b.get_pixel(x, y)[1]);
+                }
+            }
+            s / ((x1 - x0) * (y1 - y0)) as f64
+        };
+        let ohne = mittel(&bezug);
+        let mit = fotos.iter().map(mittel).sum::<f64>() / fotos.len() as f64;
+        let verh = if ohne > 1e-4 { mit / ohne } else { f64::NAN };
+        if ohne > 0.01 {
+            groesste_abweichung = groesste_abweichung.max((verh - gewinn).abs());
+        }
+        println!("| {} | {:.4} | {:.4} | {:.3} | {:.3} |", stufe * 17, ohne, mit, verh, gewinn);
+    }
+    eprintln!("größte Abweichung vom Soll (ab 1 % Helligkeit): {groesste_abweichung:.3}");
+    // Foto: Teilbilder nebeneinander, verkleinert
+    let (fb, fh) = (g.0 / 2, g.1 / 2);
+    let zeigen = fotos.len().min(8);
+    let mut bogen = image::RgbaImage::new(fb * zeigen as u32, fh);
+    for (i, f) in fotos.iter().take(zeigen).enumerate() {
+        let k = image::imageops::resize(f, fb, fh, image::imageops::FilterType::Triangle);
+        image::imageops::overlay(&mut bogen, &k, (i as u32 * fb) as i64, 0);
+    }
+    bogen.save(aus)?;
+    Ok(groesste_abweichung)
 }

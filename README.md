@@ -5,7 +5,7 @@ Signal (RGB, S-Video, Composite mit NTSC/PAL), Strahl, Maske, Leuchtstoff, Licht
 HDR, Strahlsimulation für Monitore ab 120 Hz und auf Wunsch ein prozedural erzeugtes Gehäuse.
 Rust-API für wgpu, C-API für Vulkan und D3D12.
 
-**Stand:** Etappe 4 (berechnete Gehäuse, Breitbild-Röhre) fertig. Plan: [docs/PLAN.md](docs/PLAN.md), Berichte: [docs/etappen/](docs/etappen/).
+**Stand:** Etappe 5 (Bewegungsschärfe für 120–480 Hz) fertig. Plan: [docs/PLAN.md](docs/PLAN.md), Berichte: [docs/etappen/](docs/etappen/).
 
 **Für KIs und Mitwirkende:** Einstieg über [AGENTS.md](AGENTS.md), aktueller Stand in
 [docs/ki/STAND.md](docs/ki/STAND.md), Vorlage für einen Prompt in [docs/ki/PROMPT.md](docs/ki/PROMPT.md).

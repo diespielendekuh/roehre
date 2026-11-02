@@ -17,6 +17,13 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ## Einträge
 
+### W-004: 3D-Vorführraum mit einem berechneten Röhrenfernseher
+- **Von:** Anwender, 2026-11-02 (Frage nach einer 3D-Szene mit Bildschirmgerät)
+- **Status:** geplant für Etappe 6 (Vorschau-Programm)
+- **Was fehlt:** Eine 3D-Szene mit einem selbst erzeugten Fernseher (gewölbtes Glas als
+  Kugelkappe, Gehäuse als Körper), Kamera frei beweglich, Bild über den Flächen-Modus.
+- **Warum:** Prüfstein und Vorlage für den 3D-Monitor im Mission:-Impossible-Port.
+
 ### W-003: Permissive Variante ohne GPL-Shader
 - **Von:** roehre (Planung), 2026-11-02
 - **Status:** offen

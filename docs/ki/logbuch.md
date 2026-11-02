@@ -2,6 +2,14 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 5
+- Bewegungsschärfe: Strahlsimulation nach Blur Busters mit echtem Vorgängerbild, Schwarzbilder,
+  Schnittstelle `zeichne_im_takt`. Lichtsumme bei 120/144/165/240/480 Hz auf 0,5 % genau.
+- Befund: Strahl darf bei nicht ganzzahligem Verhältnis nicht je Spielbild neu beginnen
+  (bis 20 % Licht fehlten).
+- Ungeprüft: Wirkung am echten Bildschirm mit hoher Bildwiederholrate.
+- Bericht: `docs/etappen/etappe-5.md`.
+
 ## 2026-11-02 · roehre-Hauptsitzung · Etappe 4
 - Berechnete Gehäuse (nur Glas, Fernseher, Monitor, Automat) mit Glas, Innenfase mit
   Spiegelung, Licht des Bildes auf Rahmen und Wand; Breitbild-Röhre (16:9-Glas).

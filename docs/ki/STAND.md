@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 4 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 5 · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -23,7 +23,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (57 Optionen, 11 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Einstellungsmodell (60 Optionen, 12 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
 | Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
 | Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
 | Permissive Variante ohne GPL-Shader (crt-beans) | **fehlt** (Wunsch W-003) | |
@@ -35,7 +35,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 | Flächen-Modus (Röhrenbildschirm als Objekt in einer 3D-Szene) | fertig; HLSL-Fassung ungeprüft | `bildschirmflaeche.rs`, `shader/eigen/flaeche/` |
 | Umschalten ohne Ruckeln (Kettenbau im Hintergrund) | fertig | `Roehre::uebernehme` |
 | Gehäuse (nur Glas, Fernseher, Monitor, Automat), berechnet, mit Spiegelung und Licht des Bildes | fertig; nur wgpu (WGSL) | `gehaeuse.rs`, `zusammensetzen.wgsl` |
-| Strahlsimulation/BFI für 120–480 Hz | **fehlt** (Etappe 5); Shader liegt bereit: `shader/fremd/mit/crt-beam-simulator` | |
+| Bewegungsschärfe für 120–480 Hz: Strahlsimulation (Blur Busters, mit echtem Vorgängerbild) und Schwarzbilder | fertig; am echten Bildschirm ungeprüft | `Roehre::zeichne_im_takt`, `zusammensetzen.wgsl` |
 | Vorschau-Programm mit Fenster | **fehlt** (Etappe 6); der Prüfstand rendert ohne Fenster | `crates/roehre-pruefstand` |
 | C-API (Vulkan, D3D12) für C/C++-Spiele | **fehlt** (Etappe 7) | |
 | Leistungsmessung auf echter GPU | **fehlt** (Etappe 8) | |
@@ -61,6 +61,10 @@ let eingang = Eingang { breite: 256, hoehe: 224, pixel_seitenverhaeltnis: 8.0 / 
 
 // je Bild:
 let rechteck = roehre.zeichne(&mut encoder, &spielbild_textur, &eingang, &ziel_ansicht, (breite, hoehe))?;
+// Bildschirm mit mehr Hertz als das Spiel (z. B. 240 Hz, 60 Bilder/s), Bewegungsschärfe an:
+// je Bildschirmauffrischung aufrufen, neues_spielbild nur bei der ersten nach einem neuen Bild
+let takt = roehre_wgpu::Takt { neues_spielbild, teilbilder_je_spielbild: 240.0 / 60.0 };
+roehre.zeichne_im_takt(&mut encoder, &spielbild_textur, &eingang, &ziel_ansicht, (breite, hoehe), takt)?;
 // Einstellung geändert (z. B. aus dem Menü):
 roehre.uebernehme(neue_einstellungen);    // Regler sofort, Kettenwechsel im Hintergrund
 ```
@@ -118,6 +122,7 @@ Lizenzmerkmal).
 | `bildformat.seitenverhaeltnis`, `bildformat.ganzzahlig`, `bildformat.fuellung` | Einpassen |
 | `eingang.zeilen`, `eingang.waagerecht` | virtuelle Zeilenzahl (0 = automatisch) |
 | `gehaeuse.typ`, `gehaeuse.zoom`, `bildformat.roehrenformat` | Gehäuse, Nähe, 16:9-Glas |
+| `bewegung.modus`, `bewegung.helligkeit` | Strahlsimulation/Schwarzbilder ab 120 Hz |
 
 Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
@@ -135,6 +140,7 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-02 | Etappe 5: `Roehre::zeichne_im_takt`, `Takt`; Optionen `bewegung.*`. |
 | 2026-11-02 | Etappe 4: Optionen `gehaeuse.*`, `bildformat.roehrenformat`; `Roehre::anordnung`; automatisches Einrasten unter 4 px je Zeile (Bildgröße bei kleinen Fenstern etwas kleiner als vorher). |
 | 2026-11-02 | Standard von `helligkeit.gamma_ausgang` 1,95 → 2,4 und von `maske.staerke_dunkel` 1,1 → 0,4 (Mitteltöne waren zu dunkel). Gespeicherte Einstellungen mit den alten Werten bleiben gültig. |
 | 2026-11-02 | Neue Optionen `strahl.zeilenverdopplung`, `signal.bandbreite`. |

@@ -207,6 +207,12 @@ pub struct Roehre {
     ausgabe: Ausgabe,
     eichung: eichung::Eichung,
     mip: bildschirmflaeche::MipErzeuger,
+    /// Vorheriges Röhrenbild (Strahlsimulation)
+    vorher: Option<Zwischen>,
+    /// Anordnung des letzten Spielbilds und Zielgröße, für die sie gilt
+    letzte_anordnung: Option<(Anordnung, (u32, u32))>,
+    auffrischung: u64,
+    zyklen: u64,
     letzter_plan: Option<roehre_kette::Plan>,
 }
 
@@ -246,6 +252,10 @@ impl Roehre {
             ausgabe,
             eichung: eichung::Eichung::neu(),
             mip: bildschirmflaeche::MipErzeuger::neu(device),
+            vorher: None,
+            letzte_anordnung: None,
+            auffrischung: 0,
+            zyklen: 0,
             bild: 0,
             hintergrund: [0.0; 3],
             letzter_plan: None,
@@ -404,6 +414,9 @@ impl Roehre {
 
     /// Zeichnet ein Bild. `eingang_textur` ist das Spielbild (mit `TEXTURE_BINDING`), `ziel`
     /// eine Ansicht der Zieltextur im bei [`Roehre::neu`] genannten Format.
+    ///
+    /// Für Bildschirme mit mehr Hertz als das Spiel und Bewegungsschärfe siehe
+    /// [`Roehre::zeichne_im_takt`].
     pub fn zeichne(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -412,6 +425,107 @@ impl Roehre {
         ziel: &wgpu::TextureView,
         ziel_groesse: (u32, u32),
     ) -> Result<Rechteck, Fehler> {
+        self.zeichne_im_takt(encoder, eingang_textur, eingang, ziel, ziel_groesse, Takt::EIN_BILD)
+    }
+
+    /// Zeichnet eine Bildschirmauffrischung. Bei einem Bildschirm mit mehr Hertz als das Spiel
+    /// (z. B. 240 Hz bei 60 Bildern je Sekunde) ruft das Spiel diese Funktion **je
+    /// Auffrischung** auf; `takt.neues_spielbild` ist nur bei der ersten nach einem neuen
+    /// Spielbild wahr. Die Röhrenkette läuft nur dann; dazwischen rechnet allein der
+    /// Zusammensetz-Pass die Teilbilder der Strahlsimulation (`bewegung.modus`).
+    pub fn zeichne_im_takt(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        eingang_textur: &wgpu::Texture,
+        eingang: &Eingang,
+        ziel: &wgpu::TextureView,
+        ziel_groesse: (u32, u32),
+        takt: Takt,
+    ) -> Result<Rechteck, Fehler> {
+        let modus = self.einstellungen.auswahl("bewegung.modus").to_string();
+        let n = takt.teilbilder_je_spielbild.max(1.0);
+        let bewegung = modus != "aus" && n >= 1.5;
+        let neu_noetig = takt.neues_spielbild
+            || self.zwischen.is_none()
+            || self.letzte_anordnung.map(|(_, g)| g) != Some(ziel_groesse);
+        if neu_noetig {
+            self.spielbild(encoder, eingang_textur, eingang, ziel_groesse, bewegung)?;
+            self.zyklen = self.zyklen.wrapping_add(1);
+            // Ganzzahliges Verhältnis: Der Strahl beginnt mit jedem Spielbild oben, auch wenn
+            // das Spiel ein Bild ausgelassen hat. Sonst läuft er wie in der Vorlage durch
+            // (Lage = Auffrischung mod n), damit bei 2,4 Teilbildern kurze und lange
+            // Spielbilder zusammen wieder das ganze Licht abgeben.
+            if n.fract() == 0.0 {
+                self.auffrischung = (self.auffrischung as f64 / n as f64).ceil() as u64 * n as u64;
+            }
+        }
+        let strahl_lage = (self.auffrischung as f64 % n as f64) as f32;
+        self.auffrischung = self.auffrischung.wrapping_add(1);
+        let (anordnung, _) = self.letzte_anordnung.expect("eben gezeichnet");
+        let zwischen = self.zwischen.as_ref().expect("eben gezeichnet");
+        let vorher = self.vorher.as_ref().filter(|v| v.groesse == zwischen.groesse);
+
+        let e = &self.einstellungen;
+        let roehre_an = e.schalter("allgemein.roehre");
+        let weiss = e.zahl("helligkeit.hdr_weiss");
+        let hdr_daten = if roehre_an {
+            // Röhrenwert 1,0 so hell, dass eine weiße Fläche im Mittel `weiss` erreicht
+            [e.zahl("helligkeit.gamma_ausgang") as f32, (weiss / self.eichung.transmission) as f32]
+        } else {
+            // Ohne Röhre: sRGB-ähnlich mit Gamma 2,2, Weiß = `weiss`
+            [2.2, weiss as f32]
+        };
+        let hdr_daten = [hdr_daten[0], hdr_daten[1], e.zahl("helligkeit.hdr_spitze") as f32, weiss as f32];
+        let licht = [
+            e.zahl("gehaeuse.spiegelung") as f32,
+            e.zahl("gehaeuse.umgebungslicht") as f32,
+            e.zahl("gehaeuse.raumlicht") as f32,
+            e.zahl("gehaeuse.glanz") as f32,
+        ];
+        // LCD-Schutz nach der Vorlage: bei geraden ganzzahligen Verhältnissen wandert die
+        // Strahlphase um 0,001 Teilbilder je Spielbild (nach 1000 Bildern ein Teilbild weiter).
+        let gerade = n.fract() == 0.0 && (n as u32) % 2 == 0;
+        let phase = if bewegung && gerade && e.schalter("bewegung.lcd_schutz") {
+            ((self.zyklen as f64 * 0.001) % 1.0) as f32
+        } else {
+            0.0
+        };
+        let strahl = [
+            if !bewegung { 0.0 } else if modus == "schwarzbilder" { 2.0 } else { 1.0 },
+            n,
+            strahl_lage,
+            e.zahl("bewegung.helligkeit") as f32,
+            e.zahl("helligkeit.gamma_ausgang") as f32,
+            phase,
+            0.0,
+            0.0,
+        ];
+        self.setzer.setze(
+            &self.device,
+            &self.queue,
+            encoder,
+            zwischen,
+            vorher.unwrap_or(zwischen),
+            ziel,
+            &anordnung,
+            self.hintergrund,
+            self.ausgabe.raum,
+            hdr_daten,
+            licht,
+            strahl,
+        );
+        Ok(anordnung.inhalt)
+    }
+
+    /// Ein neues Spielbild durch Vorstufe und Röhrenkette in die Röhrentextur zeichnen.
+    fn spielbild(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        eingang_textur: &wgpu::Texture,
+        eingang: &Eingang,
+        ziel_groesse: (u32, u32),
+        bewegung: bool,
+    ) -> Result<(), Fehler> {
         self.tausche_wenn_fertig(false)?;
 
         // Vorstufe: hochaufgelöste Bilder auf die Zeilenzahl der Röhre bringen
@@ -432,6 +546,12 @@ impl Roehre {
         let r = anordnung.inhalt;
         // Mipmaps braucht nur ein Gehäuse mit Rahmen (Spiegelung, Licht des Bildes)
         let mips = anordnung.form.is_some_and(|f| f.art >= 2);
+        // Strahlsimulation: das bisherige Bild wird zum vorherigen
+        if bewegung {
+            std::mem::swap(&mut self.zwischen, &mut self.vorher);
+        } else {
+            self.vorher = None;
+        }
         Zwischen::sichern(&mut self.zwischen, &self.device, (r.breite, r.hoehe), "roehre: Röhrenfläche", mips);
         let zwischen = self.zwischen.as_ref().expect("eben gesichert");
 
@@ -439,8 +559,7 @@ impl Roehre {
         let hdr = self.ausgabe.ist_hdr();
         let kontext = roehre_kette::Kontext { eingang: (wirksam.breite, wirksam.hoehe), flaeche: (r.breite, r.hoehe), hdr, flaeche_modus: false };
         let plan = roehre_kette::plane(&self.einstellungen, &kontext);
-        let roehre_an = self.einstellungen.schalter("allgemein.roehre");
-        if hdr && roehre_an {
+        if hdr && self.einstellungen.schalter("allgemein.roehre") {
             self.eichung.abholen(&self.device);
             self.eichung.bei_bedarf_messen(
                 &self.device,
@@ -463,31 +582,29 @@ impl Roehre {
         let optionen = FrameOptions { aspect_ratio: seite as f32, ..Default::default() };
         self.aktiv.1.frame(roehren_eingang, &zwischen.viewport(), encoder, self.bild, Some(&optionen))?;
         self.bild = self.bild.wrapping_add(1);
-
-        let weiss = self.einstellungen.zahl("helligkeit.hdr_weiss");
-        let hdr_daten = if roehre_an {
-            // Röhrenwert 1,0 so hell, dass eine weiße Fläche im Mittel `weiss` erreicht
-            [self.einstellungen.zahl("helligkeit.gamma_ausgang") as f32, (weiss / self.eichung.transmission) as f32]
-        } else {
-            // Ohne Röhre: sRGB-ähnlich mit Gamma 2,2, Weiß = `weiss`
-            [2.2, weiss as f32]
-        };
-        let hdr_daten = [hdr_daten[0], hdr_daten[1], self.einstellungen.zahl("helligkeit.hdr_spitze") as f32, weiss as f32];
         if mips {
             for n in 1..zwischen.stufen.len() {
                 self.mip.stufe(&self.device, encoder, &zwischen.stufen[n - 1], &zwischen.stufen[n]);
             }
         }
-        let e = &self.einstellungen;
-        let licht = [
-            e.zahl("gehaeuse.spiegelung") as f32,
-            e.zahl("gehaeuse.umgebungslicht") as f32,
-            e.zahl("gehaeuse.raumlicht") as f32,
-            e.zahl("gehaeuse.glanz") as f32,
-        ];
-        self.setzer.setze(&self.device, &self.queue, encoder, zwischen, ziel, &anordnung, self.hintergrund, self.ausgabe.raum, hdr_daten, licht);
-        Ok(r)
+        self.letzte_anordnung = Some((anordnung, ziel_groesse));
+        Ok(())
     }
+}
+
+/// Takt einer Bildschirmauffrischung (siehe [`Roehre::zeichne_im_takt`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Takt {
+    /// Seit der letzten Auffrischung ist ein neues Spielbild da.
+    pub neues_spielbild: bool,
+    /// Bildschirmauffrischungen je Spielbild: Hertz des Bildschirms geteilt durch die
+    /// Bildrate des Spiels (240 / 60 = 4; 144 / 60 = 2,4 geht auch, ganzzahlig ist besser).
+    pub teilbilder_je_spielbild: f32,
+}
+
+impl Takt {
+    /// Ein Spielbild je Auffrischung (keine Strahlsimulation).
+    pub const EIN_BILD: Takt = Takt { neues_spielbild: true, teilbilder_je_spielbild: 1.0 };
 }
 
 fn kette_fuer(e: &Einstellungen) -> Kette {
@@ -544,6 +661,7 @@ impl Zusammensetzer {
                 },
                 textur(1, false),
                 textur(2, true),
+                textur(4, false),
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -607,12 +725,14 @@ impl Zusammensetzer {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         quelle: &Zwischen,
+        vorher: &Zwischen,
         ziel: &wgpu::TextureView,
         an: &Anordnung,
         hintergrund: [f32; 3],
         raum: Ausgaberaum,
         hdr: [f32; 4],
         licht: [f32; 4],
+        strahl: [f32; 8],
     ) {
         let art = match raum {
             Ausgaberaum::Sdr if self.srgb => 1.0,
@@ -633,7 +753,7 @@ impl Zusammensetzer {
             rauheit: 1.0,
         });
         let mip_max = quelle.stufen.len().saturating_sub(1) as f32;
-        let daten: [f32; 32] = [
+        let daten: [f32; 40] = [
             r.x as f32, r.y as f32, r.breite as f32, r.hoehe as f32,
             an.glas[0], an.glas[1], an.glas[2], an.glas[3],
             hintergrund[0], hintergrund[1], hintergrund[2], art,
@@ -642,6 +762,8 @@ impl Zusammensetzer {
             f.seite, f.oben, f.unten, f.rauheit,
             f.farbe[0], f.farbe[1], f.farbe[2], mip_max,
             licht[0], licht[1], licht[2], licht[3],
+            strahl[0], strahl[1], strahl[2], strahl[3],
+            strahl[4], strahl[5], strahl[6], strahl[7],
         ];
         let bytes: Vec<u8> = daten.iter().flat_map(|f| f.to_le_bytes()).collect();
         let puffer = self.puffer.get_or_insert_with(|| {
@@ -664,6 +786,7 @@ impl Zusammensetzer {
                     resource: wgpu::BindingResource::TextureView(quelle.mip_ansicht.as_ref().unwrap_or(&self.leer)),
                 },
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.abtaster) },
+                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&vorher.ansicht) },
             ],
         });
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
