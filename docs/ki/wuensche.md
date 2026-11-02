@@ -1,0 +1,36 @@
+# Wunschliste: was Projekte von roehre brauchen
+
+Hier trägt jede KI (oder jeder Mensch) ein, was einem Spielprojekt fehlt. Wer roehre
+weiterbaut, arbeitet diese Liste mit ab. Neue Einträge **oben** einfügen, fortlaufende
+Nummer, erledigte nicht löschen, sondern mit Commit markieren.
+
+## Vorlage
+
+```markdown
+### W-NNN: <kurzer Titel>
+- **Von:** <Projekt / KI>, <Datum>
+- **Status:** offen | in Arbeit (<wer>) | erledigt (<Commit>) | abgelehnt (<Grund>)
+- **Was fehlt:** <konkret: Funktion, Format, Fehlerbild mit Werten>
+- **Warum:** <wofür das Spiel es braucht>
+- **Vorschlag:** <wie es gehen könnte, falls bekannt>
+```
+
+## Einträge
+
+### W-002: Einbauanleitung und Versionsanhebung für den Terranigma-Port
+- **Von:** roehre (Planung), 2026-11-02
+- **Status:** offen (geplant Etappe 7)
+- **Was fehlt:** Der Port nutzt wgpu 24 / egui 0.31, roehre braucht wgpu 30. Anleitung für das
+  Anheben (egui 0.37) und den Einbau (Spielbild unvergrößert hochladen, roehre zeichnet, egui
+  darüber), siehe `docs/PLAN.md` Abschnitt 11.1.
+- **Warum:** Terranigma ist das erste Spiel, das roehre benutzen soll.
+
+### W-001: C-API mit Vulkan- und D3D12-Weg
+- **Von:** roehre (Planung, für Mission: Impossible), 2026-11-02
+- **Status:** offen (geplant Etappe 7)
+- **Was fehlt:** Eine C-Schnittstelle (`roehre.h`) für C/C++-Spiele: erstellen mit
+  Vulkan-Gerät oder D3D12-Gerät, Einstellungen laden/setzen, Katalog auflisten, zeichnen in
+  eine Zieltextur, Flächen-Modus.
+- **Warum:** Der PC-Port von Mission: Impossible entsteht in C (Renderer noch offen).
+- **Vorschlag:** librashader hat Vulkan- und D3D12-Laufzeiten und eine C-API; die eigenen
+  Pässe (Zusammensetzen, Mipmaps) müssen dafür als slang-Pässe oder je Backend vorliegen.

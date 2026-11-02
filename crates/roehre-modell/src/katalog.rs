@@ -659,6 +659,16 @@ mod tests {
         }
     }
 
+    /// docs/ki/STAND.md ist die Übersicht für andere KIs; sie darf bei der Zahl der Optionen
+    /// und Gruppen nicht hinter dem Katalog zurückbleiben.
+    #[test]
+    fn stand_md_nennt_die_richtige_zahl_der_optionen() {
+        let stand = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/ki/STAND.md"))
+            .expect("docs/ki/STAND.md fehlt");
+        let erwartet = format!("({} Optionen, {} Gruppen", katalog().len(), Gruppe::ALLE.len());
+        assert!(stand.contains(&erwartet), "docs/ki/STAND.md muss „{erwartet}“ nennen – bitte aktualisieren");
+    }
+
     #[test]
     fn standardwerte_liegen_in_den_grenzen() {
         for o in katalog() {

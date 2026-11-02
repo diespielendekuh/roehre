@@ -7,6 +7,9 @@ Rust-API für wgpu, C-API für Vulkan und D3D12.
 
 **Stand:** Etappe 2 (Eingangsstufe, Moiré-Messung, HDR) fertig. Plan: [docs/PLAN.md](docs/PLAN.md), Berichte: [docs/etappen/](docs/etappen/).
 
+**Für KIs und Mitwirkende:** Einstieg über [AGENTS.md](AGENTS.md), aktueller Stand in
+[docs/ki/STAND.md](docs/ki/STAND.md), Vorlage für einen Prompt in [docs/ki/PROMPT.md](docs/ki/PROMPT.md).
+
 Fremde Arbeiten, auf denen `roehre` aufbaut, und ihre Lizenzen: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Schnellstart

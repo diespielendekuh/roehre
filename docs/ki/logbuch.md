@@ -1,0 +1,20 @@
+# Logbuch: wer hat was an roehre geändert
+
+Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
+
+## 2026-11-02 · roehre-Hauptsitzung · Übergabe für andere KIs
+- `AGENTS.md`, `CLAUDE.md`, `docs/ki/` (STAND, Wunschliste, Logbuch, Prompt-Vorlage) angelegt,
+  damit KIs anderer Spielprojekte roehre verstehen, einbauen und selbst verbessern können.
+
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 2
+- Virtuelle Zeilenzahl, Moiré-Messung, HDR mit Eichung, Flächen-Modus für 3D-Szenen.
+- Fehler behoben: Voreinstellungen waren seit Etappe 1 beschädigt; Overscan halbiert.
+- Ungeprüft: HLSL-Fassung der Flächen-Maske; HDR nicht auf echtem HDR-Bildschirm angesehen.
+- Bericht: `docs/etappen/etappe-2.md`.
+
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 1
+- Grundgerüst: Einstellungsmodell, Kettenzuordnung, wgpu-Schnittstelle, Testbilder, Prüfstand.
+- Bericht: `docs/etappen/etappe-1.md`.
+
+## 2026-11-02 · roehre-Hauptsitzung · Etappe 0
+- Recherche und Plan: `docs/PLAN.md`.
