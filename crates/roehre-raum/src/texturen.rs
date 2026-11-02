@@ -159,7 +159,8 @@ fn schrift(text: &str, ox: i32, oy: i32, s: i32, wackeln: bool, tx: i32, ty: i32
 /// Rücken einer Videohülle (Zeile `zeile` des Atlas), Texel (tx 0 … 255, ty 0 … 31).
 fn kassettenruecken(zeile: usize, tx: i32, ty: i32, u: f32, v: f32) -> ([f32; 3], f32) {
     // (Titel, Grund, Schrift, Akzent): erfundene Filme im Stil der Genres
-    const HUELLEN: [(&str, [f32; 3], [f32; 3], [f32; 3]); 8] = [
+    type Huelle = (&'static str, [f32; 3], [f32; 3], [f32; 3]);
+    const HUELLEN: [Huelle; 8] = [
         ("NEBELNACHT", [0.010, 0.010, 0.012], [0.62, 0.02, 0.02], [0.30, 0.30, 0.30]),
         ("STERNENFEUER", [0.012, 0.025, 0.12], [0.85, 0.62, 0.06], [0.50, 0.50, 0.55]),
         ("DER STILLE SEE", [0.60, 0.56, 0.44], [0.03, 0.12, 0.06], [0.10, 0.25, 0.12]),
