@@ -11,6 +11,7 @@ roehre-modell.workspace = true
 roehre-wgpu.workspace = true
 roehre-kette.workspace = true
 roehre-testbilder.workspace = true
+roehre-raum.workspace = true
 wgpu.workspace = true
 image.workspace = true
 pollster.workspace = true

@@ -51,6 +51,11 @@ fn main() {
             Path::new(&opt("-o").unwrap_or("flaeche.png".into())),
         ),
         "helligkeit" => helligkeit_messen().map(|_| ()),
+        "raum" => raum_fotos(
+            &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
+            groesse(&opt("-g").unwrap_or("1920x1080".into())),
+            Path::new(&opt("-o").unwrap_or("raum".into())),
+        ),
         "bewegung" => bewegung_messen(
             opt("-n").and_then(|n| n.parse().ok()).unwrap_or(4.0),
             Path::new(&opt("-o").unwrap_or("bewegung.png".into())),
@@ -623,4 +628,45 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
     }
     bogen.save(aus)?;
     Ok(groesste_abweichung)
+}
+
+/// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.
+fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
+    use roehre_raum::{Ansicht, Raum};
+    std::fs::create_dir_all(ordner)?;
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::pixelszene();
+    let eingang = gpu.eingang(&bild);
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
+    let raum = Raum::neu(&gpu.device, &shader_ordner(), gpu::ZIELFORMAT)?;
+    let mut werte = None;
+    for _ in 0..3 {
+        let mut enc = gpu.device.create_command_encoder(&Default::default());
+        werte = Some(roehre.zeichne_flaeche(&mut enc, &eingang, &eingang_von(&bild), &flaeche)?);
+        gpu.queue.submit([enc.finish()]);
+    }
+    let werte = werte.expect("gezeichnet");
+    let mut seitlich = Ansicht::sitzplatz(0.0, 1.6, 0.0);
+    seitlich.auge = [-0.9, 1.25, -1.0];
+    let mut nah = Ansicht::sitzplatz(0.0, 0.45, 0.0);
+    nah.ziel = [0.1, 0.95, 0.0];
+    let ansichten = [
+        ("sitzplatz", Ansicht::sitzplatz(3.0, 1.7, 1.0)),
+        ("seitlich", seitlich),
+        ("nah", nah),
+        ("fern", Ansicht::sitzplatz(1.0, 3.2, 0.0)),
+    ];
+    for (name, a) in ansichten {
+        let t = Instant::now();
+        let ziel = gpu.ziel(g.0, g.1);
+        let mut enc = gpu.device.create_command_encoder(&Default::default());
+        raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), g, &flaeche, &werte, &a);
+        gpu.queue.submit([enc.finish()]);
+        let foto = gpu.lies(&ziel);
+        let pfad = ordner.join(format!("raum_{name}_{}x{}.png", g.0, g.1));
+        foto.save(&pfad)?;
+        eprintln!("{} ({:.1} s)", pfad.display(), t.elapsed().as_secs_f64());
+    }
+    Ok(())
 }

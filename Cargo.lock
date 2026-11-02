@@ -1337,7 +1337,16 @@ dependencies = [
  "pollster",
  "roehre-kette",
  "roehre-modell",
+ "roehre-raum",
  "roehre-testbilder",
+ "roehre-wgpu",
+ "wgpu",
+]
+
+[[package]]
+name = "roehre-raum"
+version = "0.1.0"
+dependencies = [
  "roehre-wgpu",
  "wgpu",
 ]

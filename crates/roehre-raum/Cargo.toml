@@ -1,0 +1,11 @@
+[package]
+name = "roehre-raum"
+description = "3D-Vorführraum von roehre: berechneter Röhrenfernseher auf einem Tisch (Flächen-Modus als Bildquelle)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roehre-wgpu.workspace = true
+wgpu = { workspace = true, features = ["wgsl"] }
