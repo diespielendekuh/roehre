@@ -229,8 +229,10 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
             c += albedo * ll * max(-dot(n, l), 0.0) * vec3<f32>(0.9, 1.4, 0.4);
         }
 
-        // Bildschirm als Flächenlicht nach vorn (−z)
-        let zum_bild = szene.bild_mitte.xyz - vec3<f32>(0.0, 0.0, 0.03) - e.welt;
+        // Bildschirm als Flächenlicht nach vorn (−z). Der Ursprung liegt hinter dem Glas: so
+        // bekommen auch die Wände des Bildtunnels neben dem Glas ihr Licht ab, wie von einer
+        // ausgedehnten Fläche (ein Punkt auf der Glasmitte sähen sie nur streifend).
+        let zum_bild = szene.bild_mitte.xyz + vec3<f32>(0.0, 0.0, 0.05) - e.welt;
         let db = length(zum_bild);
         let lb = zum_bild / db;
         // Der Bildschirm strahlt nach −z: Flächen davor sehen ihn in Richtung +z
@@ -253,7 +255,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         // Raum. Ohne diesen Anteil lag alles, was die Lampe nicht direkt sieht (die Front des
         // Fernsehers mit Knöpfen und Aufdrucken), im völligen Schwarz.
         let von_waenden = normalize(vec3<f32>(0.35, 0.25, 1.0));
-        c += diffus * lampe_farbe() * (0.010 + 0.008 * max(dot(n, -von_waenden), 0.0)) * kante;
+        c += diffus * lampe_farbe() * (0.016 + 0.012 * max(dot(n, -von_waenden), 0.0)) * kante;
         let spiegel_staerke = (1.0 - rauheit) * (1.0 - rauheit);
         c += f0 * umgebung(reflect(blick, n), e.welt) * spiegel_staerke * 1.5;
 

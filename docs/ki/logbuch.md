@@ -2,6 +2,24 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Fernseher neu nach Art früher 80er-Tischgeräte
+- Rückmeldung: Rahmen lief in die Bedienleiste, Bildöffnung ohne richtige Ecken, Bedienfeld
+  zu hell. Neu, in grober Anlehnung an US-Tischgeräte der frühen 80er (Referenzfoto des
+  Anwenders, nicht nachgebaut, bewusst dunkel):
+  - Nussbaumgehäuse mit sichtbarem Holzrand, darunter ein zurückgesetzter schwarzer Sockel.
+  - Bildblende aus dunkel eloxiertem Aluminium (neues Material `Blende`), mittig um das Bild,
+    mit abgeschrägter Kante und tiefem Tunnel mit weit gerundeten Ecken bis zur Gummidichtung
+    am Glas (neue Hilfen `rund_umfang`/`rund_ring`).
+  - Eigene Bediensäule hinter einer Fuge: Kopfteil mit Drucktaste NETZ, Zugknopf LAUTSTÄRKE
+    und Kontrolllampe; schwarze Leiste mit vier Rändelrädern (Bildlage, Schärfe, Helligkeit,
+    Farbton) und Farbknopf; Wählerplatte mit VHF-Kanalring 2–13 (neues Material
+    `Kanalskala`) und UHF-Feinskala, beide mit Knebelknopf; unten 14 Lautsprecherlamellen.
+  - Aufdrucke hell auf dunkel; Programmtasten, silbernes Feld und gelochtes Gitter entfallen.
+- `BILD_MITTE.z` liegt jetzt auf dem Scheitel des Glases (−0,18 statt −0,215); das Licht des
+  Bildschirms kommt von hinter dem Glas, damit die Tunnelwände es abbekommen. Rücklicht der
+  Wände etwas stärker. Gerätebreite für die Kamera 0,68 m.
+- Ungeprüft: Leistung (mehr Dreiecke am Gerät, unerheblich erwartet).
+
 ## 2026-11-02 · roehre-Hauptsitzung · 3D-Raum: Fernseher im Detail, Szene feingeschliffen
 - Bedienfeld neu: silberne Blende statt schwarzer Fläche; zwei Drehknöpfe mit 36 Rippen,
   Aluminiumkappe, weißem Zeiger und Skalenring (LAUTSTÄRKE, HELLIGKEIT); acht Programmtasten

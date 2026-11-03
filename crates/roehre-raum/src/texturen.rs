@@ -52,11 +52,11 @@ pub enum Material {
     Rinde,
     Buecher,
     Videorekorder,
-    Bedienfeld,
+    Blende,
     Beschriftung,
     Skala,
     Knopf,
-    Gitter,
+    Kanalskala,
     LedGruen,
 }
 
@@ -69,7 +69,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
-        Triebhuelle, Rinde, Buecher, Videorekorder, Bedienfeld, Beschriftung, Skala, Knopf, Gitter, LedGruen,
+        Triebhuelle, Rinde, Buecher, Videorekorder, Blende, Beschriftung, Skala, Knopf, Kanalskala, LedGruen,
     ]
 };
 
@@ -618,45 +618,37 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let (c, h, rauh, leuchten) = videorekorder(tx, ty, u, v);
             ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, leuchten])
         }
-        Bedienfeld => {
-            // Bedienfeld des Fernsehers: silbern lackiert mit gebürsteter Struktur, wie bei vielen
-            // Geräten der späten 80er; hell genug, dass Knöpfe und Aufdrucke im Halbdunkel lesbar
-            // bleiben
-            let strich = wert(u * 256.0, v * 6.0, 256, 851);
-            let c = mal([0.20, 0.20, 0.195], 0.9 + 0.16 * strich - 0.1 * staub);
-            ([c[0], c[1], c[2], 1.0], [0.5 + 0.06 * strich, 0.38, 0.0, 0.0])
+        Blende => {
+            // Zierblende des Fernsehers: dunkel eloxiertes, gebürstetes Aluminium (Anthrazit),
+            // feine Riefen in u-Richtung, leicht metallisch; bewusst dunkel, damit das Gerät im
+            // Halbdunkel nicht heller wirkt als sein Bild
+            let strich = fbm(u * 0.08, v * 256.0, 2, 3, 851);
+            let fein = wert(u * 256.0, v * 256.0, 256, 852);
+            let c = mal([0.13, 0.125, 0.118], 0.82 + 0.3 * strich + 0.06 * fein - 0.12 * staub);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.12 * strich, 0.32 + 0.12 * strich + 0.15 * staub, 0.25, 0.0])
         }
         Beschriftung => {
-            // Aufdrucke als Abziehbild (Alpha): acht Zeilen zu 256 × 32 Texeln. 0–4 Wörter
-            // (dunkel auf Silber, „STEREO“ hell), 5–6 Ziffern der Programmtasten (hell, 64 Texel)
+            // Aufdrucke als Abziehbild (Alpha), acht Zeilen zu 256 × 32 Texeln, hell auf der
+            // dunklen Blende: Bedienung rechts neben dem Bild und die Senderwahl
             let zeile = ((v * 8.0).floor() as usize).min(7);
             let tx = (u * 256.0).floor() as i32;
             let ty = ((v * 8.0).fract() * 32.0).floor() as i32;
-            const WOERTER: [&str; 5] = ["LAUTSTÄRKE", "HELLIGKEIT", "PROGRAMM", "NETZ", "STEREO"];
-            let (an, farbe) = if zeile < 5 {
-                let w = WOERTER[zeile];
-                let breite = w.chars().count() as i32 * 12 - 2;
-                // Zeile 4 („STEREO“) steht auf der schwarzen Front: hell; die anderen auf Silber: dunkel
-                (schrift(w, (256 - breite) / 2, 9, 2, false, tx, ty), if zeile == 4 { [0.55, 0.55, 0.53] } else { [0.012, 0.012, 0.014] })
-            } else if zeile < 7 {
-                let feld = tx / 64;
-                let ziffer = char::from_digit((feld + 1 + 4 * (zeile as i32 - 5)) as u32, 10).unwrap_or(' ');
-                (schrift(&ziffer.to_string(), feld * 64 + 27, 9, 2, false, tx, ty), [0.62, 0.62, 0.6])
-            } else {
-                (false, [0.0; 3])
-            };
-            ([farbe[0], farbe[1], farbe[2], if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
+            const WOERTER: [&str; 8] = ["NETZ", "LAUTSTAERKE", "BILDLAGE", "SCHAERFE", "HELLIGKEIT", "FARBTON", "FARBE", "VHF   UHF"];
+            let w = WOERTER[zeile];
+            let breite = w.chars().count() as i32 * 12 - 2;
+            let an = schrift(w, (256 - breite) / 2, 9, 2, false, tx, ty);
+            ([0.50, 0.49, 0.46, if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
         }
         Skala => {
-            // Skalenring um einen Drehknopf (Alpha): elf Striche über 270°, jeder fünfte länger
+            // Feinskala des UHF-Rads (Alpha): 60 Striche ringsum, jeder fünfte länger, hell
             let (dx, dy) = (u - 0.5, v - 0.5);
             let r = (dx * dx + dy * dy).sqrt();
-            let winkel = dx.atan2(-dy).to_degrees();
-            let k = ((winkel + 135.0) / 27.0).round();
-            let nah = (winkel + 135.0 - k * 27.0).abs() < 2.2 && (0.0..=10.0).contains(&k);
+            let winkel = dx.atan2(-dy).to_degrees() + 180.0;
+            let k = (winkel / 6.0).round();
+            let nah = (winkel - k * 6.0).abs() < 0.9;
             let lang = k as i32 % 5 == 0;
-            let an = nah && r < 0.48 && r > if lang { 0.37 } else { 0.41 };
-            ([0.012, 0.012, 0.014, if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
+            let an = nah && r < 0.48 && r > if lang { 0.38 } else { 0.43 };
+            ([0.48, 0.47, 0.44, if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
         }
         Knopf => {
             // Drehknopf aus satiniertem Kunststoff mit 36 Griffrillen ringsum (u = Umfang)
@@ -664,15 +656,25 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let c = mal([0.028, 0.028, 0.03], 0.75 + 0.35 * rille);
             ([c[0], c[1], c[2], 1.0], [0.3 + 0.5 * rille, 0.42, 0.0, 0.0])
         }
-        Gitter => {
-            // Lautsprechergitter: gelochtes, silbern lackiertes Blech, versetzte Lochreihen
-            let (x, y) = (u * 24.0, v * 24.0);
-            let zeile = y.floor();
-            let versatz = if zeile as i32 % 2 == 0 { 0.0 } else { 0.5 };
-            let (fx, fy) = ((x + versatz).fract() - 0.5, y.fract() - 0.5);
-            let loch = 1.0 - glatt(0.26, 0.32, (fx * fx + fy * fy).sqrt());
-            let c = mische(mal([0.17, 0.17, 0.165], 0.9 + 0.15 * staub), [0.006, 0.006, 0.006], loch);
-            ([c[0], c[1], c[2], 1.0], [0.6 - 0.5 * loch, 0.45 + 0.4 * loch, 0.0, 0.0])
+        Kanalskala => {
+            // Kanalring des VHF-Wählers (Alpha): Kanäle 2 … 13 aufrecht im Kreis, dazu je ein
+            // Rastpunkt innen, hell auf dunkel
+            let (tx, ty) = ((u * 256.0).floor() as i32, (v * 256.0).floor() as i32);
+            let mut an = false;
+            for k in 0..12 {
+                let w = (k as f32 * 30.0 + 15.0).to_radians();
+                let (cx, cy) = (128.0 + 98.0 * w.sin(), 128.0 - 98.0 * w.cos());
+                let text = (k + 2).to_string();
+                let breite = text.len() as i32 * 18 - 3;
+                if schrift(&text, cx as i32 - breite / 2, cy as i32 - 10, 3, false, tx, ty) {
+                    an = true;
+                }
+                let (px, py) = (128.0 + 72.0 * w.sin(), 128.0 - 72.0 * w.cos());
+                if (tx as f32 - px).powi(2) + (ty as f32 - py).powi(2) < 16.0 {
+                    an = true;
+                }
+            }
+            ([0.50, 0.49, 0.46, if an { 1.0 } else { 0.0 }], [0.55, 0.5, 0.0, 0.0])
         }
         Buecher => {
             // Buchrücken: unterschiedlich breite Bücher in gedeckten Farben, verblichen, mit

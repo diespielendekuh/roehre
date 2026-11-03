@@ -98,7 +98,7 @@ const RAND_SEITE: f32 = 0.015;
 /// Hüllquader des Fernsehers samt Füßen (Mitte, halbe Größe) – daran richtet sich die Kamera.
 fn geraet() -> ([f32; 3], [f32; 3]) {
     let h = 0.2625;
-    ([0.0, szene::TISCH_HOEHE + h, 0.0], [0.33, h, 0.205])
+    ([0.0, szene::TISCH_HOEHE + h, 0.0], [0.34, h, 0.205])
 }
 
 /// Hüllquader der Bildröhre mit einem schmalen Streifen Rahmen – Bezug der Stufe „ganz nah“.

@@ -1,9 +1,7 @@
 //! Die Szene: ein Wohnzimmer der späten 80er bei Nacht. Ein Röhrenfernseher mit
-//! Holzfurnier steht auf einem Holztisch, daneben eine Spielkonsole im Stil des Super Famicom
-//! (ohne Logo) mit Controller, Videokassetten,
-//! Tasse, Fernbedienung und Zeitschrift; ein Gummibaum, eine Stehlampe, ein Bild an der Wand,
-//! ein Fenster mit Vorhang und Heizkörper. Alles selbst modelliert; die Konsole ist in der Form
-//! an ein reales Gerät angelehnt, trägt aber kein Logo und keine Schrift.
+//! Nussbaumgehäuse steht auf einem Eichentisch, daneben ein Videorekorder und Videokassetten,
+//! Tasse und Fernbedienung; ein Gummibaum, eine Stehlampe, ein Bild an der Wand, ein Fenster
+//! mit Vorhang und Heizkörper, ein Bücherregal. Alles selbst modelliert, ohne Marken.
 //!
 //! Maße in Metern. Der Fernseher steht auf dem Tisch nahe dem Ursprung, sein Bildschirm zeigt
 //! nach −z (zur Kamera).
@@ -13,7 +11,7 @@ use crate::texturen::Material::*;
 
 pub const TISCH_HOEHE: f32 = 0.70;
 /// Mitte des Bildschirms (Weltkoordinaten) und halbe Größe der Bildröhre.
-pub const BILD_MITTE: V3 = [-0.06, TISCH_HOEHE + 0.035 + 0.245, -0.215];
+pub const BILD_MITTE: V3 = [-0.06, TISCH_HOEHE + 0.035 + 0.245, -0.18];
 pub const BILD_HALB: [f32; 2] = [0.20, 0.15];
 /// Lage des Pflanztopfs: rechts neben dem Tisch, im Licht der Lampe.
 pub const PFLANZE: V3 = [1.12, 0.0, 0.08];
@@ -179,75 +177,111 @@ fn tisch(n: &mut Netz) {
     }
 }
 
+/// Punkt auf dem Umfang eines Rechtecks mit gerundeten Ecken (halbe Größe `halb`, Eckradius
+/// `r`), `s` ∈ [0, 1) einmal herum. Acht gleich lange Abschnitte des Parameters (vier Kanten,
+/// vier Ecken), unabhängig vom Radius – so passen Umfänge mit verschiedenen Radien zueinander
+/// und lassen sich zu Ringen verbinden (Radius 0 ergibt ein scharfkantiges Rechteck).
+fn rund_umfang(halb: [f32; 2], r: f32, s: f32) -> [f32; 2] {
+    let s = s.rem_euclid(1.0) * 8.0;
+    let (k, t) = (s.floor() as i32, s.fract());
+    let (ax, ay) = (halb[0] - r, halb[1] - r);
+    let ecke = |cx: f32, cy: f32, w0: f32| {
+        let w = (w0 - 90.0 * t).to_radians();
+        [cx + r * w.cos(), cy + r * w.sin()]
+    };
+    match k {
+        0 => [-ax + 2.0 * ax * t, halb[1]],
+        1 => ecke(ax, ay, 90.0),
+        2 => [halb[0], ay - 2.0 * ay * t],
+        3 => ecke(ax, -ay, 0.0),
+        4 => [ax - 2.0 * ax * t, -halb[1]],
+        5 => ecke(-ax, -ay, -90.0),
+        6 => [-halb[0], -ay + 2.0 * ay * t],
+        _ => ecke(-ax, ay, 180.0),
+    }
+}
+
+/// Ring zwischen zwei gerundeten Rechtecken um `mitte` (x, y): von (halb, Radius, z) außen
+/// nach innen. Flach (gleiches z) ist es eine Blende mit runder Öffnung, mit verschiedenem z
+/// ein schräger Tunnel. Die Normale zeigt zum Betrachter (−z).
+fn rund_ring(n: &mut Netz, mitte: [f32; 2], aussen: ([f32; 2], f32, f32), innen: ([f32; 2], f32, f32), m: crate::texturen::Material, uvm: f32) {
+    let lage = |s: f32, q: f32| -> V3 {
+        let a = rund_umfang(aussen.0, aussen.1, s);
+        let b = rund_umfang(innen.0, innen.1, s);
+        [mitte[0] + a[0] + (b[0] - a[0]) * q, mitte[1] + a[1] + (b[1] - a[1]) * q, aussen.2 + (innen.2 - aussen.2) * q]
+    };
+    let umfang = 4.0 * (aussen.0[0] + aussen.0[1]);
+    let breite = ((aussen.0[1] - innen.0[1]).powi(2) + (aussen.2 - innen.2).powi(2)).sqrt();
+    n.gitter(&Trafo::bei([0.0; 3]), (8 * 12, 2), m, 0.0, |s, q| {
+        let p = lage(s, q);
+        let e = 1e-3;
+        let ds = sub(lage(s + e, q), lage(s - e, q));
+        let dq = sub(lage(s, (q + e).min(1.0)), lage(s, (q - e).max(0.0)));
+        let mut nn = norm(cross(ds, dq));
+        if nn[2] > 0.0 {
+            nn = mul(nn, -1.0);
+        }
+        (p, nn, [s * umfang * uvm, q * breite * uvm])
+    });
+}
+
+/// Röhrenfernseher der frühen 80er in grober Anlehnung an US-Tischgeräte jener Zeit:
+/// Nussbaumgehäuse, eingesetzte Front aus dunkel eloxiertem Aluminium, tiefer Bildtunnel mit
+/// gerundeten Ecken, rechts eine eigene Bediensäule (Netz/Lautstärke, Feinregler hinter
+/// einer schwarzen Leiste, VHF- und UHF-Wähler, Lautsprecherlamellen), darunter ein
+/// zurückgesetzter Sockel. Ohne Marke.
 fn fernseher(n: &mut Netz) {
-    let y0 = TISCH_HOEHE + 0.035;           // Unterkante Gehäuse (auf Füßen)
+    let y0 = TISCH_HOEHE + 0.035;           // Unterkante Gehäuse (auf dem Sockel)
     let mitte = [0.0, y0 + 0.245, 0.0];
-    // Gehäuse: Mantel aus Holzfurnier (Deckel, Boden, Seiten), vorn eine eingesetzte schwarze
-    // Front mit Bildöffnung und Bedienfeld. Hohl gebaut, damit die Bildröhre sichtbar bleibt.
-    let (hb, hh, ht) = (0.33, 0.245, 0.205);
-    let w = 0.022;                                      // Stärke des Holzmantels
-    n.quader(&Trafo::bei([0.0, mitte[1] + hh - w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.008, Furnier, 2.5);
-    n.quader(&Trafo::bei([0.0, mitte[1] - hh + w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.008, Furnier, 2.5);
-    n.quader(&Trafo::bei([-hb + w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.008, Furnier, 2.5);
-    n.quader(&Trafo::bei([hb - w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.008, Furnier, 2.5);
-    // Rückwand und Innenraum (dunkel)
-    // Rückwand und Front ragen je eine halbe Wandstärke in den Holzmantel hinein: Stoßen sie nur
-    // an, bleiben zwischen den gerundeten Kanten feine Spalten, durch die die Lampe hinter dem
-    // Fernseher pixelweise hindurchblitzte (Spur heller Punkte an der rechten Kante, „ganz nah“).
+    let (hb, hh, ht) = (0.34, 0.245, 0.205);
+    let w = 0.026;                                      // Stärke des Holzmantels
+    n.quader(&Trafo::bei([0.0, mitte[1] + hh - w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.006, Furnier, 2.5);
+    n.quader(&Trafo::bei([0.0, mitte[1] - hh + w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.006, Furnier, 2.5);
+    n.quader(&Trafo::bei([-hb + w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.006, Furnier, 2.5);
+    n.quader(&Trafo::bei([hb - w / 2.0, mitte[1], 0.0]), [w / 2.0, hh, ht], 0.006, Furnier, 2.5);
+    // Rückwand ragt in den Mantel hinein (ohne Spalt blitzt die Lampe nicht durch)
     let ein = w / 2.0;
     n.quader(&Trafo::bei([0.0, mitte[1], ht - 0.01]), [hb - w + ein, hh - w + ein, 0.01], 0.0, KunststoffSchwarz, 4.0);
-    n.quader(&Trafo::bei([BILD_MITTE[0], BILD_MITTE[1], -0.12]), [BILD_HALB[0] + 0.03, BILD_HALB[1] + 0.03, 0.01], 0.0, Gummi, 4.0);
-    let front_z = -ht + 0.006;
-    // Schwarze Front: Rahmen um die Bildöffnung und Block für das Bedienfeld
-    let (ix0, ix1, iy0, iy1) = (-hb + w - ein, hb - w + ein, mitte[1] - hh + w - ein, mitte[1] + hh - w + ein);
-    let (ox0, ox1) = (BILD_MITTE[0] - BILD_HALB[0] - 0.012, BILD_MITTE[0] + BILD_HALB[0] + 0.012);
-    let (oy0, oy1) = (BILD_MITTE[1] - BILD_HALB[1] - 0.012, BILD_MITTE[1] + BILD_HALB[1] + 0.012);
-    let tafel = |n: &mut Netz, x0: f32, x1: f32, y0: f32, y1: f32| {
-        n.quader(&Trafo::bei([(x0 + x1) / 2.0, (y0 + y1) / 2.0, front_z + 0.02]), [(x1 - x0) / 2.0, (y1 - y0) / 2.0, 0.02], 0.002, KunststoffSchwarz, 4.0);
-    };
-    tafel(n, ix0, ox0, iy0, iy1);                      // links der Öffnung
-    tafel(n, ox0, ox1, oy1, iy1);                      // darüber
-    tafel(n, ox0, ox1, iy0, oy0);                      // darunter
-    tafel(n, ox1, ix1, iy0, iy1);                      // rechts: Bedienfeld
     // Rückteil (Röhrenhals), verjüngt, mit Lüftungsschlitzen
     n.quader(&Trafo::bei([0.0, mitte[1] + 0.01, 0.28]), [0.24, 0.19, 0.09], 0.03, KunststoffSchwarz, 4.0);
     for i in 0..9 {
         n.quader(&Trafo::bei([-0.16 + i as f32 * 0.04, mitte[1] + 0.205, 0.26]), [0.012, 0.002, 0.05], 0.001, Gummi, 8.0);
     }
-    // Füße
+    // Sockel: schwarz, ringsum zurückgesetzt, mit vier Gummifüßen
+    let sockel_h = (y0 - TISCH_HOEHE - 0.004) / 2.0;
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE + 0.004 + sockel_h, 0.01]), [hb - 0.035, sockel_h, ht - 0.03], 0.003, KunststoffSchwarz, 4.0);
     for (sx, sz) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-        n.zylinder(&Trafo::bei([0.27 * sx, TISCH_HOEHE, 0.15 * sz]), 0.022, 0.036, 12, Gummi);
+        n.zylinder(&Trafo::bei([(hb - 0.06) * sx, TISCH_HOEHE, 0.14 * sz]), 0.012, 0.0045, 10, Gummi);
     }
 
-    // Bildöffnung: Chromring, schräge Fase nach innen, darin die gewölbte Bildröhre
+    // Front: Innenmaß des Mantels, darin von links die Bildblende und rechts die Bediensäule
+    let fz = -ht + 0.007;                               // Vorderfläche der Blende
+    let (ix0, ix1) = (-hb + w, hb - w);
+    let (iy0, iy1) = (mitte[1] - hh + w, mitte[1] + hh - w);
     let (bx, by) = (BILD_MITTE[0], BILD_MITTE[1]);
     let (hx, hy) = (BILD_HALB[0], BILD_HALB[1]);
-    let z_front = front_z - 0.013;
-    for (x, y, ax, ay) in [
-        (bx, by + hy + 0.022, hx + 0.03, 0.007),
-        (bx, by - hy - 0.022, hx + 0.03, 0.007),
-        (bx - hx - 0.022, by, 0.007, hy + 0.03),
-        (bx + hx + 0.022, by, 0.007, hy + 0.03),
-    ] {
-        n.quader(&Trafo::bei([x, y, z_front]), [ax, ay, 0.004], 0.003, Chrom, 6.0);
-    }
-    // Fase: vier schräge Streifen von der Front zur Röhre
-    let tiefe = 0.03;
-    for (seite, drehung) in [(0, 0.0f32), (1, std::f32::consts::FRAC_PI_2), (2, std::f32::consts::PI), (3, -std::f32::consts::FRAC_PI_2)] {
-        let laenge = if seite % 2 == 0 { hx + 0.02 } else { hy + 0.02 };
-        let abstand = if seite % 2 == 0 { hy + 0.012 } else { hx + 0.012 };
-        let t = Trafo::bei([bx, by, z_front + tiefe * 0.5])
-            .nach(&Trafo::dreh_z(drehung))
-            .nach(&Trafo::bei([0.0, abstand, 0.0]))
-            .nach(&Trafo::dreh_x(-1.0));
-        n.flaeche(&t, [laenge, tiefe * 0.62], KunststoffSchwarz, [0.0, 0.0, 2.0, 0.2]);
-    }
-    n.bildroehre(&Trafo::bei([bx, by, z_front + tiefe - 0.004]), [hx, hy], 0.018);
 
-    bedienfeld(n, mitte[1], front_z, ox1, ix1 - ein, iy0 + ein, iy1 - ein);
-    // Plakette unter dem Bild und Aufdruck „STEREO“
-    n.quader(&Trafo::bei([bx, by - hy - 0.05, front_z - 0.013]), [0.05, 0.009, 0.002], 0.002, Chrom, 4.0);
-    n.flaeche(&Trafo::bei([bx - hx + 0.03, by - hy - 0.05, front_z - 0.0005]), [0.03, 0.00375], Beschriftung, [0.0, 4.0 / 8.0, 1.0, 1.0 / 8.0]);
+    // Bildblende, mittig um das Bild: außen fast rechteckig, innen ein tiefer Tunnel mit weit
+    // gerundeten Ecken; rechts daneben (nach einer Fuge) die Bediensäule
+    let blende_halb = [bx - ix0 - 0.004, (iy1 - iy0) / 2.0 - 0.004];
+    let bm = [bx, by];
+    let saeule_x0 = bx + blende_halb[0] + 0.003;
+    // Schattenfugen: dunkler Grund hinter den Fugen, ragt in den Mantel; um die Bildblende
+    // als Ring (die Öffnung bleibt frei), hinter der Säule als Platte
+    rund_ring(n, bm, ([blende_halb[0] + 0.008, blende_halb[1] + 0.008], 0.0, fz + 0.006), ([blende_halb[0] - 0.02, blende_halb[1] - 0.02], 0.0, fz + 0.006), Gummi, 4.0);
+    n.quader(&Trafo::bei([(saeule_x0 - 0.006 + ix1 + ein) / 2.0, mitte[1], fz + 0.012]), [(ix1 + ein - saeule_x0 + 0.006) / 2.0, hh - w + ein, 0.004], 0.0, Gummi, 4.0);
+    rund_ring(n, bm, (blende_halb, 0.008, fz), ([blende_halb[0] - 0.012, blende_halb[1] - 0.012], 0.03, fz), Blende, 6.0);
+    // abgeschrägte Kante zwischen flacher Blende und Tunnel
+    rund_ring(n, bm, ([blende_halb[0] - 0.012, blende_halb[1] - 0.012], 0.03, fz), ([blende_halb[0] - 0.016, blende_halb[1] - 0.016], 0.034, fz + 0.003), Chrom, 6.0);
+    // Tunnel: von der Blende schräg in die Tiefe bis knapp vor das Glas
+    rund_ring(n, [bx, by], ([blende_halb[0] - 0.016, blende_halb[1] - 0.016], 0.034, fz + 0.003), ([hx + 0.008, hy + 0.008], 0.028, fz + 0.034), Blende, 6.0);
+    // Gummidichtung um das Glas
+    rund_ring(n, [bx, by], ([hx + 0.008, hy + 0.008], 0.028, fz + 0.034), ([hx - 0.004, hy - 0.004], 0.02, fz + 0.035), Gummi, 8.0);
+    // Glasmitte (Scheitel der Wölbung) liegt auf BILD_MITTE
+    debug_assert!((BILD_MITTE[2] + 0.018 - (fz + 0.036)).abs() < 1e-4);
+    n.bildroehre(&Trafo::bei([bx, by, BILD_MITTE[2] + 0.018]), [hx, hy], 0.018);
+
+    bediensaeule(n, saeule_x0, ix1, iy0, iy1, fz);
 
     // Zimmerantenne auf dem Gerät: Fuß und zwei Teleskopstäbe mit Kugeln
     let fuss = [0.05, y0 + 0.49, 0.06];
@@ -261,73 +295,79 @@ fn fernseher(n: &mut Netz) {
     }
 }
 
-/// Ein Aufdruck aus dem Atlas `Beschriftung` (Zeile 0–4), mittig bei (x, y), Breite `b`.
+/// Ein Aufdruck aus dem Atlas `Beschriftung` (Zeile 0–7), mittig bei (x, y), Breite `b`.
 fn aufdruck(n: &mut Netz, x: f32, y: f32, z: f32, b: f32, zeile: u32) {
     n.flaeche(&Trafo::bei([x, y, z]), [b / 2.0, b / 16.0], Beschriftung, [0.0, zeile as f32 / 8.0, 1.0, 1.0 / 8.0]);
 }
 
-/// Drehknopf auf der Front bei (x, y), Achse zum Betrachter: Bund, geriffelter Körper,
-/// Aluminiumkappe, weißer Zeigerstrich bei `stellung` (−1 … 1 über 270°), Skalenring dahinter.
-fn drehknopf(n: &mut Netz, x: f32, y: f32, front_z: f32, stellung: f32) {
-    let achse = Trafo::bei([x, y, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2));
-    // Skalenring auf der Front
-    n.flaeche(&Trafo::bei([x, y, front_z - 0.0006]), [0.034, 0.034], Skala, [0.0, 0.0, 1.0, 1.0]);
-    // Bund und Körper mit Griffrillen (Kanten doppelt, damit sie hart bleiben)
-    n.drehkoerper(
-        &achse,
-        &[(0.0, 0.0), (0.0215, 0.0), (0.0215, 0.0), (0.0215, 0.0035), (0.0215, 0.0035), (0.0185, 0.0045), (0.0185, 0.0045), (0.0185, 0.0205), (0.0185, 0.0205), (0.0172, 0.0218)],
-        36,
-        Knopf,
-        1.0,
-    );
-    // Kappe aus gebürstetem Aluminium, leicht gewölbt
-    n.drehkoerper(&achse, &[(0.0172, 0.0218), (0.009, 0.0226), (0.0, 0.0228)], 36, Chrom, 1.0);
-    // Zeigerstrich auf der Kappe, um die Achse gedreht
-    let w = stellung.clamp(-1.0, 1.0) * 135f32.to_radians();
-    let zeiger = achse.nach(&Trafo::dreh_y(w)).nach(&Trafo::bei([0.0, 0.0231, -0.010]));
-    n.quader(&zeiger, [0.0011, 0.0004, 0.0062], 0.0, Lack, 4.0);
+/// Senderwähler bei (x, y): Skalenring auf der Platte, runder Knopf mit Griffrillen und
+/// quer darüber ein Knebel aus Metall, gedreht um `winkel` (Grad), mit hellem Zeigerende.
+fn waehler(n: &mut Netz, x: f32, y: f32, z: f32, r: f32, skala: crate::texturen::Material, winkel: f32) {
+    let achse = Trafo::bei([x, y, z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2));
+    n.flaeche(&Trafo::bei([x, y, z - 0.0005]), [r, r], skala, [0.0, 0.0, 1.0, 1.0]);
+    let rk = r * 0.62;
+    n.drehkoerper(&achse, &[(0.0, 0.0), (rk, 0.0), (rk, 0.0), (rk, 0.008), (rk, 0.008), (rk - 0.002, 0.010), (0.0, 0.010)], 36, Knopf, 1.0);
+    let knebel = Trafo::bei([x, y, z - 0.014]).nach(&Trafo::dreh_z(winkel.to_radians()));
+    n.quader(&knebel, [rk * 0.95, 0.0055, 0.006], 0.0025, Chrom, 8.0);
+    n.quader(&knebel.nach(&Trafo::bei([0.0, 0.0, -0.0061])), [rk * 0.85, 0.0026, 0.0005], 0.0, Blende, 8.0);
+    n.quader(&knebel.nach(&Trafo::bei([rk * 0.78, 0.0, -0.0063])), [0.0035, 0.0012, 0.0004], 0.0, Lack, 4.0);
 }
 
-/// Bedienfeld rechts neben dem Bild: Aluminiumplatte, zwei Drehknöpfe mit Skala, acht
-/// Programmtasten mit Ziffern (eine gedrückt, grüne Leuchte), Netztaste mit roter Lampe und
-/// Fenster für die Fernbedienung, gelochtes Lautsprechergitter mit Chromrahmen.
-fn bedienfeld(n: &mut Netz, my: f32, front_z: f32, x0: f32, x1: f32, y0: f32, y1: f32) {
-    let px = (x0 + x1) / 2.0 + 0.004;
-    let breite = x1 - x0;
-    let z = front_z - 0.0003;
-    n.flaeche(&Trafo::bei([(x0 + x1) / 2.0, (y0 + y1) / 2.0, z]), [breite / 2.0 - 0.004, (y1 - y0) / 2.0 - 0.004], Bedienfeld, [0.0, 0.0, 1.0, (y1 - y0) / breite]);
-    let zd = z - 0.0003;
-    // Drehknöpfe
-    aufdruck(n, px, my + 0.209, zd, 0.07, 0);
-    drehknopf(n, px, my + 0.168, front_z, 0.25);
-    aufdruck(n, px, my + 0.123, zd, 0.07, 1);
-    drehknopf(n, px, my + 0.082, front_z, -0.1);
-    // Programmtasten 2 × 4
-    aufdruck(n, px, my + 0.036, zd, 0.06, 2);
-    for i in 0..8 {
-        let (spalte, reihe) = (i % 2, i / 2);
-        let (x, y) = (px - 0.017 + spalte as f32 * 0.034, my + 0.016 - reihe as f32 * 0.024);
-        let gedrueckt = i == 2;
-        let tiefe = if gedrueckt { 0.0035 } else { 0.006 };
-        n.quader(&Trafo::bei([x, y, front_z - tiefe / 2.0]), [0.0135, 0.0075, tiefe / 2.0], 0.0015, KunststoffSchwarz, 8.0);
-        let feld = (i % 4) as f32;
-        let zeile = if i < 4 { 5.0 } else { 6.0 };
-        n.flaeche(&Trafo::bei([x, y, front_z - tiefe - 0.0003]), [0.008, 0.004], Beschriftung, [feld / 4.0, zeile / 8.0, 0.25, 1.0 / 8.0]);
-        if gedrueckt {
-            n.zylinder(&Trafo::bei([x + 0.0175, y + 0.0055, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.0016, 0.0016, 10, LedGruen);
-        }
+/// Bediensäule rechts neben dem Bild (x0 … x1, y0 … y1 auf der Front `fz`), von oben:
+/// Netz- und Lautstärketeil mit Drucktaste, Zugknopf und Kontrolllampe; schwarze Leiste mit
+/// vier Feinreglern (Bildlage, Schärfe, Helligkeit, Farbton) und Farbknopf; daneben die
+/// Wählerplatte mit VHF-Kanalring und UHF-Feinskala; unten Lautsprecherlamellen.
+fn bediensaeule(n: &mut Netz, x0: f32, x1: f32, y0: f32, y1: f32, fz: f32) {
+    let rx = Trafo::dreh_x(-std::f32::consts::FRAC_PI_2);
+    let platte = |n: &mut Netz, a: f32, b: f32, c: f32, d: f32, z: f32, m| {
+        n.quader(&Trafo::bei([(a + b) / 2.0, (c + d) / 2.0, z + 0.004]), [(b - a) / 2.0, (d - c) / 2.0, 0.004], 0.0015, m, 6.0);
+    };
+    let fuge = 0.003;
+    // Teilung in der Höhe
+    let oben = y1 - 0.075;
+    let unten = y0 + 0.135;
+
+    // 1) Kopfteil: Blende, schwarzes Schriftfeld, Drucktaste NETZ, Zugknopf LAUTSTÄRKE, Lampe
+    platte(n, x0, x1, oben + fuge, y1, fz, Blende);
+    platte(n, x0 + 0.008, x1 - 0.008, y1 - 0.022, y1 - 0.008, fz - 0.0005, KunststoffSchwarz);
+    let (tx, kx) = (x0 + 0.032, x1 - 0.034);
+    aufdruck(n, tx, y1 - 0.015, fz - 0.0006, 0.026, 0);
+    aufdruck(n, kx, y1 - 0.015, fz - 0.0006, 0.05, 1);
+    n.quader(&Trafo::bei([tx, oben + 0.030, fz - 0.003]), [0.011, 0.0065, 0.003], 0.0015, KunststoffSchwarz, 8.0);
+    n.drehkoerper(&Trafo::bei([kx, oben + 0.030, fz]).nach(&rx), &[(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.012), (0.0095, 0.013), (0.0098, 0.018), (0.0085, 0.020), (0.0, 0.0205)], 24, Chrom, 1.0);
+    n.zylinder(&Trafo::bei([tx + 0.021, oben + 0.030, fz - 0.0003]).nach(&rx), 0.0018, 0.0012, 10, LedRot);
+
+    // 2) Mittelteil: schwarze Leiste mit Feinreglern (links) und Wählerplatte (rechts)
+    let leiste_x1 = x0 + 0.036;
+    platte(n, x0, leiste_x1, unten + fuge, oben, fz + 0.004, KunststoffSchwarz);
+    let regler = 4;
+    for i in 0..regler {
+        let y = oben - 0.032 - i as f32 * 0.036;
+        aufdruck(n, (x0 + leiste_x1) / 2.0, y + 0.013, fz + 0.0035, 0.03, 2 + i as u32);
+        // Rändelrad, halb in der Leiste versenkt
+        n.drehkoerper(&Trafo::bei([(x0 + leiste_x1) / 2.0, y, fz + 0.004]).nach(&rx), &[(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.0055), (0.0045, 0.0062), (0.0, 0.0064)], 24, Knopf, 1.0);
     }
-    // Netztaste, Kontrolllampe, Fenster für die Fernbedienung
-    aufdruck(n, px - 0.012, my - 0.072, zd, 0.04, 3);
-    n.quader(&Trafo::bei([px - 0.012, my - 0.092, front_z - 0.004]), [0.022, 0.009, 0.004], 0.002, KunststoffSchwarz, 8.0);
-    n.drehkoerper(&Trafo::bei([px + 0.035, my - 0.092, front_z - 0.0004]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), &[(0.0, 0.0), (0.0055, 0.0), (0.0055, 0.002), (0.0035, 0.0028), (0.0, 0.0028)], 14, Chrom, 1.0);
-    n.zylinder(&Trafo::bei([px + 0.035, my - 0.092, front_z - 0.0028]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), 0.0026, 0.0015, 12, LedRot);
-    n.quader(&Trafo::bei([px + 0.035, my - 0.112, front_z - 0.001]), [0.009, 0.004, 0.001], 0.0005, Glas, 4.0);
-    // Lautsprechergitter mit Chromrahmen
-    let (gy, gb, gh) = (my - 0.172, 0.058, 0.04);
-    n.flaeche(&Trafo::bei([px, gy, z - 0.0004]), [gb, gh], Gitter, [0.0, 0.0, 1.0, gh / gb]);
-    for (x, y, ax, ay) in [(px, gy + gh + 0.002, gb + 0.004, 0.002), (px, gy - gh - 0.002, gb + 0.004, 0.002), (px - gb - 0.002, gy, 0.002, gh + 0.004), (px + gb + 0.002, gy, 0.002, gh + 0.004)] {
-        n.quader(&Trafo::bei([x, y, front_z - 0.002]), [ax, ay, 0.002], 0.001, Chrom, 6.0);
+    // Farbe: kleiner blauer Drucker unten in der Leiste
+    aufdruck(n, (x0 + leiste_x1) / 2.0, unten + 0.03, fz + 0.0035, 0.022, 6);
+    n.drehkoerper(&Trafo::bei([(x0 + leiste_x1) / 2.0, unten + 0.016, fz + 0.004]).nach(&rx), &[(0.0, 0.0), (0.006, 0.0), (0.006, 0.004), (0.004, 0.0052), (0.0, 0.0054)], 18, Fernbedienung, 1.0);
+    // Wählerplatte
+    let wx0 = leiste_x1 + fuge;
+    platte(n, wx0, x1, unten + fuge, oben, fz, KunststoffSchwarz);
+    let wm = (wx0 + x1) / 2.0;
+    let r = ((x1 - wx0) / 2.0 - 0.006).min(0.04);
+    let (vhf_y, uhf_y) = (oben - 0.012 - r, unten + 0.012 + r);
+    waehler(n, wm, vhf_y, fz, r, Kanalskala, -30.0);
+    waehler(n, wm, uhf_y, fz, r, Skala, 52.0);
+
+    // 3) Lautsprecher: waagerechte Lamellen vor schwarzem Stoff, in einem Blendenrahmen
+    platte(n, x0, x1, y0, unten, fz, Blende);
+    let (lx0, lx1, ly0, ly1) = (x0 + 0.008, x1 - 0.008, y0 + 0.010, unten - 0.010);
+    n.flaeche(&Trafo::bei([(lx0 + lx1) / 2.0, (ly0 + ly1) / 2.0, fz - 0.0004]), [(lx1 - lx0) / 2.0, (ly1 - ly0) / 2.0], Lautsprecherstoff, [0.0, 0.0, 4.0, 4.0]);
+    let lamellen = 14;
+    let schritt = (ly1 - ly0) / lamellen as f32;
+    for i in 0..lamellen {
+        let y = ly0 + (i as f32 + 0.5) * schritt;
+        n.quader(&Trafo::bei([(lx0 + lx1) / 2.0, y, fz - 0.004]), [(lx1 - lx0) / 2.0, schritt * 0.28, 0.0035], 0.0012, Blende, 6.0);
     }
 }
 
