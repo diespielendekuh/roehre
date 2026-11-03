@@ -2,6 +2,27 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Schattenwurf draußen und drinnen
+- Rückmeldung: Bank mitten auf dem Weg ohne Schatten, quer zum Weg; insgesamt zu künstlich,
+  es fehlen Schatten.
+- Park mit echtem Licht statt aufgemalter Helligkeit: Hang, Bäume, Laternenmasten, Bank und
+  Auto haben nur noch Grundfarben; der Shader beleuchtet sie mit Himmel, Mond (von Wolken
+  gedämpft) und den drei Laternen (Lichtkegel nach unten, Inseln von gut drei Metern). Jeder
+  Lichtstrahl wird gegen alle Kulissen (Alpha der Textur) und die Kästen der Bank geprüft:
+  Schatten von Bäumen, Masten und Bank. Daten im Uniform `park` (`park_kulissen`,
+  `parkbank_kaesten`). Dunst nach hinten.
+- Bank ist jetzt ein 3D-Modell (Holzlatten, gusseiserne Wangen, Armlehnen), steht auf dem
+  Rasen neben dem Weg, längs zu ihm und mit der Sitzfläche zum Weg (`szene::parkbank`).
+  Ein junger Baum vorn rechts dazu.
+- Drinnen: zweite Schattenkarte für das Bildschirmlicht (Tasse, Fernbedienung, Kassetten
+  werfen Schatten vom Fernseher weg), dazu Umgebungsverdeckung im Nachbearbeitungspass
+  (Kontaktschatten unter Gegenständen, in Kehlen und am Bildtunnel; aus der Entfernung im
+  Alpha, Paare gegenüberliegender Nachbarn, Tiefensprünge über 0,25 m zählen nicht).
+- Ehrlich: Laternen und Bank stehen nahe beieinander, der Schatten der Bank liegt daher
+  großteils unter ihr; die Mondschatten sind gegen das Laternenlicht schwach. Leistung
+  ungeprüft (ein Schattenpass mehr, Strahltests draußen nur im Fensterausschnitt, 16
+  Abtastungen je Pixel für die Verdeckung).
+
 ## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Park vor dem Fenster, Leben in der Szene
 - Draußen statt neblig-leerer Häuserfront ein kleiner Park am Hang bei Nacht (`szene::park`):
   Himmel mit Verlauf, Mond samt Hof, funkelnden Sternen und langsam ziehenden Wolken (im

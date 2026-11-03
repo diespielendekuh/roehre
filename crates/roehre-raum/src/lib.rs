@@ -97,6 +97,48 @@ const BLICKWINKEL: f32 = 38.0;
 /// Rand links/rechts, der bei voller Verschiebung zum Fensterrand bleibt (Anteil der halben Breite).
 const RAND_SEITE: f32 = 0.015;
 
+/// Größe des Szenen-Uniforms: 240 Byte Grundwerte, dazu `PARK_VEC4` Vektoren für Licht und
+/// Schattenwerfer des Parks (siehe `park_werte`).
+const PARK_VEC4: usize = 56;
+/// dazu die Matrix der Bildschirm-Schattenkarte (64 Byte)
+const SZENE_BYTES: usize = 240 + PARK_VEC4 * 16 + 64;
+
+/// Park im Uniform: Laternen 0–2 (xyz, Index ihrer Kulisse), Vektor 3 (Zahl der Kulissen,
+/// Zahl der Kästen), danach je Kulisse drei Vektoren: (Mitte x, Fuß y, z, Breite), (Höhe, u0,
+/// du, Texturebene), (v0, dv, 0, 0); danach je Schattenkasten der Bank zwei Vektoren:
+/// (Mitte xyz, Drehung um y), (halbe Größe xyz, 0).
+fn park_werte() -> Vec<f32> {
+    let kulissen = szene::park_kulissen();
+    let mut w = Vec::with_capacity(PARK_VEC4 * 4);
+    for (i, l) in szene::laternenlicht().iter().enumerate() {
+        w.extend([l[0], l[1], l[2], i as f32]);
+    }
+    let kaesten = szene::parkbank_kaesten();
+    w.extend([kulissen.len() as f32, kaesten.len() as f32, 0.0, 0.0]);
+    for k in &kulissen {
+        w.extend([k.fuss[0], k.fuss[1], k.fuss[2], k.breite]);
+        w.extend([k.hoehe, k.uv[0], k.uv[2], k.material as u32 as f32]);
+        w.extend([k.uv[1], k.uv[3], 0.0, 0.0]);
+    }
+    let (fuss, drehung) = szene::parkbank();
+    let t = geometrie::Trafo::bei(fuss).nach(&geometrie::Trafo::dreh_y(drehung));
+    for (mitte, halb) in kaesten {
+        let m = t.punkt(mitte);
+        w.extend([m[0], m[1], m[2], drehung]);
+        w.extend([halb[0], halb[1], halb[2], 0.0]);
+    }
+    assert!(w.len() <= PARK_VEC4 * 4, "zu viele Kulissen für das Uniform");
+    w.resize(PARK_VEC4 * 4, 0.0);
+    w
+}
+
+/// Sicht des Bildschirms für seine Schattenkarte: von der Glasmitte nach vorn (−z), 150°
+/// weit, so dass alles auf dem Tisch davor erfasst ist.
+fn bild_licht() -> Mat {
+    let a = szene::BILD_MITTE;
+    mal(&perspektive(150.0, 1.0, 0.02, 6.0), &blick(a, [a[0], a[1], a[2] - 1.0]))
+}
+
 /// Hüllquader des Fernsehers samt Füßen (Mitte, halbe Größe) – daran richtet sich die Kamera.
 fn geraet() -> ([f32; 3], [f32; 3]) {
     let h = 0.2625;
@@ -299,6 +341,9 @@ pub struct Raum {
     rand: wgpu::Sampler,
     vergleich: wgpu::Sampler,
     schatten: wgpu::TextureView,
+    /// Schattenkarte des Bildschirmlichts (Tasse, Fernbedienung, Kassetten vor dem Gerät)
+    bildschatten: wgpu::TextureView,
+    bildschatten_pipeline: wgpu::RenderPipeline,
     schatten_pipeline: wgpu::RenderPipeline,
     haupt_pipeline: wgpu::RenderPipeline,
     nach_pipeline: wgpu::RenderPipeline,
@@ -429,7 +474,7 @@ impl Raum {
         let index_bytes: Vec<u8> = netz.indizes.iter().flat_map(|i| i.to_le_bytes()).collect();
         let ecken = bytes(&ecken_bytes, wgpu::BufferUsages::VERTEX);
         let indizes = bytes(&index_bytes, wgpu::BufferUsages::INDEX);
-        let uniform = bytes(&[0u8; 240], wgpu::BufferUsages::UNIFORM);
+        let uniform = bytes(&[0u8; SZENE_BYTES], wgpu::BufferUsages::UNIFORM);
         let material_puffer = bytes(&[0u8; 32], wgpu::BufferUsages::UNIFORM);
 
         // Abtaster
@@ -470,6 +515,18 @@ impl Raum {
                 view_formats: &[],
             })
             .create_view(&Default::default());
+        let bildschatten = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("roehre-raum: Schattenkarte des Bildschirms"),
+                size: wgpu::Extent3d { width: SCHATTEN, height: SCHATTEN, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: TIEFE,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+            .create_view(&Default::default());
 
         // Pipelines
         let modul = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -492,6 +549,7 @@ impl Raum {
                 eintrag(6, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), f),
                 eintrag(7, wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Depth, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false }, f),
                 eintrag(8, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison), f),
+                eintrag(9, wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Depth, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false }, f),
             ],
         });
         let nach_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -523,6 +581,23 @@ impl Raum {
             label: Some("roehre-raum: Schatten"),
             layout: Some(&pl(&schatten_layout)),
             vertex: wgpu::VertexState { module: &modul, entry_point: Some("schatten_ecke"), compilation_options: Default::default(), buffers: &[Some(ecken_layout.clone())] },
+            fragment: None,
+            primitive: Default::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: TIEFE,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                bias: wgpu::DepthBiasState { constant: 2, slope_scale: 2.0, clamp: 0.0 },
+            }),
+            multisample: Default::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let bildschatten_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("roehre-raum: Bildschatten"),
+            layout: Some(&pl(&schatten_layout)),
+            vertex: wgpu::VertexState { module: &modul, entry_point: Some("bildschatten_ecke"), compilation_options: Default::default(), buffers: &[Some(ecken_layout.clone())] },
             fragment: None,
             primitive: Default::default(),
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -588,6 +663,8 @@ impl Raum {
             rand,
             vergleich,
             schatten,
+            bildschatten,
+            bildschatten_pipeline,
             schatten_pipeline,
             haupt_pipeline,
             nach_pipeline,
@@ -702,6 +779,8 @@ impl Raum {
         let fokus = geometrie::sub(szene::BILD_MITTE, a.auge);
         w.extend([geometrie::dot(fokus, fokus).sqrt(), a.unschaerfe, a.gluehen, 0.0]);
         w.extend([if a.rohpixel { 1.0 } else { 0.0 }, a.vignette, a.leben, 0.0]);
+        w.extend(park_werte());
+        w.extend(bild_licht().iter().flatten());
         let bytes: Vec<u8> = w.iter().flat_map(|f| f.to_le_bytes()).collect();
         queue.write_buffer(&self.uniform, 0, &bytes);
         let mut mw = *material;
@@ -733,6 +812,26 @@ impl Raum {
             pass.set_index_buffer(self.indizes.slice(..), wgpu::IndexFormat::Uint32);
             pass.draw_indexed(0..self.anzahl, 0, 0..1);
         }
+        // 1b. Schattenkarte des Bildschirms
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("roehre-raum: Bildschatten"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.bildschatten,
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&self.bildschatten_pipeline);
+            pass.set_bind_group(0, &sg, &[]);
+            pass.set_vertex_buffer(0, self.ecken.slice(..));
+            pass.set_index_buffer(self.indizes.slice(..), wgpu::IndexFormat::Uint32);
+            pass.draw_indexed(0..self.anzahl, 0, 0..1);
+        }
 
         // 2. Szene
         let hg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -748,6 +847,7 @@ impl Raum {
                 wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::Sampler(&self.rand) },
                 wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(&self.schatten) },
                 wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::Sampler(&self.vergleich) },
+                wgpu::BindGroupEntry { binding: 9, resource: wgpu::BindingResource::TextureView(&self.bildschatten) },
             ],
         });
         {

@@ -67,9 +67,11 @@ pub enum Material {
     Auto,
     Heizlack,
     Taste,
+    Parkholz,
+    Parkeisen,
 }
 
-pub const ANZAHL: u32 = Material::Taste as u32 + 1;
+pub const ANZAHL: u32 = Material::Parkeisen as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -79,7 +81,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Himmel, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
         Triebhuelle, Rinde, Buecher, Videorekorder, Blende, Beschriftung, Skala, Knopf, Kanalskala, LedGruen,
-        Wolken, Parkboden, Baumkulisse, Ferne, Laterne, Auto, Heizlack, Taste,
+        Wolken, Parkboden, Baumkulisse, Ferne, Laterne, Auto, Heizlack, Taste, Parkholz, Parkeisen,
     ]
 };
 
@@ -685,29 +687,26 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], dicht * 0.95], [0.5, 1.0, 0.0, 1.0])
         }
         Parkboden => {
-            // Hang des Parks (Weltlage aus u, v wie in `szene::park`): Rasen im Mondlicht, ein
-            // geschwungener Kiesweg, Lichtinseln der Laternen, dunkle Büsche
+            // Hang des Parks als Grundfarbe (Licht und Schatten rechnet der Shader): Rasen mit
+            // Flecken und Grasbüscheln, geschwungener Kiesweg mit Rand, Straße, dunkle Büsche.
+            // Weltlage aus u, v wie in `szene::park`
             let (x, z) = crate::szene::park_welt(u, v);
             let rasen = fbm(u * 4.0, v * 4.0, 16, 4, 411);
-            let mut c = mal([0.010, 0.017, 0.012], 0.7 + 0.6 * rasen);
+            let buesche = wert(u * 200.0, v * 200.0, 200, 414);
+            let mut c = mal([0.040, 0.062, 0.030], 0.65 + 0.5 * rasen + 0.25 * buesche);
             let weg = (x - crate::szene::park_weg(z)).abs();
-            c = mische(c, mal([0.040, 0.037, 0.034], 0.8 + 0.4 * wert(u * 128.0, v * 128.0, 128, 412)), glatt(0.5, 0.38, weg));
+            let kies = mal([0.20, 0.185, 0.16], 0.8 + 0.4 * wert(u * 160.0, v * 160.0, 160, 412));
+            c = mische(c, kies, glatt(0.5, 0.40, weg));
+            c = mal(c, 1.0 - 0.25 * (1.0 - glatt(0.0, 0.06, (weg - 0.45).abs())));
             let busch = glatt(0.62, 0.68, fbm(u * 2.0, v * 2.0, 8, 4, 413)) * glatt(0.9, 1.4, weg);
-            c = mal(c, 1.0 - 0.6 * busch);
-            // Straße hinter dem Park (auf ihr fährt ab und zu ein Auto)
+            c = mische(c, [0.015, 0.025, 0.012], busch * 0.8);
             let strasse = 1.0 - glatt(0.35, 0.45, (z - crate::szene::STRASSE_Z).abs());
-            c = mische(c, mal([0.016, 0.016, 0.018], 0.85 + 0.3 * rasen), strasse);
-            for l in crate::szene::parklaternen() {
-                let d2 = (x - l[0]).powi(2) + (z - l[1]).powi(2);
-                let insel = (-d2 / 2.2).exp();
-                c = [c[0] + 0.11 * insel, c[1] + 0.075 * insel, c[2] + 0.035 * insel];
-            }
-            ([c[0], c[1], c[2], 1.0], [0.5, 1.0, 0.0, 1.0])
+            c = mische(c, mal([0.05, 0.05, 0.055], 0.85 + 0.3 * rasen), strasse);
+            ([c[0], c[1], c[2], 1.0], [0.5, 1.0, 0.0, 0.0])
         }
         Baumkulisse => {
             // Vier Bäume nebeneinander (u-Viertel): drei Laubbäume mit runder Krone, eine
-            // Tanne. Dunkle Silhouetten, oben ein kühler Saum vom Mond, unten warm von den
-            // Laternen. Alpha als weicher Abstand zur Kante (nicht 0/1): die Alphaschwelle zieht
+            // Tanne. Alpha als weicher Abstand zur Kante (nicht 0/1): die Alphaschwelle zieht
             // dann eine glatte Linie zwischen den Texeln statt Treppenstufen
             let art = ((u * 4.0).floor() as i32).clamp(0, 3);
             let lu = (u * 4.0).fract();
@@ -724,11 +723,12 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
                 (glatt(0.06, -0.06, d), glatt(cy - ry, cy + ry * 0.8, v))
             };
             let stamm = glatt(1.5 * texel, -1.5 * texel, (lu - 0.5).abs() - (0.025 + 0.04 * glatt(0.85, 1.0, v))) * glatt(0.43, 0.47, v);
+            // Grundfarbe des Laubs mit Blattbüscheln (hell und dunkel), unten dunkler; Licht und
+            // Schatten rechnet der Shader
             let laub = fbm(u * 6.0, v * 6.0, 24, 3, saat + 1);
-            let mut c = mal([0.006, 0.009, 0.007], 0.7 + 0.6 * laub);
-            c = mische(c, [0.020, 0.028, 0.038], (1.0 - oben) * 0.6 * laub);
-            c = mische(c, [0.045, 0.030, 0.014], glatt(0.55, 0.9, oben) * 0.5 * laub);
-            c = mische(c, [0.008, 0.006, 0.005], stamm * (1.0 - krone));
+            let bueschel = glatt(0.4, 0.7, fbm(u * 12.0, v * 12.0, 48, 2, saat + 2));
+            let mut c = mal([0.030, 0.048, 0.024], 0.45 + 0.6 * laub + 0.35 * bueschel - 0.25 * oben);
+            c = mische(c, [0.05, 0.035, 0.025], stamm * (1.0 - krone));
             ([c[0], c[1], c[2], krone.max(stamm)], [0.5, 1.0, 0.0, 1.0])
         }
         Ferne => {
@@ -757,9 +757,9 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], a], [0.5, 1.0, 0.0, 1.0])
         }
         Laterne => {
-            // Links eine Parklaterne (Mast, Laternenkopf mit leuchtendem Glas), rechts oben eine
-            // Parkbank, beides als Silhouette
-            let (mut c, mut a) = ([0.008f32, 0.008, 0.009], 0.0f32);
+            // Links eine Parklaterne (Eisenmast, Kopf mit leuchtendem Glas), rechts oben eine
+            // Parkbank (Holzlatten auf Eisenfüßen); Grundfarben, das Glas leuchtet selbst
+            let (mut c, mut a) = ([0.035f32, 0.035, 0.04], 0.0f32);
             if u < 0.5 {
                 let lu = u * 2.0;
                 let mast = (lu - 0.5).abs() < 0.035 + 0.05 * glatt(0.9, 1.0, v) && v > 0.2;
@@ -773,7 +773,7 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
                 let sitz = lv > 0.62 && lv < 0.70;
                 let beine = lv > 0.62 && ((lu - 0.12).abs() < 0.03 || (lu - 0.88).abs() < 0.03);
                 if (lehne || sitz) && lu > 0.05 && lu < 0.95 || beine { a = 1.0; }
-                if sitz { c = [0.03, 0.022, 0.014]; }
+                if (lehne || sitz) && !beine { c = mal([0.16, 0.10, 0.055], 0.8 + 0.3 * wert(u * 128.0, v * 16.0, 128, 441)); }
             }
             ([c[0], c[1], c[2], a], [0.5, 1.0, 0.0, 1.0])
         }
@@ -813,6 +813,18 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             };
             let k = 0.92 + 0.08 * wert(u * 64.0, v * 64.0, 64, 471);
             ([c[0] * k, c[1] * k, c[2] * k, 1.0], [0.5, 0.62, 0.0, 0.0])
+        }
+        Parkholz => {
+            // Latten einer Parkbank: verwittertes, geöltes Holz, Faser in u-Richtung
+            let faser = fbm(u * 0.5, v * 24.0, 4, 3, 481);
+            let c = mal([0.17, 0.105, 0.058], 0.75 + 0.4 * faser - 0.15 * staub);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * faser, 0.7, 0.0, 0.0])
+        }
+        Parkeisen => {
+            // Gusseisen der Bankwangen, dunkelgrün lackiert, an Kanten blank gescheuert
+            let n = fbm(u, v, 8, 3, 491);
+            let c = mal([0.025, 0.040, 0.030], 0.8 + 0.4 * n);
+            ([c[0], c[1], c[2], 1.0], [0.5, 0.45, 0.3, 0.0])
         }
         Bildroehre => ([0.0, 0.0, 0.0, 1.0], [0.5, 0.05, 0.0, 0.0]),
     }

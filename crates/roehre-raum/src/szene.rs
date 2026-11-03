@@ -73,36 +73,112 @@ fn kulisse(n: &mut Netz, fuss: V3, breite: f32, hoehe: f32, m: crate::texturen::
     });
 }
 
-/// Was man durchs Fenster sieht: ein kleiner Park am Hang bei Nacht. Alles leuchtet selbst
-/// (gemalt), unbeleuchtet vom Zimmer und ohne dessen Nebel: Himmel (Mond, Sterne und ziehende
-/// Wolken im Shader), Baumreihe und Häuser in der Ferne, Straße, Hang mit Weg, Laternen,
-/// Bank und einzelnen Bäumen, die sich im Wind wiegen.
+/// Eine Kulisse im Park, die Licht abbekommt und Schatten wirft (Baum, Laterne, Bank).
+#[derive(Clone, Copy, Debug)]
+pub struct Kulisse {
+    pub fuss: V3,
+    pub breite: f32,
+    pub hoehe: f32,
+    pub material: crate::texturen::Material,
+    /// Ausschnitt der Textur (u0, v0, du, dv), oben = v0
+    pub uv: [f32; 4],
+    pub wind: f32,
+}
+
+/// Lage einer Parklaterne als Lichtquelle (Mitte des Glases) und Fuß ihrer Kulisse.
+pub fn laternenlicht() -> [V3; 3] {
+    parklaternen().map(|[x, z]| [x, park_hoehe(x, z) - 0.05 + 3.4 * 0.875, z - 0.06])
+}
+
+/// Bäume, Laternen und Bank des Parks: daraus entstehen die Kulissen (Geometrie) und die
+/// Schattenwerfer des Shaders (`Raum::zeichne` übergibt sie im Uniform `park`). Die drei
+/// Laternen stehen vorn, in derselben Reihenfolge wie `laternenlicht`.
+pub fn park_kulissen() -> Vec<Kulisse> {
+    let mut k = Vec::new();
+    for [x, z] in parklaternen() {
+        k.push(Kulisse { fuss: [x, park_hoehe(x, z) - 0.05, z], breite: 0.95, hoehe: 3.4, material: Laterne, uv: [0.0, 0.0, 0.5, 1.0], wind: 0.0 });
+    }
+    // Bäume (x, z, Höhe, Art 0–3)
+    for (x, z, h, art) in [
+        (-9.5f32, 13.8f32, 6.5f32, 0u32), (-6.8, 13.2, 5.5, 3), (-1.2, 13.6, 6.0, 1), (2.6, 13.0, 5.0, 2),
+        (-7.6, 10.4, 6.0, 1), (-0.4, 10.8, 5.2, 0), (-4.8, 8.2, 4.6, 2), (1.6, 7.6, 6.2, 3), (-9.0, 6.8, 6.4, 0),
+        // junger Baum vorn rechts neben der ersten Laterne: sein Schatten fällt zum Haus hin
+        (0.9, 5.3, 3.2, 2),
+    ] {
+        let breite = if art == 3 { h * 0.55 } else { h * 0.85 };
+        k.push(Kulisse { fuss: [x, park_hoehe(x, z) - 0.1, z], breite, hoehe: h, material: Baumkulisse, uv: [art as f32 / 4.0, 0.0, 0.25, 1.0], wind: 6.0 });
+    }
+    k
+}
+
+/// Die Parkbank: steht auf dem Rasen neben dem Weg, kurz hinter der ersten Laterne, längs zum Weg
+/// und mit der Sitzfläche zu ihm hin. Ergebnis: Mitte am Boden und Drehung um y (Trafo::dreh_y;
+/// lokal x = Länge, −z = Vorderseite).
+pub fn parkbank() -> (V3, f32) {
+    let z = 7.5;
+    let x = park_weg(z) + 1.0;
+    // Richtung des Wegs (x je z) an dieser Stelle
+    let steigung = 1.6 * 0.45 * (z * 0.45).cos();
+    let l = (steigung * steigung + 1.0).sqrt();
+    let (dx, dz) = (steigung / l, 1.0 / l);
+    // lokal x soll längs des Wegs liegen: (cos w, −sin w) = (dx, dz)
+    let mut w = (-dz).atan2(dx);
+    // Vorderseite (lokal −z) = −(sin w, cos w) muss zum Weg zeigen (nach −x)
+    if -w.sin() > 0.0 {
+        w += std::f32::consts::PI;
+    }
+    ([x, park_hoehe(x, z) - 0.02, z], w)
+}
+
+/// Schattenkästen der Bank für den Shader: (Mitte, halbe Größe) im lokalen Rahmen der Bank.
+pub fn parkbank_kaesten() -> [(V3, V3); 2] {
+    [([0.0, 0.45, 0.0], [0.80, 0.02, 0.18]), ([0.0, 0.70, 0.20], [0.80, 0.12, 0.02])]
+}
+
+fn bank(n: &mut Netz) {
+    let (fuss, w) = parkbank();
+    let t = Trafo::bei(fuss).nach(&Trafo::dreh_y(w));
+    // Sitzlatten mit Fugen
+    for z in [-0.15f32, -0.03, 0.09] {
+        n.quader(&t.nach(&Trafo::bei([0.0, 0.45, z])), [0.80, 0.014, 0.05], 0.006, Parkholz, 3.0);
+    }
+    // Lehne: zwei Latten, leicht nach hinten geneigt
+    for y in [0.63f32, 0.77] {
+        let lehne = t.nach(&Trafo::bei([0.0, y, 0.19 + (y - 0.63) * 0.25])).nach(&Trafo::dreh_x(-0.25));
+        n.quader(&lehne, [0.80, 0.045, 0.013], 0.006, Parkholz, 3.0);
+    }
+    // Wangen aus Gusseisen: Vorderbein, Hinterbein bis zur Lehne, Sitzträger, Armlehne
+    for x in [-0.70f32, 0.70] {
+        n.quader(&t.nach(&Trafo::bei([x, 0.22, -0.16])), [0.022, 0.22, 0.022], 0.006, Parkeisen, 3.0);
+        n.quader(&t.nach(&Trafo::bei([x, 0.41, 0.17])).nach(&Trafo::dreh_x(-0.12)), [0.022, 0.41, 0.022], 0.006, Parkeisen, 3.0);
+        n.quader(&t.nach(&Trafo::bei([x, 0.425, 0.0])), [0.024, 0.02, 0.2], 0.006, Parkeisen, 3.0);
+        n.quader(&t.nach(&Trafo::bei([x, 0.64, -0.02])), [0.028, 0.014, 0.19], 0.008, Parkeisen, 3.0);
+        n.quader(&t.nach(&Trafo::bei([x, 0.53, -0.18])), [0.02, 0.10, 0.018], 0.006, Parkeisen, 3.0);
+    }
+}
+
+/// Was man durchs Fenster sieht: ein kleiner Park am Hang bei Nacht. Himmel und Ferne sind
+/// gemalt und leuchten selbst; Hang, Bäume, Laternen und Bank bekommen im Shader das Licht der
+/// Laternen und des Mondes samt Schatten der Kulissen. Kein Zimmerlicht, kein Zimmernebel.
 fn park(n: &mut Netz) {
     // Himmel weit hinten, groß genug für jede Kamerastellung
     kulisse(n, [-3.0, -1.0, 16.6], 44.0, 18.0, Himmel, [0.0, 0.0, 1.0, 1.0], 0.0);
     // Ferne: Häuser und Baumreihe auf der Kuppe
     kulisse(n, [-3.0, park_hoehe(-3.0, 15.7) - 0.4, 15.7], 32.0, 4.4, Ferne, [0.0, 0.0, 1.0, 1.0], 0.0);
-    // Hang mit Rasen, Weg und Straße
-    n.gitter(&Trafo::bei([0.0; 3]), (48, 48), Parkboden, 0.0, |s, q| {
+    // Hang mit Rasen, Weg und Straße; Normale aus der Steigung (für Licht und Schatten)
+    n.gitter(&Trafo::bei([0.0; 3]), (64, 64), Parkboden, 0.0, |s, q| {
         let (x, z) = park_welt(s, q);
-        ([x, park_hoehe(x, z), z], [0.0, 1.0, 0.0], [s, q])
+        let e = 0.05;
+        let dx = (park_hoehe(x + e, z) - park_hoehe(x - e, z)) / (2.0 * e);
+        let dz = (park_hoehe(x, z + e) - park_hoehe(x, z - e)) / (2.0 * e);
+        ([x, park_hoehe(x, z), z], norm([-dx, 1.0, -dz]), [s, q])
     });
     // Auto (vom Shader entlang der Straße verschoben, sonst weit außerhalb)
     kulisse(n, [0.0, park_hoehe(0.0, STRASSE_Z) - 0.05, STRASSE_Z], 1.9, 0.95, Auto, [0.0, 0.0, 1.0, 1.0], 0.0);
-    // Bäume (x, z, Höhe, Art 0–3), von hinten nach vorn
-    for (x, z, h, art) in [
-        (-9.5f32, 13.8f32, 6.5f32, 0u32), (-6.8, 13.2, 5.5, 3), (-1.2, 13.6, 6.0, 1), (2.6, 13.0, 5.0, 2),
-        (-7.6, 10.4, 6.0, 1), (-0.4, 10.8, 5.2, 0), (-4.8, 8.2, 4.6, 2), (1.6, 7.6, 6.2, 3), (-9.0, 6.8, 6.4, 0),
-    ] {
-        let breite = if art == 3 { h * 0.55 } else { h * 0.85 };
-        kulisse(n, [x, park_hoehe(x, z) - 0.1, z], breite, h, Baumkulisse, [art as f32 / 4.0, 0.0, 0.25, 1.0], 6.0);
+    for k in park_kulissen() {
+        kulisse(n, k.fuss, k.breite, k.hoehe, k.material, k.uv, k.wind);
     }
-    // Laternen am Weg und eine Bank unter der mittleren
-    for [x, z] in parklaternen() {
-        kulisse(n, [x, park_hoehe(x, z) - 0.05, z - 0.01], 0.95, 3.4, Laterne, [0.0, 0.0, 0.5, 1.0], 0.0);
-    }
-    let [lx, lz] = parklaternen()[1];
-    kulisse(n, [lx - 1.1, park_hoehe(lx - 1.1, lz) - 0.05, lz - 0.2], 1.7, 0.85, Laterne, [0.5, 0.0, 0.5, 0.5], 0.0);
+    bank(n);
 }
 
 fn zimmer(n: &mut Netz) {

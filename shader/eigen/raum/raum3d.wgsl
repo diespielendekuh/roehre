@@ -27,6 +27,11 @@ struct Szene {
     fokus: vec4<f32>,
     // Rohpixel (1 = an), Stärke der Vignette, Leben der Szene (0 … 1), frei
     raumbild: vec4<f32>,
+    // Park: Laternen 0–2 (xyz, Index ihrer Kulisse), [3].x Zahl der Kulissen, ab 4 je Kulisse
+    // drei Vektoren (Mitte x, Fuß y, z, Breite), (Höhe, u0, du, Ebene), (v0, dv, –, –)
+    park: array<vec4<f32>, 56>,
+    // Sicht des Bildschirms für seine Schattenkarte
+    licht_bild: mat4x4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> szene: Szene;
@@ -38,6 +43,7 @@ struct Szene {
 @group(0) @binding(6) var rand: sampler;
 @group(0) @binding(7) var schattenkarte: texture_depth_2d;
 @group(0) @binding(8) var vergleich: sampler_comparison;
+@group(0) @binding(9) var bildschattenkarte: texture_depth_2d;
 
 // Materialnummern (wie texturen.rs)
 const M_KUNSTSTOFF_SCHWARZ: u32 = 1u;
@@ -49,13 +55,18 @@ const M_GLUEHBIRNE: u32 = 20u;
 const M_LED: u32 = 21u;
 const M_BILDROEHRE: u32 = 26u;
 const M_WOLKEN: u32 = 40u;
+const M_PARK: u32 = 41u;
 const M_BAUM: u32 = 42u;
+const M_FERNE: u32 = 43u;
+const M_LATERNE: u32 = 44u;
 const M_AUTO: u32 = 45u;
+const M_PARKHOLZ: u32 = 48u;
+const M_PARKEISEN: u32 = 49u;
 
 // Draußen (Himmel, Park, Bäume, Ferne, Laternen, Auto): gemalt, leuchtet selbst, ohne
 // Zimmerlicht und ohne Zimmernebel
 fn draussen(m: u32) -> bool {
-    return m == M_HIMMEL || (m >= 40u && m <= 45u);
+    return m == M_HIMMEL || (m >= 40u && m <= 45u) || m == M_PARKHOLZ || m == M_PARKEISEN;
 }
 
 // Leben der Szene (Option raum.leben): Wolken, Auto, Bäume im Wind
@@ -88,6 +99,75 @@ fn wolken_uv(d: vec3<f32>) -> vec2<f32> {
 // Wie dicht die Wolken gerade vor dem Mond stehen (0 … 1): dimmt das Mondlicht im Zimmer
 fn wolke_vor_mond() -> f32 {
     return textureSampleLevel(farben, kachel, wolken_uv(MOND), M_WOLKEN, 3.0).a;
+}
+
+// Wie viel Licht von `l` bei `p` ankommt (0 … 1): der Strahl wird gegen jede Kulisse des
+// Parks (Bäume, Laternen, Bank) geprüft; trifft er sie innerhalb ihres Rechtecks, hält sie
+// so viel Licht ab, wie ihre Textur dort deckt (Alpha, leicht verwischt aus Mip-Stufe 1).
+// `ohne` ist die Kulisse, zu der das Licht selbst gehört (die Laterne verschattet sich nicht).
+fn park_schatten(p: vec3<f32>, l: vec3<f32>, ohne: i32) -> f32 {
+    let anzahl = i32(szene.park[3].x);
+    var s = 1.0;
+    for (var i = 0; i < anzahl; i++) {
+        if (i == ohne) { continue; }
+        let a = szene.park[4 + 3 * i];
+        let b = szene.park[5 + 3 * i];
+        let v = szene.park[6 + 3 * i];
+        let dp = p.z - a.z;
+        let dl = l.z - a.z;
+        if (dp * dl >= 0.0) { continue; }
+        let h = p + (l - p) * (dp / (dp - dl));
+        let su = (h.x - a.x) / a.w + 0.5;
+        let q = (h.y - a.y) / b.x;
+        if (su < 0.0 || su > 1.0 || q < 0.0 || q > 1.0) { continue; }
+        let uv = vec2<f32>(b.y + su * b.z, v.x + (1.0 - q) * v.y);
+        s *= 1.0 - 0.92 * textureSampleLevel(farben, kachel, uv, i32(b.w), 1.0).a;
+    }
+    // Kästen der Bank (gedreht um y): Strahl im Rahmen des Kastens, Plattentest
+    let kaesten = i32(szene.park[3].y);
+    let basis = 4 + 3 * anzahl;
+    for (var j = 0; j < kaesten; j++) {
+        let m = szene.park[basis + 2 * j];
+        let h = szene.park[basis + 2 * j + 1].xyz;
+        let c = cos(m.w);
+        let sn = sin(m.w);
+        let zu_lokal = mat3x3<f32>(vec3<f32>(c, 0.0, sn), vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(-sn, 0.0, c));
+        let o = zu_lokal * (p - m.xyz);
+        let d = zu_lokal * (l - p);
+        let inv = 1.0 / select(d, vec3<f32>(1e-6), abs(d) < vec3<f32>(1e-6));
+        let t1 = (-h - o) * inv;
+        let t2 = (h - o) * inv;
+        let nah = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z));
+        let fern = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z));
+        if (nah < fern && fern > 0.002 && nah < 1.0) { s *= 0.08; }
+    }
+    return s;
+}
+
+// Licht im Park bei `p` mit Normale `n`: Himmel, Mond (von Wolken gedämpft) und die drei
+// Laternen, jeweils mit den Schatten der Kulissen. Kulissen (`karte`) sind flach: sie nehmen
+// Licht auch von hinten halb an (Laub lässt es durch), damit ein Baum vor einer Laterne
+// nicht schwarz ausgestanzt wirkt.
+fn park_licht(p: vec3<f32>, n: vec3<f32>, karte: bool) -> vec3<f32> {
+    var e = vec3<f32>(0.010, 0.012, 0.020) * select(0.55 + 0.45 * n.y, 0.6, karte);
+    let mond = vec3<f32>(0.06, 0.075, 0.11) * mix(1.0, 0.4, wolke_vor_mond());
+    let nm = select(max(dot(n, MOND), 0.0), max(dot(n, MOND) * 0.5 + 0.5, 0.0) * 0.6, karte);
+    e += mond * nm * park_schatten(p, p + MOND * 30.0, -1);
+    for (var i = 0; i < 3; i++) {
+        let lage = szene.park[i];
+        // der eigene Mast liegt neben dem Glas: von dort käme nur Streulicht, keine Beleuchtung
+        let eigene = szene.park[4 + 3 * i];
+        if (karte && abs(p.z - eigene.z) < 0.02 && abs(p.x - eigene.x) < eigene.w * 0.5) { continue; }
+        let d = lage.xyz - p;
+        let dd = dot(d, d);
+        let l = d * inverseSqrt(dd);
+        let nl = select(max(dot(n, l), 0.0), max(dot(n, l) * 0.5 + 0.5, 0.0) * 0.8, karte);
+        // Der Laternenkopf hat oben eine Kappe: Licht fällt vor allem nach unten, so entsteht
+        // um jeden Mast eine Lichtinsel von gut drei Metern statt eines hellen Hangs
+        let kegel = mix(0.03, 1.0, smoothstep(0.55, 0.92, l.y));
+        e += vec3<f32>(1.0, 0.70, 0.36) * 4.0 / (dd + 0.25) * kegel * nl * park_schatten(p, lage.xyz, i32(lage.w));
+    }
+    return e;
 }
 
 fn himmel(d: vec3<f32>) -> vec3<f32> {
@@ -150,6 +230,33 @@ fn schatten_ecke(e: Ecke) -> @builtin(position) vec4<f32> {
         return vec4<f32>(0.0, 0.0, -2.0, 1.0);    // wirft keinen Schatten (Licht sitzt darin)
     }
     return szene.licht * vec4<f32>(bewegt(e), 1.0);
+}
+
+// Schattenkarte des Bildschirms: das Glas selbst wirft keinen Schatten
+@vertex
+fn bildschatten_ecke(e: Ecke) -> @builtin(position) vec4<f32> {
+    if (e.material == M_BILDROEHRE) {
+        return vec4<f32>(0.0, 0.0, -2.0, 1.0);
+    }
+    return szene.licht_bild * vec4<f32>(bewegt(e), 1.0);
+}
+
+// Wie viel Bildschirmlicht bei `welt` ankommt (0 … 1), aus der Schattenkarte des Bildschirms.
+// Nur vor dem Gerät; Bildtunnel und Gehäuse bekommen ihr Licht ohne Karte.
+fn bild_schatten(welt: vec3<f32>, n: vec3<f32>) -> f32 {
+    if (welt.z > szene.bild_mitte.z - 0.04) { return 1.0; }
+    let p = szene.licht_bild * vec4<f32>(welt + n * 0.006, 1.0);
+    let ndc = p.xyz / p.w;
+    if (p.w <= 0.0 || ndc.z > 1.0 || any(abs(ndc.xy) > vec2<f32>(1.0))) { return 1.0; }
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    let pixel = 1.0 / 2048.0;
+    var s = 0.0;
+    for (var y = -1; y <= 1; y++) {
+        for (var x = -1; x <= 1; x++) {
+            s += textureSampleCompareLevel(bildschattenkarte, vergleich, uv + vec2<f32>(f32(x), f32(y)) * pixel * 2.0, ndc.z - 0.0008);
+        }
+    }
+    return s / 9.0;
 }
 
 // ---------------------------------------------------------------- 2. Szene
@@ -317,7 +424,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         // Der Bildschirm strahlt nach −z: Flächen davor sehen ihn in Richtung +z
         let nach_vorn = max(lb.z, 0.0);
         let flaeche = 4.0 * szene.bild_halb.x * szene.bild_halb.y;
-        let bl = bildlicht() * nach_vorn * flaeche / (db * db + flaeche);
+        let bl = bildlicht() * nach_vorn * flaeche / (db * db + flaeche) * bild_schatten(e.welt, n_flaeche);
         let hb = normalize(lb - blick);
         c += diffus * bl * max(dot(n, lb), 0.0) * 8.0 + f0 * bl * pow(max(dot(n, hb), 0.0), glanz) * 0.5 * nach_vorn;
 
@@ -372,10 +479,26 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         c += albedo * leuchten;
         strahlt = leuchten > 0.01;
         if (draussen(e.material)) {
-            // gemalte Farben gedämpft auf Nachthelligkeit; nur Leuchtendes (Laternenglas,
-            // Scheinwerfer, Fenster in der Ferne) bleibt hell
+            // Leuchtendes (Laternenglas, Scheinwerfer, Fenster in der Ferne) bleibt hell; Hang,
+            // Bäume, Laternenmasten, Bank und Auto bekommen Licht und Schatten; Himmel und
+            // Ferne sind gemalt
             let hell = max(farbe.r, max(farbe.g, farbe.b)) > 0.5;
-            c = select(farbe.rgb * select(0.35, 0.9, hell), himmel(blick), e.material == M_HIMMEL);
+            let beleuchtet = e.material == M_PARK || e.material == M_BAUM || e.material == M_LATERNE || e.material == M_AUTO
+                || e.material == M_PARKHOLZ || e.material == M_PARKEISEN;
+            if (e.material == M_HIMMEL) {
+                c = himmel(blick);
+            } else if (hell) {
+                c = farbe.rgb * 1.3;
+            } else if (beleuchtet) {
+                let flach = e.material == M_BAUM || e.material == M_LATERNE || e.material == M_AUTO;
+                let nf = select(n_flaeche, vec3<f32>(0.0, 0.0, -1.0), flach);
+                c = farbe.rgb * park_licht(e.welt + nf * 0.004, nf, flach);
+            } else {
+                c = farbe.rgb * 0.35;
+            }
+            // Dunst: je weiter weg, desto mehr im Grau der Nacht
+            let dunst = 1.0 - exp(-max(entfernung - 5.0, 0.0) * 0.04);
+            c = mix(c, vec3<f32>(0.010, 0.012, 0.018), dunst * select(0.6, 0.25, hell));
             strahlt = true;
         }
     }
@@ -470,6 +593,28 @@ fn nach_farbe(e: NachAus) -> @location(0) vec4<f32> {
             gewicht += w;
         }
         c = summe / gewicht;
+    }
+
+    // Umgebungsverdeckung (Kontaktschatten) aus der Entfernung im Alpha: in Kehlen, unter
+    // Gegenständen und an Kanten liegen die Nachbarn im Mittel näher als der Punkt selbst.
+    // Je Paar gegenüberliegender Nachbarn: liegt ihr Mittel deutlich vor dem Punkt (auf einer
+    // ebenen Fläche liegt es genau auf ihm), ist der Punkt verdeckt. Fernes (über 0,25 m
+    // Tiefensprung) zählt nicht, sonst bekämen Umrisse einen dunklen Hof.
+    let tiefe = abs(mitte.a);
+    if (mitte.a > 0.0 && tiefe < 12.0) {
+        let radius = clamp(0.07 * groesse.y * 1.45 / tiefe, 3.0, 48.0);
+        var verdeckt = 0.0;
+        for (var i = 0; i < 8; i++) {
+            let w = f32(i) * 0.392699 + drehung;
+            let r = radius * (0.35 + 0.65 * f32((i * 5) % 8) / 7.0);
+            let o = vec2<i32>(vec2<f32>(cos(w), sin(w)) * r);
+            let d1 = abs(textureLoad(hdr, clamp(p + o, vec2<i32>(0), gmax), 0).a);
+            let d2 = abs(textureLoad(hdr, clamp(p - o, vec2<i32>(0), gmax), 0).a);
+            let vor = (tiefe - 0.5 * (d1 + d2)) / tiefe;
+            let nah = step(abs(d1 - tiefe), 0.25) * step(abs(d2 - tiefe), 0.25);
+            verdeckt += smoothstep(0.002, 0.02, vor) * nah;
+        }
+        c *= 1.0 - 0.55 * verdeckt / 8.0;
     }
 
     // Glühen: helle Stellen (Bildschirm, Lampe) strahlen in den Dunst ab. Aus dem auf 1/8
