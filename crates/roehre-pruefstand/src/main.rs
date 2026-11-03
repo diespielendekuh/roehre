@@ -64,6 +64,7 @@ fn main() {
             args.iter().any(|x| x == "--ohne-rohpixel"),
             args.iter().any(|x| x == "--ohne-korn") || args.iter().any(|x| x == "--nur-unschaerfe"),
             args.iter().any(|x| x == "--nur-unschaerfe"),
+            opt("--zeit").and_then(|z| z.parse().ok()),
         ),
         "bewegung" => bewegung_messen(
             opt("-n").and_then(|n| n.parse().ok()).unwrap_or(4.0),
@@ -708,7 +709,8 @@ fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
 }
 
 /// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.
-fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>, ohne_rohpixel: bool, ohne_korn: bool, nur_unschaerfe: bool) -> Ergebnis {
+#[allow(clippy::too_many_arguments)]
+fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>, ohne_rohpixel: bool, ohne_korn: bool, nur_unschaerfe: bool, zeit: Option<f32>) -> Ergebnis {
     use roehre_raum::{Ansicht, Raum};
     std::fs::create_dir_all(ordner)?;
     let gpu = Gpu::neu();
@@ -752,6 +754,19 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     bedienfeld.auge = [0.12, 1.02, -0.62];
     bedienfeld.ziel = [0.235, 0.98, -0.2];
     bedienfeld.blickwinkel = 30.0;
+    let mut fenster = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    fenster.auge = [-1.0, 1.35, -1.2];
+    fenster.ziel = [-1.4, 1.45, 1.05];
+    let mut fernbedienung = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    fernbedienung.auge = [0.10, 0.93, -0.58];
+    fernbedienung.ziel = [0.22, 0.71, -0.34];
+    fernbedienung.blickwinkel = 28.0;
+    let mut heizung = Ansicht::sitzplatz(0.0, 1.0, 0.0);
+    heizung.auge = [-0.95, 0.95, -0.55];
+    heizung.ziel = [-1.35, 0.45, 0.95];
+    // mitten in der Fahrt des Autos (Scheinwerferlicht im Zimmer)
+    let mut auto = Ansicht::sitzplatz(15.0, 0.0, 0.0);
+    auto.zeit = 15.0;
     let ganznah = Ansicht::aus_kamera(&roehre_raum::Kamera { naehe: 1.0, schwenk: false, ..Default::default() }, 0.0, g.0 as f32 / g.1 as f32);
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
@@ -765,8 +780,15 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         ("tischkante", tischkante),
         ("ganznah", ganznah),
         ("bedienfeld", bedienfeld),
+        ("fenster", fenster),
+        ("fernbedienung", fernbedienung),
+        ("heizung", heizung),
+        ("auto", auto),
     ];
     for (name, mut a) in ansichten {
+        if let Some(z) = zeit {
+            a.zeit = z;
+        }
         a.rohpixel = !ohne_rohpixel;
         if ohne_korn {
             a.korn = 0.0;

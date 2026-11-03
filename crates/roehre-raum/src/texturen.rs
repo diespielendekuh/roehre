@@ -36,7 +36,8 @@ pub enum Material {
     Lack,
     Lampenschirm,
     Gummi,
-    Nacht,
+    /// Nachthimmel hinter dem Fenster (Himmel, Mond, Sterne rechnet der Shader aus der Blickrichtung)
+    Himmel,
     Gluehbirne,
     LedRot,
     Decke,
@@ -58,18 +59,27 @@ pub enum Material {
     Knopf,
     Kanalskala,
     LedGruen,
+    Wolken,
+    Parkboden,
+    Baumkulisse,
+    Ferne,
+    Laterne,
+    Auto,
+    Heizlack,
+    Taste,
 }
 
-pub const ANZAHL: u32 = Material::LedGruen as u32 + 1;
+pub const ANZAHL: u32 = Material::Taste as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
     use Material::*;
     [
         Furnier, KunststoffSchwarz, Chrom, Lautsprecherstoff, Tapete, Dielen, Teppich, Tischholz, Terrakotta, Erde,
-        Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Nacht, Gluehbirne,
+        Blatt, Kassette, Keramik, KunststoffGrau, Vorhang, Wandbild, Lack, Lampenschirm, Gummi, Himmel, Gluehbirne,
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
         Triebhuelle, Rinde, Buecher, Videorekorder, Blende, Beschriftung, Skala, Knopf, Kanalskala, LedGruen,
+        Wolken, Parkboden, Baumkulisse, Ferne, Laterne, Auto, Heizlack, Taste,
     ]
 };
 
@@ -498,34 +508,10 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let g = 0.018 + 0.008 * wert(u * 200.0, v * 200.0, 200, 181);
             ([g, g, g, 1.0], [0.5, 0.65, 0.0, 0.0])
         }
-        Nacht => {
-            // Neblige Nacht: Dunst, der zur Laterne hin orange aufleuchtet, schemenhafte Häuser
-            // und ein kahler Baum, wenige verschwommene Fenster, Schlieren auf der Scheibe
-            let laterne_d = ((u - 0.68).powi(2) + (v - 0.48).powi(2) * 1.4).sqrt();
-            let dunst = [0.012, 0.013, 0.015];
-            let hof = (-laterne_d * 7.0).exp() * 0.12;
-            let mut c = [dunst[0] + hof, dunst[1] + hof * 0.6, dunst[2] + hof * 0.25];
-            // Häuser: Silhouette mit unruhiger Oberkante, nur wenig dunkler als der Nebel
-            let dach = 0.52 + 0.1 * ((u * 5.0).floor() * 2.3).sin().abs() + 0.02 * fbm(u * 4.0, v, 8, 3, 193);
-            if v > dach {
-                c = mal(c, 0.55);
-                let (fx, fy) = ((u * 24.0).floor() as i32, ((v - dach) * 24.0).floor() as i32);
-                if zufall(fx * 97 + fy, 191) > 0.95 {
-                    let (lx, ly) = (((u * 24.0).fract() - 0.5).abs(), (((v - dach) * 24.0).fract() - 0.5).abs());
-                    let fenster = (1.0 - glatt(0.1, 0.45, lx.max(ly))) * 0.12 * (0.5 + zufall(fx * 31 + fy, 196));
-                    c = [c[0] + fenster * 0.5, c[1] + fenster * 0.33, c[2] + fenster * 0.15];
-                }
-            }
-            // Kahler Baum links: Äste aus Rauschen
-            let baum = glatt(0.58, 0.62, fbm(u * 3.0, v * 2.0, 6, 5, 194)) * glatt(0.45, 0.2, u) * glatt(0.1, 0.4, v);
-            c = mal(c, 1.0 - 0.6 * baum);
-            // Laterne: kleiner Kopf, Lichtkegel im Nebel
-            let kopf = (-laterne_d * 120.0).exp();
-            let kegel = glatt(0.08, 0.0, (u - 0.68).abs() - (v - 0.48).max(0.0) * 0.25) * glatt(0.48, 0.6, v) * (1.0 - glatt(0.6, 1.0, v)) * 0.04;
-            c = [c[0] + kopf * 0.9 + kegel, c[1] + kopf * 0.55 + kegel * 0.6, c[2] + kopf * 0.2 + kegel * 0.2];
-            // Schlieren und Tropfen auf der Scheibe
-            let schliere = glatt(0.7, 0.9, wert(u * 40.0, v * 3.0, 40, 195)) * 0.25;
-            c = mal(c, 1.0 + schliere);
+        Himmel => {
+            // Nur Grundton: Verlauf, Mond, Sterne und Wolken entstehen im Shader aus der
+            // Blickrichtung (unabhängig von der Texturauflösung)
+            let c = mische([0.004, 0.006, 0.016], [0.03, 0.03, 0.04], v);
             ([c[0], c[1], c[2], 1.0], [0.5, 0.0, 0.0, 1.0])
         }
         Gluehbirne => ([1.0, 0.75, 0.45, 1.0], [0.5, 0.1, 0.0, 1.0]),
@@ -575,36 +561,15 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             ([c[0], c[1], c[2], 1.0], [0.5 + 0.1 * faser, 0.9, 0.0, 0.0])
         }
         Fernbedienung => {
-            // Oberseite einer schlanken Fernbedienung: Netztaste, Zifferntasten, Farbtasten,
-            // Programm- und Lautstärkewippen; Aufdrucke als kurze Balken (keine Schrift)
-            let mut c = [0.022, 0.022, 0.024];
-            let mut h = 0.4;
-            let mut rauh = 0.35;
-            let taste = |cx: f32, cy: f32, hx: f32, hy: f32| -> f32 {
-                let d = ((u - cx).abs() - hx).max((v - cy).abs() - hy);
-                1.0 - glatt(-0.004, 0.004, d)
-            };
-            let mut tasten = 0.0f32;
-            let netz = taste(0.75, 0.08, 0.09, 0.025);
-            c = mische(c, [0.35, 0.03, 0.02], netz);
-            for i in 0..12 {
-                let (cx, cy) = (0.25 + (i % 3) as f32 * 0.25, 0.2 + (i / 3) as f32 * 0.075);
-                tasten = tasten.max(taste(cx, cy, 0.09, 0.025));
+            // Deckplatte der Fernbedienung: satiniertes dunkles Aluminium mit feinem Strich in
+            // Längsrichtung, zwei dünne helle Trennlinien zwischen den Tastenfeldern
+            let strich = fbm(u * 64.0, v * 0.5, 64, 2, 581);
+            let mut c = mal([0.085, 0.085, 0.088], 0.9 + 0.18 * strich);
+            for y in [0.27f32, 0.62] {
+                let linie = 1.0 - glatt(0.002, 0.006, (v - y).abs());
+                c = mische(c, [0.40, 0.40, 0.38], linie * glatt(0.08, 0.12, u) * glatt(0.92, 0.88, u));
             }
-            for (i, f) in [[0.35, 0.03, 0.02], [0.03, 0.25, 0.04], [0.35, 0.3, 0.02], [0.03, 0.06, 0.35]].iter().enumerate() {
-                let t = taste(0.14 + i as f32 * 0.24, 0.52, 0.09, 0.018);
-                c = mische(c, *f, t);
-                tasten = tasten.max(t * 0.5);
-            }
-            for cx in [0.3f32, 0.7] {
-                tasten = tasten.max(taste(cx, 0.7, 0.12, 0.08));
-            }
-            c = mische(c, [0.08, 0.08, 0.085], tasten);
-            let aufdruck = glatt(0.6, 0.62, wert(u * 30.0, v * 50.0, 30, 251)) * (1.0 - tasten) * glatt(0.1, 0.15, v);
-            c = mische(c, [0.4, 0.4, 0.4], aufdruck * 0.5);
-            h += 0.4 * tasten + 0.4 * netz;
-            rauh += 0.3 * tasten;
-            ([c[0], c[1], c[2], 1.0], [h, rauh, 0.0, 0.0])
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.05 * strich, 0.34, 0.6, 0.0])
         }
         Triebhuelle => {
             let c = mische([0.28, 0.05, 0.04], [0.12, 0.06, 0.03], v + 0.2 * fbm(u, v, 4, 2, 261));
@@ -709,6 +674,145 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let lentizellen = glatt(0.8, 0.85, wert(u * 30.0, v * 60.0, 30, 272));
             let c = mische(mal([0.05, 0.05, 0.028], 0.8 + 0.4 * n), [0.12, 0.1, 0.06], lentizellen * 0.6);
             ([c[0], c[1], c[2], 1.0], [n, 0.6, 0.0, 0.0])
+        }
+        Wolken => {
+            // Nachtwolken (kachelbar), Farbe und Deckung (Alpha); der Shader schiebt sie langsam
+            // über den Himmel und mischt sie selbst ein (keine Alphaschwelle)
+            let f = fbm(u, v * 2.0, 4, 5, 401);
+            let dicht = glatt(0.45, 0.72, f);
+            let rand = glatt(0.55, 0.45, f) * dicht;
+            let c = mische([0.020, 0.022, 0.030], [0.075, 0.078, 0.090], 0.3 + 0.7 * rand + 0.2 * fbm(u * 2.0, v * 4.0, 8, 3, 402));
+            ([c[0], c[1], c[2], dicht * 0.95], [0.5, 1.0, 0.0, 1.0])
+        }
+        Parkboden => {
+            // Hang des Parks (Weltlage aus u, v wie in `szene::park`): Rasen im Mondlicht, ein
+            // geschwungener Kiesweg, Lichtinseln der Laternen, dunkle Büsche
+            let (x, z) = crate::szene::park_welt(u, v);
+            let rasen = fbm(u * 4.0, v * 4.0, 16, 4, 411);
+            let mut c = mal([0.010, 0.017, 0.012], 0.7 + 0.6 * rasen);
+            let weg = (x - crate::szene::park_weg(z)).abs();
+            c = mische(c, mal([0.040, 0.037, 0.034], 0.8 + 0.4 * wert(u * 128.0, v * 128.0, 128, 412)), glatt(0.5, 0.38, weg));
+            let busch = glatt(0.62, 0.68, fbm(u * 2.0, v * 2.0, 8, 4, 413)) * glatt(0.9, 1.4, weg);
+            c = mal(c, 1.0 - 0.6 * busch);
+            // Straße hinter dem Park (auf ihr fährt ab und zu ein Auto)
+            let strasse = 1.0 - glatt(0.35, 0.45, (z - crate::szene::STRASSE_Z).abs());
+            c = mische(c, mal([0.016, 0.016, 0.018], 0.85 + 0.3 * rasen), strasse);
+            for l in crate::szene::parklaternen() {
+                let d2 = (x - l[0]).powi(2) + (z - l[1]).powi(2);
+                let insel = (-d2 / 2.2).exp();
+                c = [c[0] + 0.11 * insel, c[1] + 0.075 * insel, c[2] + 0.035 * insel];
+            }
+            ([c[0], c[1], c[2], 1.0], [0.5, 1.0, 0.0, 1.0])
+        }
+        Baumkulisse => {
+            // Vier Bäume nebeneinander (u-Viertel): drei Laubbäume mit runder Krone, eine
+            // Tanne. Dunkle Silhouetten, oben ein kühler Saum vom Mond, unten warm von den
+            // Laternen. Alpha als weicher Abstand zur Kante (nicht 0/1): die Alphaschwelle zieht
+            // dann eine glatte Linie zwischen den Texeln statt Treppenstufen
+            let art = ((u * 4.0).floor() as i32).clamp(0, 3);
+            let lu = (u * 4.0).fract();
+            let saat = 420 + art as u32 * 7;
+            let rand = fbm(u * 2.0, v, 16, 4, saat) - 0.5;
+            let texel = 1.0 / 64.0;
+            let (krone, oben) = if art == 3 {
+                let breite = 0.42 * glatt(0.02, 0.85, v) + 0.08 * ((v * 9.0).fract() - 0.5);
+                let d = (lu - 0.5).abs() - (breite + 0.05 * rand);
+                (glatt(1.5 * texel, -1.5 * texel, d) * glatt(0.87, 0.85, v), glatt(0.0, 0.5, v))
+            } else {
+                let (cy, ry, rx) = (0.38 + 0.04 * art as f32, 0.34 - 0.03 * art as f32, 0.44 - 0.04 * art as f32);
+                let d = (((lu - 0.5) / rx).powi(2) + ((v - cy) / ry).powi(2)).sqrt() - (1.0 + 0.45 * rand);
+                (glatt(0.06, -0.06, d), glatt(cy - ry, cy + ry * 0.8, v))
+            };
+            let stamm = glatt(1.5 * texel, -1.5 * texel, (lu - 0.5).abs() - (0.025 + 0.04 * glatt(0.85, 1.0, v))) * glatt(0.43, 0.47, v);
+            let laub = fbm(u * 6.0, v * 6.0, 24, 3, saat + 1);
+            let mut c = mal([0.006, 0.009, 0.007], 0.7 + 0.6 * laub);
+            c = mische(c, [0.020, 0.028, 0.038], (1.0 - oben) * 0.6 * laub);
+            c = mische(c, [0.045, 0.030, 0.014], glatt(0.55, 0.9, oben) * 0.5 * laub);
+            c = mische(c, [0.008, 0.006, 0.005], stamm * (1.0 - krone));
+            ([c[0], c[1], c[2], krone.max(stamm)], [0.5, 1.0, 0.0, 1.0])
+        }
+        Ferne => {
+            // Jenseits des Parks: Baumreihe, dahinter Häuser mit ein paar erleuchteten Fenstern
+            // (eines bläulich: dort läuft auch ein Fernseher), ein Kirchturm
+            let dach = 0.42 + 0.12 * ((u * 9.0).floor() * 1.7).sin().abs() + 0.02 * ((u * 9.0).fract() - 0.5).abs();
+            let turm = (u - 0.68).abs() < 0.012 && v > 0.12 + (u - 0.68).abs() * 6.0;
+            let haus = v > dach || turm;
+            let baumkante = v - (0.56 + 0.08 * fbm(u * 3.0, v, 24, 4, 431));
+            let mut c = [0.010, 0.011, 0.015];
+            let mut a = 0.0;
+            if haus {
+                a = 1.0;
+                let (fx, fy) = ((u * 64.0).floor() as i32, (v * 24.0).floor() as i32);
+                let (lx, ly) = ((u * 64.0).fract(), (v * 24.0).fract());
+                if !turm && zufall(fx * 131 + fy * 7, 432) > 0.88 && lx > 0.25 && lx < 0.75 && ly > 0.3 && ly < 0.8 && v > dach + 0.04 {
+                    c = if zufall(fx + fy * 31, 433) > 0.85 { [0.10, 0.16, 0.30] } else { mal([0.50, 0.33, 0.13], 0.5 + 0.5 * zufall(fx * 3 + fy, 434)) };
+                }
+            }
+            // weiche Kante der Baumreihe (glatte Linie statt Treppen)
+            let baum_a = glatt(-0.006, 0.006, baumkante);
+            if baum_a > 0.0 {
+                c = mische(c, mal([0.005, 0.008, 0.006], 0.7 + 0.6 * fbm(u * 8.0, v * 4.0, 32, 3, 435)), glatt(0.0, 0.006, baumkante));
+                a = f32::max(a, baum_a);
+            }
+            ([c[0], c[1], c[2], a], [0.5, 1.0, 0.0, 1.0])
+        }
+        Laterne => {
+            // Links eine Parklaterne (Mast, Laternenkopf mit leuchtendem Glas), rechts oben eine
+            // Parkbank, beides als Silhouette
+            let (mut c, mut a) = ([0.008f32, 0.008, 0.009], 0.0f32);
+            if u < 0.5 {
+                let lu = u * 2.0;
+                let mast = (lu - 0.5).abs() < 0.035 + 0.05 * glatt(0.9, 1.0, v) && v > 0.2;
+                let glas = (lu - 0.5).abs() < 0.10 + 0.08 * glatt(0.18, 0.06, v) && v > 0.06 && v < 0.19;
+                let kappe = (lu - 0.5).abs() < 0.2 * glatt(0.0, 0.06, v) && v < 0.065 && v > 0.02;
+                if mast || kappe { a = 1.0; }
+                if glas { a = 1.0; c = [0.85, 0.58, 0.28]; }
+            } else if v < 0.5 {
+                let (lu, lv) = ((u - 0.5) * 2.0, v * 2.0);
+                let lehne = lv > 0.30 && lv < 0.50 && ((lv - 0.40).abs() > 0.03);
+                let sitz = lv > 0.62 && lv < 0.70;
+                let beine = lv > 0.62 && ((lu - 0.12).abs() < 0.03 || (lu - 0.88).abs() < 0.03);
+                if (lehne || sitz) && lu > 0.05 && lu < 0.95 || beine { a = 1.0; }
+                if sitz { c = [0.03, 0.022, 0.014]; }
+            }
+            ([c[0], c[1], c[2], a], [0.5, 1.0, 0.0, 1.0])
+        }
+        Auto => {
+            // Ein Auto auf der Straße hinter dem Park, nur die Scheinwerfer und ein Schatten
+            let mut a = 0.0;
+            let mut c = [0.006f32, 0.006, 0.007];
+            let karosserie = v > 0.35 && v < 0.85 && (u - 0.5).abs() < 0.45 - 0.2 * glatt(0.5, 0.35, v);
+            if karosserie { a = 1.0; }
+            for x in [0.2f32, 0.8] {
+                let d = ((u - x).powi(2) + (v - 0.62).powi(2) * 2.0).sqrt();
+                if d < 0.07 {
+                    a = 1.0;
+                    c = [1.0, 0.95, 0.82];
+                }
+            }
+            ([c[0], c[1], c[2], a], [0.5, 1.0, 0.0, 1.0])
+        }
+        Heizlack => {
+            // Heizkörperlack der 60er auf Gusseisen: warmes Altweiß, vergilbt, Läufer vom
+            // Streichen, Staub in den Tiefen, an Kanten abgeplatzt bis aufs dunkle Eisen
+            let laeufer = fbm(u * 0.5, v * 6.0, 4, 3, 461);
+            let staub_l = glatt(0.55, 0.8, fbm(u, v, 6, 4, 462));
+            let mut c = mische([0.46, 0.43, 0.36], [0.38, 0.34, 0.25], 0.4 * laeufer + 0.4 * staub_l);
+            let abplatzer = glatt(0.83, 0.86, fbm(u * 2.0, v * 2.0, 16, 4, 463));
+            c = mische(c, [0.05, 0.045, 0.04], abplatzer);
+            ([c[0], c[1], c[2], 1.0], [0.5 + 0.2 * laeufer - 0.3 * abplatzer, 0.38 + 0.25 * staub_l + 0.3 * abplatzer, 0.0, 0.0])
+        }
+        Taste => {
+            // Gummitasten einer Fernbedienung: u-Felder grau (Ränder), rot, grün, gelb
+            let feld = (u * 8.0).floor() as i32;
+            let c = match feld {
+                2 | 3 => [0.30, 0.03, 0.02],
+                4 => [0.03, 0.20, 0.05],
+                5 => [0.40, 0.30, 0.02],
+                _ => [0.055, 0.055, 0.06],
+            };
+            let k = 0.92 + 0.08 * wert(u * 64.0, v * 64.0, 64, 471);
+            ([c[0] * k, c[1] * k, c[2] * k, 1.0], [0.5, 0.62, 0.0, 0.0])
         }
         Bildroehre => ([0.0, 0.0, 0.0, 1.0], [0.5, 0.05, 0.0, 0.0]),
     }

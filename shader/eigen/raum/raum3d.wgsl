@@ -25,7 +25,7 @@ struct Szene {
     nachbild: vec4<f32>,
     // Abstand der Schärfeebene (m), Stärke der Tiefenunschärfe, Stärke des Glühens, frei
     fokus: vec4<f32>,
-    // Rohpixel (1 = an), Stärke der Vignette, frei, frei
+    // Rohpixel (1 = an), Stärke der Vignette, Leben der Szene (0 … 1), frei
     raumbild: vec4<f32>,
 };
 
@@ -44,10 +44,80 @@ const M_KUNSTSTOFF_SCHWARZ: u32 = 1u;
 const M_CHROM: u32 = 2u;
 const M_BLATT: u32 = 10u;
 const M_LAMPENSCHIRM: u32 = 17u;
-const M_NACHT: u32 = 19u;
+const M_HIMMEL: u32 = 19u;
 const M_GLUEHBIRNE: u32 = 20u;
 const M_LED: u32 = 21u;
 const M_BILDROEHRE: u32 = 26u;
+const M_WOLKEN: u32 = 40u;
+const M_BAUM: u32 = 42u;
+const M_AUTO: u32 = 45u;
+
+// Draußen (Himmel, Park, Bäume, Ferne, Laternen, Auto): gemalt, leuchtet selbst, ohne
+// Zimmerlicht und ohne Zimmernebel
+fn draussen(m: u32) -> bool {
+    return m == M_HIMMEL || (m >= 40u && m <= 45u);
+}
+
+// Leben der Szene (Option raum.leben): Wolken, Auto, Bäume im Wind
+fn leben() -> f32 {
+    return szene.raumbild.z;
+}
+
+// Ein Auto fährt alle 21 s auf der Straße hinter dem Park von rechts nach links (6,5 s).
+// Ergebnis: Lage (x verschiebt die Kulisse) und Stärke seines Lichts am Fenster (0 außerhalb
+// der Fahrt, in der Mitte am hellsten).
+fn auto_licht(t: f32) -> vec4<f32> {
+    let periode = 21.0;
+    let dauer = 6.5;
+    let ph = (t + 9.0) - floor((t + 9.0) / periode) * periode;
+    if (ph > dauer || leben() <= 0.0) {
+        return vec4<f32>(60.0, 1.5, 14.3, 0.0);
+    }
+    let s = ph / dauer;
+    let staerke = pow(sin(3.14159265 * s), 2.0) * leben();
+    return vec4<f32>(7.0 - 18.0 * s, 1.5, 14.3, staerke);
+}
+
+// Richtung zum Mond und Wolkenlage am Himmel (aus der Blickrichtung, von der Textur
+// unabhängig). Die Wolken ziehen sehr langsam nach links.
+const MOND: vec3<f32> = vec3<f32>(-0.2577, 0.1909, 0.9472);
+fn wolken_uv(d: vec3<f32>) -> vec2<f32> {
+    let t = szene.auge.w;
+    return vec2<f32>(d.x / d.z, d.y / max(d.z, 0.05)) * vec2<f32>(0.8, 1.6) + vec2<f32>(t * 0.006 * leben() + 0.31, 0.12);
+}
+// Wie dicht die Wolken gerade vor dem Mond stehen (0 … 1): dimmt das Mondlicht im Zimmer
+fn wolke_vor_mond() -> f32 {
+    return textureSampleLevel(farben, kachel, wolken_uv(MOND), M_WOLKEN, 3.0).a;
+}
+
+fn himmel(d: vec3<f32>) -> vec3<f32> {
+    let t = szene.auge.w;
+    let hoehe = clamp(d.y / max(d.z, 0.05) * 2.2 + 0.15, 0.0, 1.0);
+    // Verlauf: unten der warme Schein der Stadt, oben tiefes Nachtblau
+    var c = mix(vec3<f32>(0.030, 0.026, 0.030), vec3<f32>(0.004, 0.006, 0.016), sqrt(hoehe));
+    // Sterne: ein Punkt je Zelle mit geringer Wahrscheinlichkeit, leicht funkelnd
+    let q = vec2<f32>(d.x / d.z, d.y / d.z) * 260.0;
+    let zelle = floor(q);
+    let h = fract(sin(dot(zelle, vec2<f32>(127.1, 311.7))) * 43758.5453);
+    if (h > 0.985) {
+        let lage = vec2<f32>(fract(h * 17.0), fract(h * 31.0)) * 0.6 + 0.2;
+        let punkt = 1.0 - smoothstep(0.05, 0.16, length(fract(q) - lage));
+        let funkeln = 0.75 + 0.25 * sin(t * (2.0 + h * 5.0) + h * 40.0);
+        c += vec3<f32>(0.55, 0.58, 0.7) * punkt * (h - 0.985) / 0.015 * funkeln * hoehe;
+    }
+    // Mond mit Hof und dunkleren Meeren
+    let w = acos(clamp(dot(d, MOND), -1.0, 1.0));
+    let r = 0.0105;
+    let scheibe = 1.0 - smoothstep(r * 0.92, r, w);
+    let ort = (d - MOND * dot(d, MOND)) / r;
+    let meere = 0.82 + 0.18 * sin(ort.x * 5.0 + 1.0) * sin(ort.y * 4.0 + ort.x * 2.0);
+    c = mix(c, vec3<f32>(0.95, 0.93, 0.85) * meere, scheibe);
+    c += vec3<f32>(0.10, 0.11, 0.13) * exp(-w * 22.0) + vec3<f32>(0.03, 0.035, 0.045) * exp(-w * 5.0);
+    // Wolken, vom Mond her aufgehellt
+    let wo = textureSampleLevel(farben, kachel, wolken_uv(d), M_WOLKEN, 1.0);
+    let lichtsaum = 0.6 + 1.6 * exp(-w * 9.0);
+    return mix(c, wo.rgb * lichtsaum, wo.a);
+}
 
 struct Ecke {
     @location(0) lage: vec3<f32>,
@@ -61,6 +131,15 @@ fn bewegt(e: Ecke) -> vec3<f32> {
     // Vorhang: sachte Wellen im Luftzug, unten stärker
     let t = szene.auge.w;
     let w = e.wind * (0.018 * sin(t * 0.7 + e.lage.x * 4.0) + 0.008 * sin(t * 1.3 + e.lage.y * 6.0));
+    // Bäume im Park: die Krone wiegt sich seitlich, jeder Baum im eigenen Takt
+    if (e.material == M_BAUM) {
+        let b = e.wind * leben() * (0.012 * sin(t * 0.55 + e.lage.z * 1.7) + 0.005 * sin(t * 1.4 + e.lage.x));
+        return e.lage + vec3<f32>(b, 0.0, 0.0);
+    }
+    // Auto: entlang der Straße verschoben
+    if (e.material == M_AUTO) {
+        return e.lage + vec3<f32>(auto_licht(t).x, 0.0, 0.0);
+    }
     return e.lage + vec3<f32>(0.0, 0.0, w);
 }
 
@@ -164,7 +243,7 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         // die echten, damit Mip-Stufe und anisotrope Filterung in der Ferne gleich arbeiten.
         // Ohne Rohpixel wird bilinear geglättet.
         let tg = vec2<f32>(textureDimensions(farben));
-        let uv_roh = select(e.uv, (floor(e.uv * tg) + 0.5) / tg, szene.raumbild.x > 0.5);
+        let uv_roh = select(e.uv, (floor(e.uv * tg) + 0.5) / tg, szene.raumbild.x > 0.5 && !draussen(e.material));
         let duv_x = dpdx(e.uv);
         let duv_y = dpdy(e.uv);
         let farbe = textureSampleGrad(farben, kachel, uv_roh, e.material, duv_x, duv_y);
@@ -246,8 +325,34 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         let zum_fenster = vec3<f32>(-1.35, 1.55, 1.15) - e.welt;
         let df = length(zum_fenster);
         let lf = zum_fenster / df;
-        let fenster_licht = vec3<f32>(0.30, 0.36, 0.50) * max(lf.z, 0.0) / (df * df + 0.6);
+        // Ziehen Wolken vor den Mond, wird es etwas dunkler; fährt draußen ein Auto vorbei,
+        // hellt sein Licht den Schein des Fensters kurz warm auf
+        let mondlicht = mix(1.0, 0.45, wolke_vor_mond());
+        let fahrt = auto_licht(szene.auge.w).w;
+        let fenster_licht = (vec3<f32>(0.30, 0.36, 0.50) * mondlicht + vec3<f32>(0.55, 0.50, 0.40) * fahrt)
+            * max(lf.z, 0.0) / (df * df + 0.6);
         c += diffus * fenster_licht * max(dot(n, lf), 0.0) * kante;
+
+        // Mondlicht fällt durchs Fenster und zeichnet Scheiben und Sprossen als kühlen Fleck
+        // auf den Teppich vor dem Heizkörper. Die Richtung ist bewusst steiler als der Mond,
+        // den man im Fenster sieht (sonst fiele der Fleck hinter die Kamera). Ob ein Punkt im Licht liegt, entscheidet der
+        // Durchstoß des Strahls zum Mond durch die Wandebene: innerhalb der Scheiben, nicht auf
+        // Rahmen oder Sprossen (Schatten der Möbel davor rechnet das nicht).
+        if (e.welt.z < 1.05) {
+            let zum_mond = normalize(vec3<f32>(-0.2, 1.0, 1.0));
+            let q = e.welt + zum_mond * ((1.05 - e.welt.z) / zum_mond.z);
+            let in_x = smoothstep(0.0, 0.02, min(q.x + 1.82, -0.88 - q.x));
+            let in_y = smoothstep(0.0, 0.02, min(q.y - 0.98, 2.12 - q.y));
+            let sprossen = smoothstep(0.016, 0.03, abs(q.x + 1.35)) * smoothstep(0.016, 0.03, abs(q.y - 1.70));
+            // die Tischplatte (x ±0,81, z −0,47 … 0,37, 0,69 hoch) wirft ihren Schatten hinein
+            var tisch = 1.0;
+            if (e.welt.y < 0.66) {
+                let r = e.welt + zum_mond * ((0.69 - e.welt.y) / zum_mond.y);
+                tisch = 1.0 - smoothstep(-0.02, 0.02, min(0.81 - abs(r.x), min(r.z + 0.47, 0.37 - r.z)));
+            }
+            let mond = vec3<f32>(0.28, 0.36, 0.55) * 0.7 * mondlicht;
+            c += diffus * mond * max(dot(n, zum_mond), 0.0) * in_x * in_y * sprossen * tisch;
+        }
 
         // Umgebung und Spiegelung
         c += diffus * umgebungslicht(n) * kante;
@@ -264,13 +369,19 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         if (e.material == M_LAMPENSCHIRM) { leuchten *= szene.lampe.w * 0.9; }
         if (e.material == M_GLUEHBIRNE) { leuchten *= szene.lampe.w * 4.0; }
         if (e.material == M_LED) { leuchten *= 1.5; }
-        if (e.material == M_NACHT) { leuchten *= 0.8; }
         c += albedo * leuchten;
         strahlt = leuchten > 0.01;
+        if (draussen(e.material)) {
+            // gemalte Farben gedämpft auf Nachthelligkeit; nur Leuchtendes (Laternenglas,
+            // Scheinwerfer, Fenster in der Ferne) bleibt hell
+            let hell = max(farbe.r, max(farbe.g, farbe.b)) > 0.5;
+            c = select(farbe.rgb * select(0.35, 0.9, hell), himmel(blick), e.material == M_HIMMEL);
+            strahlt = true;
+        }
     }
 
     // Nebel: dichter Dunst, leicht grünlich-grau, vom Lampenlicht etwas aufgehellt
-    let nebel = 1.0 - exp(-entfernung * szene.nachbild.x);
+    let nebel = select(1.0 - exp(-entfernung * szene.nachbild.x), 0.0, draussen(e.material));
     let nebelfarbe = vec3<f32>(0.010, 0.012, 0.011) + lampe_farbe() * 0.004;
     c = mix(c, nebelfarbe, nebel);
     // Alpha trägt die Entfernung für die Tiefenunschärfe; negativ heißt »leuchtet selbst« und

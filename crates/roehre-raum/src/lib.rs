@@ -54,6 +54,8 @@ pub struct Ansicht {
     pub rohpixel: bool,
     /// Stärke der Vignette 0 … 1 (0 = aus)
     pub vignette: f32,
+    /// Leben der Szene 0 … 1: Wolken ziehen, ab und zu ein Auto, Bäume im Wind (0 = still)
+    pub leben: f32,
 }
 
 /// Kamera des Raums, wie sie die Optionen der Gruppe `raum` beschreiben (W-005).
@@ -207,6 +209,7 @@ impl Ansicht {
             gluehen: 0.5,
             rohpixel: true,
             vignette: 1.0,
+            leben: 1.0,
         }
     }
 
@@ -220,6 +223,7 @@ impl Ansicht {
         a.gluehen = e.zahl("raum.gluehen") as f32;
         a.rohpixel = e.schalter("raum.rohpixel");
         a.vignette = e.zahl("raum.vignette") as f32;
+        a.leben = e.zahl("raum.leben") as f32;
         a
     }
 
@@ -679,7 +683,8 @@ impl Raum {
         self.ziele_sichern(device, groesse);
         let ziele = self.ziele.as_ref().expect("gesichert");
         let seite = groesse.0 as f32 / groesse.1.max(1) as f32;
-        let mut projektion = perspektive(a.blickwinkel, seite, 0.03, 20.0);
+        // fern 40 m: der Park hinter dem Fenster reicht bis 17 m
+        let mut projektion = perspektive(a.blickwinkel, seite, 0.03, 40.0);
         // außermittig: x_ndc += verschiebung (w = −z_Ansicht)
         projektion[2][0] = -a.verschiebung[0];
         projektion[2][1] = -a.verschiebung[1];
@@ -696,7 +701,7 @@ impl Raum {
         w.extend([a.nebel, a.korn, if self.srgb { 1.0 } else { 0.0 }, a.belichtung]);
         let fokus = geometrie::sub(szene::BILD_MITTE, a.auge);
         w.extend([geometrie::dot(fokus, fokus).sqrt(), a.unschaerfe, a.gluehen, 0.0]);
-        w.extend([if a.rohpixel { 1.0 } else { 0.0 }, a.vignette, 0.0, 0.0]);
+        w.extend([if a.rohpixel { 1.0 } else { 0.0 }, a.vignette, a.leben, 0.0]);
         let bytes: Vec<u8> = w.iter().flat_map(|f| f.to_le_bytes()).collect();
         queue.write_buffer(&self.uniform, 0, &bytes);
         let mut mw = *material;

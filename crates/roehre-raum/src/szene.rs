@@ -18,6 +18,37 @@ pub const PFLANZE: V3 = [1.12, 0.0, 0.08];
 /// Lage der Glühbirne der Stehlampe (Lichtquelle), in der hinteren rechten Zimmerecke.
 pub const LAMPE: V3 = [1.95, 1.48, 0.70];
 
+/// Der Park hinter dem Fenster: ein Hang, der vom Haus weg ansteigt (so sieht man ihn auch
+/// vom Sessel aus über die Fensterbank), Ausschnitt in Weltlage x −12 … 6, z 1,55 … 16,05.
+const PARK_X0: f32 = -12.0;
+const PARK_B: f32 = 18.0;
+const PARK_Z0: f32 = 1.55;
+const PARK_T: f32 = 14.5;
+/// Straße hinter dem Park (z), auf der gelegentlich ein Auto fährt (Shader: `auto_x`).
+pub const STRASSE_Z: f32 = 14.3;
+
+/// Weltlage (x, z) eines Punkts der Parktextur.
+pub fn park_welt(u: f32, v: f32) -> (f32, f32) {
+    (PARK_X0 + u * PARK_B, PARK_Z0 + v * PARK_T)
+}
+
+/// Höhe des Parkhangs (die Straße davor liegt 0,6 m unter dem Zimmerboden).
+pub fn park_hoehe(x: f32, z: f32) -> f32 {
+    let dz = z - 1.05;
+    let t = ((dz - 3.5) / 10.5).clamp(0.0, 1.0);
+    -0.6 + 1.5 * t * t * (3.0 - 2.0 * t) + 0.15 * (x * 0.4).sin() * t
+}
+
+/// Mittellinie des Kieswegs (x zu z).
+pub fn park_weg(z: f32) -> f32 {
+    -3.0 + 1.6 * (z * 0.45).sin()
+}
+
+/// Laternen am Weg (x, z).
+pub fn parklaternen() -> [[f32; 2]; 3] {
+    [6.5f32, 9.5, 12.5].map(|z| [park_weg(z) + 0.75, z])
+}
+
 /// Baut die ganze Szene.
 pub fn bauen() -> Netz {
     let mut n = Netz::default();
@@ -30,7 +61,48 @@ pub fn bauen() -> Netz {
     kabel(&mut n);
     stehlampe(&mut n);
     regal(&mut n);
+    park(&mut n);
     n
+}
+
+/// Senkrechte Kulisse (Normale −z) auf dem Boden bei `fuss`, Breite × Höhe, Ausschnitt `uv`
+/// der Textur; `wind` lässt die Oberkante im Wind schwanken (Bäume).
+fn kulisse(n: &mut Netz, fuss: V3, breite: f32, hoehe: f32, m: crate::texturen::Material, uv: [f32; 4], wind: f32) {
+    n.gitter(&Trafo::bei(fuss), (1, 4), m, wind, |s, q| {
+        ([(s - 0.5) * breite, q * hoehe, 0.0], [0.0, 0.0, -1.0], [uv[0] + s * uv[2], uv[1] + (1.0 - q) * uv[3]])
+    });
+}
+
+/// Was man durchs Fenster sieht: ein kleiner Park am Hang bei Nacht. Alles leuchtet selbst
+/// (gemalt), unbeleuchtet vom Zimmer und ohne dessen Nebel: Himmel (Mond, Sterne und ziehende
+/// Wolken im Shader), Baumreihe und Häuser in der Ferne, Straße, Hang mit Weg, Laternen,
+/// Bank und einzelnen Bäumen, die sich im Wind wiegen.
+fn park(n: &mut Netz) {
+    // Himmel weit hinten, groß genug für jede Kamerastellung
+    kulisse(n, [-3.0, -1.0, 16.6], 44.0, 18.0, Himmel, [0.0, 0.0, 1.0, 1.0], 0.0);
+    // Ferne: Häuser und Baumreihe auf der Kuppe
+    kulisse(n, [-3.0, park_hoehe(-3.0, 15.7) - 0.4, 15.7], 32.0, 4.4, Ferne, [0.0, 0.0, 1.0, 1.0], 0.0);
+    // Hang mit Rasen, Weg und Straße
+    n.gitter(&Trafo::bei([0.0; 3]), (48, 48), Parkboden, 0.0, |s, q| {
+        let (x, z) = park_welt(s, q);
+        ([x, park_hoehe(x, z), z], [0.0, 1.0, 0.0], [s, q])
+    });
+    // Auto (vom Shader entlang der Straße verschoben, sonst weit außerhalb)
+    kulisse(n, [0.0, park_hoehe(0.0, STRASSE_Z) - 0.05, STRASSE_Z], 1.9, 0.95, Auto, [0.0, 0.0, 1.0, 1.0], 0.0);
+    // Bäume (x, z, Höhe, Art 0–3), von hinten nach vorn
+    for (x, z, h, art) in [
+        (-9.5f32, 13.8f32, 6.5f32, 0u32), (-6.8, 13.2, 5.5, 3), (-1.2, 13.6, 6.0, 1), (2.6, 13.0, 5.0, 2),
+        (-7.6, 10.4, 6.0, 1), (-0.4, 10.8, 5.2, 0), (-4.8, 8.2, 4.6, 2), (1.6, 7.6, 6.2, 3), (-9.0, 6.8, 6.4, 0),
+    ] {
+        let breite = if art == 3 { h * 0.55 } else { h * 0.85 };
+        kulisse(n, [x, park_hoehe(x, z) - 0.1, z], breite, h, Baumkulisse, [art as f32 / 4.0, 0.0, 0.25, 1.0], 6.0);
+    }
+    // Laternen am Weg und eine Bank unter der mittleren
+    for [x, z] in parklaternen() {
+        kulisse(n, [x, park_hoehe(x, z) - 0.05, z - 0.01], 0.95, 3.4, Laterne, [0.0, 0.0, 0.5, 1.0], 0.0);
+    }
+    let [lx, lz] = parklaternen()[1];
+    kulisse(n, [lx - 1.1, park_hoehe(lx - 1.1, lz) - 0.05, lz - 0.2], 1.7, 0.85, Laterne, [0.5, 0.0, 0.5, 0.5], 0.0);
 }
 
 fn zimmer(n: &mut Netz) {
@@ -62,9 +134,7 @@ fn zimmer(n: &mut Netz) {
     n.quader(&Trafo::bei([links + 0.008, 0.035, (hinten + vorn) / 2.0]), [0.008, 0.035, (hinten - vorn) / 2.0], 0.003, Furnier, 2.0);
     n.quader(&Trafo::bei([rechts - 0.008, 0.035, (hinten + vorn) / 2.0]), [0.008, 0.035, (hinten - vorn) / 2.0], 0.003, Furnier, 2.0);
 
-    // Fenster: Nacht dahinter, Rahmen mit Sprossen, Fensterbank
-    let nacht = Trafo::bei([(fx0 + fx1) / 2.0, (fy0 + fy1) / 2.0, hinten + 0.12]);
-    n.flaeche(&nacht, [(fx1 - fx0) / 2.0 + 0.1, (fy1 - fy0) / 2.0 + 0.1], Nacht, [0.0, 0.0, 1.0, 1.0]);
+    // Fenster: Rahmen mit Sprossen, Fensterbank; dahinter der Park (`park`)
     let (mx, my) = ((fx0 + fx1) / 2.0, (fy0 + fy1) / 2.0);
     for (x, y, hx, hy) in [
         (mx, fy0, 0.53, 0.03),
@@ -82,27 +152,81 @@ fn zimmer(n: &mut Netz) {
         n.quader(&Trafo::bei([x, my, hinten + 0.06]), [0.005, 0.6, 0.06], 0.0, Tapete, 1.0);
     }
     n.quader(&Trafo::bei([mx, fy1 + 0.005, hinten + 0.06]), [0.5, 0.005, 0.06], 0.0, Tapete, 1.0);
-    // Vorhangstange und zwei Vorhänge in Falten (Windgewicht für sachte Bewegung)
-    n.zylinder(&Trafo::bei([fx0 - 0.25, fy1 + 0.15, hinten - 0.1]).nach(&Trafo::dreh_z(-std::f32::consts::FRAC_PI_2)), 0.012, fx1 - fx0 + 0.5, 10, RahmenHolz);
-    for (x0, breite) in [(fx0 - 0.25, 0.38), (fx1 - 0.08, 0.32)] {
-        let hoehe = fy1 + 0.13 - 0.35;
-        n.gitter(&Trafo::bei([x0, fy1 + 0.13, hinten - 0.1]), (24, 8), Vorhang, 1.0, |s, q| {
-            let falte = (s * 24.0 * std::f32::consts::PI).sin();
-            ([s * breite, -q * hoehe, 0.035 * falte], crate::geometrie::norm([-0.035 * 24.0 * std::f32::consts::PI / breite * (s * 24.0 * std::f32::consts::PI).cos(), 0.0, -1.0]), [s * 2.0, q * 3.0])
+    n.quader(&Trafo::bei([mx, fy0 + 0.005, hinten + 0.06]), [0.5, 0.005, 0.06], 0.0, Lack, 1.0);
+    // Vorhangstange mit Haltern und zwei bodenlange Vorhänge in Falten, vor der Fensterbank
+    // (die ragt bis 0,12 m in den Raum; die Falten liegen 0,13 … 0,21 m vor der Wand)
+    let stange_z = hinten - 0.17;
+    let stange_y = fy1 + 0.15;
+    n.zylinder(&Trafo::bei([fx0 - 0.42, stange_y, stange_z]).nach(&Trafo::dreh_z(-std::f32::consts::FRAC_PI_2)), 0.013, fx1 - fx0 + 0.84, 12, RahmenHolz);
+    for x in [fx0 - 0.36, fx1 + 0.36] {
+        n.quader(&Trafo::bei([x, stange_y, (stange_z + hinten) / 2.0]), [0.008, 0.008, (hinten - stange_z) / 2.0], 0.003, RahmenHolz, 4.0);
+        n.drehkoerper(&Trafo::bei([x, stange_y, hinten - 0.003]).nach(&Trafo::dreh_x(-std::f32::consts::FRAC_PI_2)), &[(0.0, 0.0), (0.03, 0.0), (0.028, 0.006), (0.0, 0.008)], 16, RahmenHolz, 1.0);
+    }
+    for (kn, x0, breite, nach_innen) in [(0, fx0 - 0.40, 0.50f32, 1.0f32), (1, fx1 - 0.10, 0.50, -1.0)] {
+        let oben = stange_y - 0.02;
+        let hoehe = oben - 0.015;
+        let falten = 9.0;
+        n.gitter(&Trafo::bei([x0, oben, stange_z]), (60, 16), Vorhang, 1.0, |s, q| {
+            // Falten werden nach unten tiefer und weiter; die Innenkante fällt leicht schräg
+            let tiefe = 0.028 + 0.014 * q;
+            let w = s * falten * std::f32::consts::TAU + kn as f32;
+            let schraeg = if nach_innen > 0.0 { s } else { 1.0 - s };
+            let x = s * breite + nach_innen * 0.03 * q * schraeg;
+            let z = tiefe * w.sin() - 0.004 * q;
+            let dz_ds = tiefe * falten * std::f32::consts::TAU * w.cos();
+            ([x, -q * hoehe, z], norm([-dz_ds / breite, 0.0, -1.0]), [s * 2.0, q * 3.0])
         });
     }
-    // Heizkörper unter dem Fenster: Rippen, Rohre
-    for i in 0..14 {
-        let x = fx0 + 0.12 + i as f32 * 0.055;
-        n.quader(&Trafo::bei([x, 0.5, hinten - 0.09]), [0.02, 0.28, 0.04], 0.012, Lack, 3.0);
-    }
-    n.rohr(&[[fx0 + 0.08, 0.25, hinten - 0.09], [fx1 - 0.15, 0.25, hinten - 0.09]], 0.012, 8, Lack);
-    n.rohr(&[[fx0 + 0.08, 0.75, hinten - 0.09], [fx1 - 0.15, 0.75, hinten - 0.09]], 0.012, 8, Lack);
-    n.rohr(&[[fx1 - 0.1, 0.55, hinten - 0.09], [fx1 - 0.1, 0.0, hinten - 0.09]], 0.01, 8, Chrom);
+    heizkoerper(n, fx0, fx1, hinten);
 
     // Bild an der Wand rechts vom Fernseher: alter Goldrahmen, Passepartout, Foto
     bilderrahmen(n, [0.55, 1.62, hinten], [0.27, 0.27], 0.065);
 
+}
+
+/// Gliederheizkörper aus Gusseisen unter dem Fenster: Glieder aus je zwei Säulen, oben und
+/// unten durch Naben verbunden (die Stöße zeigen sich als Kerben), zwei Standfüße,
+/// Thermostatventil mit geripptem Kopf rechts oben, Vor- und Rücklauf aus dem Boden.
+fn heizkoerper(n: &mut Netz, fx0: f32, fx1: f32, hinten: f32) {
+    let glieder = 15;
+    let teilung = 0.052;
+    let x0 = (fx0 + fx1) / 2.0 - (glieder - 1) as f32 * teilung / 2.0;
+    let (y_unten, y_oben) = (0.16, 0.70);
+    let zm = hinten - 0.085;
+    let quer = Trafo::dreh_z(-std::f32::consts::FRAC_PI_2);
+    for i in 0..glieder {
+        let x = x0 + i as f32 * teilung;
+        for dz in [-0.022f32, 0.022] {
+            n.quader(&Trafo::bei([x, (y_unten + y_oben) / 2.0, zm + dz]), [0.016, (y_oben - y_unten) / 2.0 + 0.012, 0.012], 0.0115, Heizlack, 3.0);
+        }
+        // Naben oben und unten (Profil mit Kerbe an beiden Enden)
+        for y in [y_unten, y_oben] {
+            n.drehkoerper(
+                &Trafo::bei([x - teilung / 2.0, y, zm]).nach(&quer),
+                &[(0.0, 0.0), (0.021, 0.0), (0.027, 0.006), (0.029, 0.026), (0.027, teilung - 0.006), (0.021, teilung), (0.0, teilung)],
+                18,
+                Heizlack,
+                2.0,
+            );
+        }
+    }
+    let x1 = x0 + (glieder - 1) as f32 * teilung;
+    // Standfüße unter dem zweiten und vorletzten Glied
+    for x in [x0 + teilung, x1 - teilung] {
+        n.quader(&Trafo::bei([x, y_unten / 2.0 - 0.01, zm]), [0.02, y_unten / 2.0 - 0.01, 0.045], 0.006, Heizlack, 3.0);
+    }
+    // Vorlauf: Ventil rechts oben, Rohr hinunter in den Boden
+    let xv = x1 + teilung / 2.0;
+    n.rohr(&[[xv, y_oben, zm], [xv + 0.07, y_oben, zm]], 0.011, 10, Chrom);
+    n.drehkoerper(&Trafo::bei([xv + 0.075, y_oben - 0.03, zm]), &[(0.0, 0.0), (0.017, 0.0), (0.019, 0.05), (0.014, 0.06), (0.0, 0.062)], 14, Chrom, 1.0);
+    n.drehkoerper(&Trafo::bei([xv + 0.075, y_oben + 0.03, zm]), &[(0.0, 0.0), (0.024, 0.0), (0.025, 0.01), (0.025, 0.07), (0.022, 0.078), (0.0, 0.08)], 24, Knopf, 1.0);
+    n.drehkoerper(&Trafo::bei([xv + 0.075, y_oben + 0.112, zm]), &[(0.0, 0.0), (0.02, 0.0), (0.0, 0.002)], 16, Heizlack, 1.0);
+    n.rohr(&[[xv + 0.075, y_oben - 0.03, zm], [xv + 0.075, 0.0, zm]], 0.011, 10, Heizlack);
+    // Rücklauf links unten
+    n.rohr(&[[x0 - teilung / 2.0, y_unten, zm], [x0 - teilung / 2.0 - 0.06, y_unten, zm], [x0 - teilung / 2.0 - 0.07, y_unten - 0.01, zm], [x0 - teilung / 2.0 - 0.07, 0.0, zm]], 0.011, 10, Heizlack);
+    for x in [xv + 0.075, x0 - teilung / 2.0 - 0.07] {
+        n.drehkoerper(&Trafo::bei([x, 0.0, zm]), &[(0.0, 0.0), (0.03, 0.0), (0.03, 0.004), (0.0, 0.005)], 14, Chrom, 1.0);
+    }
 }
 
 /// Goldrahmen mit geschwungenem Profil (Kehle, Wulst, Perlstab), auf Gehrung; innen ein
@@ -349,7 +473,7 @@ fn bediensaeule(n: &mut Netz, x0: f32, x1: f32, y0: f32, y1: f32, fz: f32) {
     }
     // Farbe: kleiner blauer Drucker unten in der Leiste
     aufdruck(n, (x0 + leiste_x1) / 2.0, unten + 0.03, fz + 0.0035, 0.022, 6);
-    n.drehkoerper(&Trafo::bei([(x0 + leiste_x1) / 2.0, unten + 0.016, fz + 0.004]).nach(&rx), &[(0.0, 0.0), (0.006, 0.0), (0.006, 0.004), (0.004, 0.0052), (0.0, 0.0054)], 18, Fernbedienung, 1.0);
+    n.drehkoerper(&Trafo::bei([(x0 + leiste_x1) / 2.0, unten + 0.016, fz + 0.004]).nach(&rx), &[(0.0, 0.0), (0.006, 0.0), (0.006, 0.004), (0.004, 0.0052), (0.0, 0.0054)], 18, Knopf, 1.0);
     // Wählerplatte
     let wx0 = leiste_x1 + fuge;
     platte(n, wx0, x1, unten + fuge, oben, fz, KunststoffSchwarz);
@@ -416,11 +540,40 @@ fn kleinkram(n: &mut Netz) {
         [tasse[0] + 0.04 + 0.025 * w.cos(), tasse[1] + 0.05 + 0.028 * w.sin(), tasse[2]]
     }).collect();
     n.rohr(&henkel, 0.006, 8, Keramik);
-    // Fernbedienung: flaches, schlankes Gehäuse, Tasten als Textur auf der Oberseite
-    let fb = Trafo::bei([0.22, TISCH_HOEHE + 0.007, -0.34]).nach(&Trafo::dreh_y(-0.45));
-    n.quader(&fb, [0.022, 0.007, 0.092], 0.005, KunststoffSchwarz, 8.0);
-    let oben = fb.nach(&Trafo::bei([0.0, 0.0072, 0.0])).nach(&Trafo::dreh_x(std::f32::consts::FRAC_PI_2));
-    n.flaeche(&oben, [0.019, 0.088], Fernbedienung, [0.0, 0.0, 1.0, 1.0]);
+    fernbedienung(n);
+}
+
+/// Fernbedienung der späten 80er: schlankes schwarzes Gehäuse mit Deckplatte aus dunklem
+/// Aluminium, darauf erhabene Gummitasten (rote Netztaste, zwölf Zifferntasten, Wippen für
+/// Lautstärke und Programm, vier Farbtasten), vorn das dunkelrote Infrarotfenster.
+fn fernbedienung(n: &mut Netz) {
+    let fb = Trafo::bei([0.22, TISCH_HOEHE + 0.008, -0.34]).nach(&Trafo::dreh_y(-0.45));
+    let (hb, hh, hl) = (0.023, 0.008, 0.092);
+    n.quader(&fb, [hb, hh, hl], 0.006, KunststoffSchwarz, 8.0);
+    let flach = Trafo::dreh_x(std::f32::consts::FRAC_PI_2);
+    let y = hh + 0.0003;
+    n.flaeche(&fb.nach(&Trafo::bei([0.0, y, 0.004])).nach(&flach), [hb - 0.004, hl - 0.012], Fernbedienung, [0.0, 0.0, 1.0, 1.0]);
+    // Tasten (x, z, halbe Breite, halbe Länge, Farbfeld der Textur 0 = grau)
+    let mut tasten: Vec<(f32, f32, f32, f32, u32)> = vec![(0.011, -0.074, 0.0055, 0.0045, 2)];
+    for i in 0..12 {
+        let (sp, re) = (i % 3, i / 3);
+        tasten.push((-0.012 + sp as f32 * 0.012, -0.052 + re as f32 * 0.0105, 0.0042, 0.0035, 0));
+    }
+    tasten.push((-0.009, 0.004, 0.0055, 0.011, 0));
+    tasten.push((0.009, 0.004, 0.0055, 0.011, 0));
+    for (i, feld) in [2u32, 4, 5, 6].iter().enumerate() {
+        tasten.push((-0.0135 + i as f32 * 0.009, 0.034, 0.0034, 0.0026, *feld));
+    }
+    for (x, z, bx, bz, feld) in tasten {
+        let t = fb.nach(&Trafo::bei([x, y + 0.0012, z]));
+        n.quader(&t, [bx, 0.0014, bz], 0.0012, Taste, 1.0);
+        if feld > 0 {
+            let u0 = feld as f32 / 8.0 + 0.02;
+            n.flaeche(&t.nach(&Trafo::bei([0.0, 0.0015, 0.0])).nach(&flach), [bx - 0.0008, bz - 0.0008], Taste, [u0, 0.2, 0.08, 0.6]);
+        }
+    }
+    // Infrarotfenster an der Stirnseite
+    n.flaeche(&fb.nach(&Trafo::bei([0.0, 0.0, -hl - 0.0003])), [hb - 0.006, hh - 0.003], Taste, [2.0 / 8.0 + 0.02, 0.2, 0.08, 0.6]);
 }
 
 /// Gummibaum (Ficus elastica): drei Triebe verschiedener Höhe aus einem Topf, große ovale

@@ -2,6 +2,32 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Park vor dem Fenster, Leben in der Szene
+- Draußen statt neblig-leerer Häuserfront ein kleiner Park am Hang bei Nacht (`szene::park`):
+  Himmel mit Verlauf, Mond samt Hof, funkelnden Sternen und langsam ziehenden Wolken (im
+  Shader aus der Blickrichtung, scharf unabhängig von der Texturgröße), Häuser mit
+  erleuchteten Fenstern und eine Baumreihe auf der Kuppe, Straße, Rasenhang mit Kiesweg,
+  drei Laternen mit Lichtinseln, eine Bank, neun Bäume als Kulissen. Alles gemalt und
+  selbstleuchtend, ohne Zimmerlicht und Zimmernebel, ohne Rohpixel; Silhouetten mit weichem
+  Alpha (glatte Kanten statt Treppen). Kamera reicht jetzt 40 m weit.
+- Neue Option `raum.leben` (0 … 1, Standard 1): Wolken ziehen am Mond vorbei und dimmen das
+  Mondlicht im Zimmer, alle 21 s fährt hinter dem Park ein Auto vorbei (Scheinwerfer, das
+  Fensterlicht wird dabei kurz warm heller), die Bäume wiegen sich. 0 = still.
+- Mondlicht fällt durchs Fenster und zeichnet Scheiben und Sprossen auf den Teppich, mit dem
+  Schatten der Tischplatte. Die Richtung ist steiler als der sichtbare Mond (sonst läge der
+  Fleck hinter der Kamera) – bewusste Freiheit.
+- Vorhänge hingen in der Fensterbank: jetzt an einer Stange mit Haltern 0,17 m vor der Wand,
+  bodenlang, Falten unten tiefer.
+- Heizkörper neu: Gliederheizkörper aus Gusseisen (15 Glieder aus je zwei Säulen mit Naben
+  und Kerben, Standfüße, Thermostatventil mit Rippenkopf, Vor- und Rücklauf), Lack
+  vergilbt mit Läufern und Abplatzern (`Heizlack`).
+- Fernbedienung neu: Deckplatte aus satiniertem Aluminium statt Rauschtextur, erhabene
+  Gummitasten (rote Netztaste, zwölf Ziffern, zwei Wippen, vier Farbtasten), IR-Fenster.
+- Prüfstand `raum`: Ansichten `fenster`, `fernbedienung`, `heizung`, `auto`; `--zeit <s>`
+  setzt die Zeit aller Ansichten.
+- Ungeprüft: Leistung (Himmel je Pixel im Fenster, ein Texturzugriff mehr je Raumpunkt für
+  die Wolken vor dem Mond).
+
 ## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Fernseher neu nach Art früher 80er-Tischgeräte
 - Rückmeldung: Rahmen lief in die Bedienleiste, Bildöffnung ohne richtige Ecken, Bedienfeld
   zu hell. Neu, in grober Anlehnung an US-Tischgeräte der frühen 80er (Referenzfoto des

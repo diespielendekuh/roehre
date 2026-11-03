@@ -913,6 +913,18 @@ static KATALOG: &[OptionBeschreibung] = &[
         kosten: Kosten::Gering,
         wirkt_wenn: None,
     },
+    OptionBeschreibung {
+        schluessel: "raum.leben",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Leben der Szene", "Scene life"),
+        beschreibung: Texte::de_en(
+            "Kleine Veränderungen draußen und im Raum: Wolken ziehen am Mond vorbei und dimmen sein Licht, ab und zu fährt ein Auto vorbei und sein Licht wandert durchs Zimmer, die Bäume im Park wiegen sich. 0 = still.",
+            "Small changes outside and in the room: clouds drift past the moon and dim its light, now and then a car passes and its light moves through the room, the trees in the park sway. 0 = still.",
+        ),
+        art: zahl(0.0, 1.0, 0.05, 1.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
 ];
 
 /// Benannte Festwerte einer stufenlosen Option (für Menüs mit Stufen): Schlüssel, Name, Wert.
