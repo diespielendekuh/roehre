@@ -58,6 +58,24 @@ pub struct Stufe {
     pub abtastung: Abtastung,
     /// Lizenz der Stufe (SPDX).
     pub lizenz: &'static str,
+    /// Regler der Stufe in der Reihenfolge von `rahmen.regler` (je `vec4`
+    /// vier Werte: Regler 0 → `regler[0].x`, 1 → `.y` …).
+    pub regler: &'static [StufenRegler],
+}
+
+/// Ein Regler einer Stufe, mit Text für das Menü eines Spiels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StufenRegler {
+    /// Schlüssel (ASCII).
+    pub name: &'static str,
+    /// Anzeigename, deutsch.
+    pub titel: &'static str,
+    /// Ein Satz, deutsch.
+    pub beschreibung: &'static str,
+    pub kleinst: f32,
+    pub groesst: f32,
+    pub schritt: f32,
+    pub standard: f32,
 }
 
 impl Stufe {
@@ -75,6 +93,7 @@ pub const SCHARF_BILINEAR: Stufe = Stufe {
     groesse: Groesse::Ziel,
     abtastung: Abtastung::Linear,
     lizenz: "MIT OR Apache-2.0",
+    regler: &[],
 };
 
 /// MMPX: verdoppeln, Treppen an schrägen Kanten glätten, keine neue Farbe.
@@ -84,6 +103,22 @@ pub const MMPX: Stufe = Stufe {
     groesse: Groesse::QuelleMal(2),
     abtastung: Abtastung::Naechster,
     lizenz: "MIT",
+    regler: &[],
+};
+
+/// Handheld-/LCD-Raster: Zellen mit dunklen Lücken, wahlweise RGB-Streifen;
+/// gegen Moiré exakt über die Fläche des Bildpunkts integriert.
+pub const LCD_RASTER: Stufe = Stufe {
+    name: "lcd-raster",
+    rumpf: include_str!("../wgsl/lcd-raster.wgsl"),
+    groesse: Groesse::Ziel,
+    abtastung: Abtastung::Naechster,
+    lizenz: "MIT OR Apache-2.0",
+    regler: &[
+        StufenRegler { name: "gitter", titel: "Raster", beschreibung: "Wie dunkel die Lücken zwischen den Punkten sind.", kleinst: 0.0, groesst: 1.0, schritt: 0.05, standard: 0.35 },
+        StufenRegler { name: "breite", titel: "Rasterbreite", beschreibung: "Breite der Lücken als Anteil eines Spielpunkts.", kleinst: 0.0, groesst: 0.5, schritt: 0.025, standard: 0.15 },
+        StufenRegler { name: "subpixel", titel: "Farbstreifen", beschreibung: "Senkrechte Rot-Grün-Blau-Streifen in jedem Punkt wie bei einem echten LCD.", kleinst: 0.0, groesst: 1.0, schritt: 0.05, standard: 0.0 },
+    ],
 };
 
 /// Stufen in Reihenfolge, als ein Bildfilter.
@@ -112,6 +147,12 @@ pub const KETTEN: &[Kette] = &[
         beschreibung: "Treppen an schrägen Kanten geglättet, ohne neue Farben; danach scharf eingepaßt.",
         stufen: &[MMPX, SCHARF_BILINEAR],
     },
+    Kette {
+        name: "lcd",
+        titel: "LCD-Raster",
+        beschreibung: "Wie ein Handheld-Bildschirm: Punkte mit feinen dunklen Lücken.",
+        stufen: &[LCD_RASTER],
+    },
 ];
 
 /// Eine Kette nach Kurzname.
@@ -138,6 +179,16 @@ impl Rahmen {
     /// Ganzes Bild, keine Regler.
     pub fn neu(quelle: (u32, u32), ziel: (u32, u32)) -> Rahmen {
         Rahmen { quelle, ziel, ausschnitt: [0.0, 0.0, 1.0, 1.0], bild: 0, regler: [0.0; 16] }
+    }
+
+    /// Die Regler einer Stufe: ihre Voreinstellungen, überschrieben mit
+    /// `werte` (Schlüssel → Wert, in die Grenzen geklemmt).
+    pub fn mit_reglern(mut self, s: &Stufe, werte: &[(&str, f32)]) -> Rahmen {
+        for (i, r) in s.regler.iter().enumerate().take(16) {
+            let w = werte.iter().find(|(n, _)| *n == r.name).map_or(r.standard, |(_, w)| *w);
+            self.regler[i] = w.clamp(r.kleinst, r.groesst);
+        }
+        self
     }
 
     /// Das Layout der WGSL-Struktur (std140-gleich: vier `vec4` zu 16 Byte,

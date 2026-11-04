@@ -176,6 +176,46 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
             }
         }
     }
+    // 2b. lcd-raster: Fotos (WGSL_FOTOS) und ein Maß gegen Moiré — auf einer
+    // weißen Fläche muß jede Zellreihe gleich hell sein (Mittel je Zelle).
+    {
+        let bild = crate::lade_bild("pixelszene")?;
+        let weiss = Bild { breite: 64, hoehe: 48, rgba: vec![255; 64 * 48 * 4], pixel_seitenverhaeltnis: 1.0 };
+        for g in [(1440u32, 1080u32), (935, 701)] {
+            for (name, b) in [("pixelszene", &bild), ("weiss", &weiss)] {
+                let eingang = gpu.eingang(b);
+                let roh = ziel_roh(&gpu, g.0, g.1);
+                let rahmen = Rahmen::neu((b.breite, b.hoehe), g).mit_reglern(&roehre_wgsl::LCD_RASTER, &[("subpixel", 0.5)]);
+                stufe_ausfuehren(&gpu, &roehre_wgsl::LCD_RASTER, &eingang, &rahmen, &roh, None);
+                let a = gpu.lies(&roh);
+                if let Some(ordner) = std::env::var_os("WGSL_FOTOS") {
+                    let _ = a.save(std::path::Path::new(&ordner).join(format!("lcd-{name}-{}x{}.png", g.0, g.1)));
+                }
+                if name == "weiss" {
+                    // Moiré ist großräumig: Spaltenhelligkeit, gleitend über vier
+                    // Zellperioden gemittelt — ein gleichmäßiges Raster ergibt
+                    // überall dasselbe. (Je Zelle gezählt wäre falsch: bei
+                    // krummen Faktoren sind Zellen 14 oder 15 Punkte breit, und
+                    // ein Randpunkt überdeckt zwei.)
+                    let zb = g.0 as f64 / b.breite as f64;
+                    let spalten: Vec<f64> = (0..g.0).map(|x| (0..g.1).map(|y| a.get_pixel(x, y).0[1] as f64).sum::<f64>() / g.1 as f64).collect();
+                    // Fenster von genau vier Perioden (4 · zb, auch gebrochen):
+                    // die letzte Spalte zählt mit ihrem Bruchteil.
+                    let l = 4.0 * zb;
+                    let ganz = l.floor() as usize;
+                    let rest = l - ganz as f64;
+                    let gleitend: Vec<f64> = (0..spalten.len() - ganz - 1).map(|x| (spalten[x..x + ganz].iter().sum::<f64>() + rest * spalten[x + ganz]) / l).collect();
+                    let m = gleitend.iter().sum::<f64>() / gleitend.len() as f64;
+                    let abw = gleitend.iter().map(|v| (v - m).abs() / m).fold(0.0, f64::max);
+                    eprintln!("lcd-raster {}×{}: Helligkeit über vier Zellen weicht höchstens {:.2} % vom Mittel ab", g.0, g.1, abw * 100.0);
+                    if abw > 0.01 {
+                        fehler.push(format!("lcd-raster {}×{}: Moiré {:.2} %", g.0, g.1, abw * 100.0));
+                    }
+                }
+            }
+        }
+    }
+
     // 3. Erzeugte Ketten (crt-beans) gegen librashaders eigene FilterChain.
     erzeugte_vergleichen(&gpu, shader, &mut fehler)?;
     let _ = Bild::neu;

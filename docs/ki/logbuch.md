@@ -2,6 +2,19 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `lcd-raster`, Regler je Stufe
+- Neue eigene Stufe `crates/roehre-wgsl/wgsl/lcd-raster.wgsl` (MIT OR Apache-2.0) für die
+  Bildfilter-Vielfalt (Wunsch E3b des Terranigma-Anwenders): Handheld-/LCD-Bild, jeder
+  Spielpunkt eine Zelle mit dunklen Lücken, wahlweise RGB-Streifen. Gegen Moiré wird der Anteil
+  der Lücken und Streifen am Ausgabepunkt je Achse **exakt integriert** (Kastenfilter), nicht
+  abgetastet. Kette `lcd` in `KETTEN`.
+- Stufen tragen jetzt beschriebene Regler (`StufenRegler`: Name, deutscher Titel und Satz,
+  Grenzen, Schritt, Voreinstellung); `Rahmen::mit_reglern` legt sie in `rahmen.regler`.
+- `roehre-pruefstand wgsl` misst das Raster auf einer weißen Fläche: Helligkeit über genau vier
+  Zellperioden (gebrochene Fenster mit Bruchteilen gewogen) — 1440×1080 0,00 %, 935×701 0,84 %
+  (Rest = 8-Bit-Rundung; Grenze 1 %, roehres Moiré-Grenze ist 1,1 %). Fotos mit `WGSL_FOTOS`.
+- `pruefe` bestanden.
+
 ## 2026-11-04 nachts · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 2: crt-beans erzeugt
 - `roehre-pruefstand wgsl-erzeugen` übersetzt die drei MIT-Ketten (`eigen/beans/rgb.slangp`,
   `signal.slangp`, `schnell.slangp`: 13, 13 und 4 Pässe samt `helligkeit.slang`) mit
