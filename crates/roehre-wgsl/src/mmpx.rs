@@ -340,9 +340,11 @@ mod proben {
     #[test]
     fn flaechen_bleiben_und_keine_farbe_ist_neu() {
         let q = bild(16, 12, |_, _| 0x204080);
-        assert!(verdoppeln(&q, 16, (0, 16, 0, 12))
-            .iter()
-            .all(|&p| p == 0x204080));
+        assert!(
+            verdoppeln(&q, 16, (0, 16, 0, 12))
+                .iter()
+                .all(|&p| p == 0x204080)
+        );
         let q = bild(16, 16, |x, y| {
             if x > y {
                 0xF8F8F8
@@ -353,9 +355,11 @@ mod proben {
             }
         });
         let farben = [0xF8F8F8, 0x103010, 0x000040];
-        assert!(verdoppeln(&q, 16, (0, 16, 0, 16))
-            .iter()
-            .all(|p| farben.contains(p)));
+        assert!(
+            verdoppeln(&q, 16, (0, 16, 0, 16))
+                .iter()
+                .all(|p| farben.contains(p))
+        );
     }
 
     /// Eine Treppe mit Steigung 1:1 wird geglättet: auf der Diagonale füllt

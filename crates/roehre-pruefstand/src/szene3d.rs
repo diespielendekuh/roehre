@@ -63,8 +63,18 @@ fn mal(a: &Mat, b: &Mat) -> Mat {
 /// einen Punkt der Fläche (in Flächenkoordinaten, Mitte = 0).
 pub fn kamera(seite: f32, abstand: f32, drehung_grad: f32, ziel: [f32; 2]) -> Mat {
     let (s, c) = drehung_grad.to_radians().sin_cos();
-    let modell: Mat = [[c, 0.0, -s, 0.0], [0.0, 1.0, 0.0, 0.0], [s, 0.0, c, 0.0], [0.0, 0.0, 0.0, 1.0]];
-    let blick: Mat = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [-ziel[0] * c, -ziel[1], -abstand, 1.0]];
+    let modell: Mat = [
+        [c, 0.0, -s, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [s, 0.0, c, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    let blick: Mat = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [-ziel[0] * c, -ziel[1], -abstand, 1.0],
+    ];
     let (nah, fern) = (0.01f32, 100.0f32);
     let f = 1.0 / (20f32.to_radians()).tan();
     let proj: Mat = [
@@ -77,14 +87,28 @@ pub fn kamera(seite: f32, abstand: f32, drehung_grad: f32, ziel: [f32; 2]) -> Ma
 }
 
 impl Szene {
-    pub fn neu(device: &wgpu::Device, shader_ordner: &std::path::Path, format: wgpu::TextureFormat) -> Self {
-        let maske = std::fs::read_to_string(shader_ordner.join("eigen/flaeche/roehre_maske.wgsl")).expect("roehre_maske.wgsl");
+    pub fn neu(
+        device: &wgpu::Device,
+        shader_ordner: &std::path::Path,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        let maske = std::fs::read_to_string(shader_ordner.join("eigen/flaeche/roehre_maske.wgsl"))
+            .expect("roehre_maske.wgsl");
         let modul = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Szene"),
             source: wgpu::ShaderSource::Wgsl(format!("{maske}\n{SZENE_WGSL}").into()),
         });
-        let eintrag = |binding, ty, sicht| wgpu::BindGroupLayoutEntry { binding, visibility: sicht, ty, count: None };
-        let uniform = wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None };
+        let eintrag = |binding, ty, sicht| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: sicht,
+            ty,
+            count: None,
+        };
+        let uniform = wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Szene"),
             entries: &[
@@ -99,7 +123,11 @@ impl Szene {
                     },
                     wgpu::ShaderStages::FRAGMENT,
                 ),
-                eintrag(3, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), wgpu::ShaderStages::FRAGMENT),
+                eintrag(
+                    3,
+                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
             ],
         });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -110,7 +138,12 @@ impl Szene {
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Szene"),
             layout: Some(&pl),
-            vertex: wgpu::VertexState { module: &modul, entry_point: Some("ecke"), compilation_options: Default::default(), buffers: &[] },
+            vertex: wgpu::VertexState {
+                module: &modul,
+                entry_point: Some("ecke"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
             fragment: Some(wgpu::FragmentState {
                 module: &modul,
                 entry_point: Some("farbe"),
@@ -131,7 +164,11 @@ impl Szene {
             anisotropy_clamp: 16,
             ..Default::default()
         });
-        Self { pipeline, layout, sampler }
+        Self {
+            pipeline,
+            layout,
+            sampler,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -169,10 +206,22 @@ impl Szene {
             label: Some("Szene"),
             layout: &self.layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: kb.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: mb.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&flaeche.ansicht_srgb) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: kb.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: mb.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&flaeche.ansicht_srgb),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
         });
         let mut enc = device.create_command_encoder(&Default::default());
@@ -184,7 +233,12 @@ impl Szene {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.02, g: 0.02, b: 0.025, a: 1.0 }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.02,
+                            g: 0.02,
+                            b: 0.025,
+                            a: 1.0,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

@@ -22,10 +22,27 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 3, groesse: 32, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 2, bild: Bild::Quelle }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 3,
+                groesse: 32,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[Feld {
+                ort: Ort::Ubo,
+                lage: 0,
+                wert: Wert::Mvp,
+            }],
+            bilder: &[Bindung {
+                nummer: 2,
+                bild: Bild::Quelle,
+            }],
         },
         Pass {
             name: "scalefx-pass0",
@@ -38,10 +55,27 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 2, groesse: 16, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 1, bild: Bild::Quelle }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 2,
+                groesse: 16,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[Feld {
+                ort: Ort::Ubo,
+                lage: 0,
+                wert: Wert::Mvp,
+            }],
+            bilder: &[Bindung {
+                nummer: 1,
+                bild: Bild::Quelle,
+            }],
         },
         Pass {
             name: "scalefx-pass1",
@@ -54,10 +88,39 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 2, groesse: 32, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Push, lage: 16, wert: Wert::Regler("SFX_CLR") }, Feld { ort: Ort::Push, lage: 20, wert: Wert::Regler("SFX_SAA") }, Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 1, bild: Bild::Quelle }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 2,
+                groesse: 32,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[
+                Feld {
+                    ort: Ort::Push,
+                    lage: 16,
+                    wert: Wert::Regler("SFX_CLR"),
+                },
+                Feld {
+                    ort: Ort::Push,
+                    lage: 20,
+                    wert: Wert::Regler("SFX_SAA"),
+                },
+                Feld {
+                    ort: Ort::Ubo,
+                    lage: 0,
+                    wert: Wert::Mvp,
+                },
+            ],
+            bilder: &[Bindung {
+                nummer: 1,
+                bild: Bild::Quelle,
+            }],
         },
         Pass {
             name: "scalefx-pass2",
@@ -70,10 +133,33 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 3, groesse: 16, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 1, bild: Bild::Quelle }, Bindung { nummer: 2, bild: Bild::Pass(1) }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 3,
+                groesse: 16,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[Feld {
+                ort: Ort::Ubo,
+                lage: 0,
+                wert: Wert::Mvp,
+            }],
+            bilder: &[
+                Bindung {
+                    nummer: 1,
+                    bild: Bild::Quelle,
+                },
+                Bindung {
+                    nummer: 2,
+                    bild: Bild::Pass(1),
+                },
+            ],
         },
         Pass {
             name: "scalefx-pass3",
@@ -86,10 +172,34 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 2, groesse: 32, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Push, lage: 16, wert: Wert::Regler("SFX_SCN") }, Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 1, bild: Bild::Quelle }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 2,
+                groesse: 32,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[
+                Feld {
+                    ort: Ort::Push,
+                    lage: 16,
+                    wert: Wert::Regler("SFX_SCN"),
+                },
+                Feld {
+                    ort: Ort::Ubo,
+                    lage: 0,
+                    wert: Wert::Mvp,
+                },
+            ],
+            bilder: &[Bindung {
+                nummer: 1,
+                bild: Bild::Quelle,
+            }],
         },
         Pass {
             name: "scalefx-pass4",
@@ -102,18 +212,62 @@ pub const SCALEFX: Erzeugt = Erzeugt {
             linear: false,
             rand: Rand::Schwarz,
             bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 3, groesse: 16, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Push, lage: 0, wert: Wert::Groesse(Bild::Quelle) }, Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 1, bild: Bild::Quelle }, Bindung { nummer: 2, bild: Bild::Pass(0) }],
+            ubo: Some(Puffer {
+                nummer: 0,
+                groesse: 64,
+                ecke: true,
+                punkt: true,
+            }),
+            push: Some(Puffer {
+                nummer: 3,
+                groesse: 16,
+                ecke: true,
+                punkt: true,
+            }),
+            felder: &[
+                Feld {
+                    ort: Ort::Push,
+                    lage: 0,
+                    wert: Wert::Groesse(Bild::Quelle),
+                },
+                Feld {
+                    ort: Ort::Ubo,
+                    lage: 0,
+                    wert: Wert::Mvp,
+                },
+            ],
+            bilder: &[
+                Bindung {
+                    nummer: 1,
+                    bild: Bild::Quelle,
+                },
+                Bindung {
+                    nummer: 2,
+                    bild: Bild::Pass(0),
+                },
+            ],
         },
     ],
-    luts: &[
-    ],
+    luts: &[],
     regler: &[
-        Regler { name: "SFX_CLR", standard: 0.5, kleinst: 0.01, groesst: 1.0 },
-        Regler { name: "SFX_SAA", standard: 1.0, kleinst: 0.0, groesst: 1.0 },
-        Regler { name: "SFX_SCN", standard: 1.0, kleinst: 0.0, groesst: 1.0 },
+        Regler {
+            name: "SFX_CLR",
+            standard: 0.5,
+            kleinst: 0.01,
+            groesst: 1.0,
+        },
+        Regler {
+            name: "SFX_SAA",
+            standard: 1.0,
+            kleinst: 0.0,
+            groesst: 1.0,
+        },
+        Regler {
+            name: "SFX_SCN",
+            standard: 1.0,
+            kleinst: 0.0,
+            groesst: 1.0,
+        },
     ],
 };
 
@@ -122,27 +276,51 @@ pub const OMNISCALE: Erzeugt = Erzeugt {
     name: "omniscale",
     preset: "eigen/omniscale.slangp",
     lizenz: "MIT",
-    paesse: &[
-        Pass {
-            name: "omniscale",
-            ecke: include_str!("../../wgsl/erzeugt/omniscale/00-omniscale.ecke.wgsl"),
-            ecke_einstieg: "main",
-            punkt: include_str!("../../wgsl/erzeugt/omniscale/00-omniscale.punkt.wgsl"),
-            punkt_einstieg: "main",
-            skala: (Skala::Ziel(1.0), Skala::Ziel(1.0)),
-            format: Format::Rgba8Unorm,
-            linear: false,
-            rand: Rand::Schwarz,
-            bildzaehler_modulo: 0,
-            ubo: Some(Puffer { nummer: 0, groesse: 64, ecke: true, punkt: true }),
-            push: Some(Puffer { nummer: 3, groesse: 64, ecke: true, punkt: true }),
-            felder: &[Feld { ort: Ort::Push, lage: 0, wert: Wert::Groesse(Bild::Quelle) }, Feld { ort: Ort::Push, lage: 32, wert: Wert::Ausgabe }, Feld { ort: Ort::Ubo, lage: 0, wert: Wert::Mvp }],
-            bilder: &[Bindung { nummer: 2, bild: Bild::Quelle }],
-        },
-    ],
-    luts: &[
-    ],
-    regler: &[
-    ],
+    paesse: &[Pass {
+        name: "omniscale",
+        ecke: include_str!("../../wgsl/erzeugt/omniscale/00-omniscale.ecke.wgsl"),
+        ecke_einstieg: "main",
+        punkt: include_str!("../../wgsl/erzeugt/omniscale/00-omniscale.punkt.wgsl"),
+        punkt_einstieg: "main",
+        skala: (Skala::Ziel(1.0), Skala::Ziel(1.0)),
+        format: Format::Rgba8Unorm,
+        linear: false,
+        rand: Rand::Schwarz,
+        bildzaehler_modulo: 0,
+        ubo: Some(Puffer {
+            nummer: 0,
+            groesse: 64,
+            ecke: true,
+            punkt: true,
+        }),
+        push: Some(Puffer {
+            nummer: 3,
+            groesse: 64,
+            ecke: true,
+            punkt: true,
+        }),
+        felder: &[
+            Feld {
+                ort: Ort::Push,
+                lage: 0,
+                wert: Wert::Groesse(Bild::Quelle),
+            },
+            Feld {
+                ort: Ort::Push,
+                lage: 32,
+                wert: Wert::Ausgabe,
+            },
+            Feld {
+                ort: Ort::Ubo,
+                lage: 0,
+                wert: Wert::Mvp,
+            },
+        ],
+        bilder: &[Bindung {
+            nummer: 2,
+            bild: Bild::Quelle,
+        }],
+    }],
+    luts: &[],
+    regler: &[],
 };
-

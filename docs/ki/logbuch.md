@@ -2,6 +2,20 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Weichheit und Leuchten
+- `scharf-bilinear` hat den Regler **»weichheit«** (0 … 1, Voreinstellung 0 = Saum ein Bildpunkt,
+  unverändert): 1 rechnet wie `linear` (größte Abweichung 1), 0,5 liegt dazwischen.
+- Neue Stufen **`leuchten`** (leichtes Leuchten/Bloom hinter einem Filter, Stärke 0 = aus) und
+  **`leuchten-hof`** (der Hof in Spielauflösung, Gauß bis 3 σ, Teil über der Schwelle). Die
+  Vereinbarung bekommt dafür das Feld `Stufe::zusatz` und die optionale Bindung 3: das Ergebnis
+  der Zusatzstufe auf dem Original. Der Hof entsteht in Spielpunkten — unabhängig von der
+  Fenstergröße und unsichtbar für Kantenglätter davor.
+- `roehre-pruefstand wgsl`: Stärke 0 = Bild unverändert (0), Punktprobe symmetrisch (±1), nach
+  außen nie zunehmend, jenseits 3 σ schwarz, Halbwertsbreite in Spielpunkten bei ×3 und ×6 gleich
+  (2,67); Grau unter der Schwelle unverändert. Ein erster Entwurf in einem Pass (9 × 9 Abtastungen
+  im Abstand 0,75 σ) zeigte Wellen im Hof — verworfen.
+- Ungeprüft: echte Grafikkarte.
+
 ## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · ScaleFX und OmniScale
 - Lizenzen der Pixelkunst-Vergrößerer in libretro `slang-shaders` `3685eda` aus den Dateiköpfen
   gelesen: xBR/Super-xBR, HQx, SABR, 2xSaI/Eagle, xSoft **GPL** (nicht übernommen); **ScaleFX**

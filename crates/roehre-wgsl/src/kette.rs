@@ -47,10 +47,14 @@ pub const ECKEN_LETZTER: [Eckdaten; 4] = [
 ];
 
 /// MVP der Zwischenpässe (librashader `IDENTITY_MVP`), spaltenweise.
-pub const MVP_EINHEIT: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+pub const MVP_EINHEIT: [f32; 16] = [
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+];
 
 /// MVP des letzten Passes (librashader `DEFAULT_MVP`), spaltenweise.
-pub const MVP_LETZTER: [f32; 16] = [2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0, 1.0];
+pub const MVP_LETZTER: [f32; 16] = [
+    2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0, 1.0,
+];
 
 /// Wie groß ein Pass rechnet (eine Achse).
 #[derive(Debug, Clone, Copy, PartialEq)]

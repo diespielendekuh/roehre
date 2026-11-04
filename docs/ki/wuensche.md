@@ -26,6 +26,8 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
   0 Abweichung; offen: `virtuelle-zeilen`, das Zusammensetzen (Lage, Hintergrund, SDR/HDR) und
   die Reglerplanung ohne librashader — erledigt: `roehre-kette` mit
   `default-features = false` hat `plane` ohne librashader.
+  Dazu für E3b des Ports: `lcd-raster`, `farbe`, `leuchten`/`leuchten-hof`, ScaleFX,
+  OmniScale, Regler »weichheit« an `scharf-bilinear`.
 - **Was fehlt:** Eine Fassung der GPL-freien Kette (crt-beans und die eigenen Stufen
   `scharf-bilinear`, `virtuelle-zeilen`), die **keine wgpu- und keine librashader-Version**
   voraussetzt: die Pässe als WGSL-Text, dazu eine Beschreibung der Pass-Folge (Größe und Format
