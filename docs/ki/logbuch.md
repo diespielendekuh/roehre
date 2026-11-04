@@ -2,6 +2,11 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-04 · Terranigma-Port (Helfer-KI der Oberfläche) · Wunsch W-009
+- Nur Doku: Wunsch W-009 eingetragen (die MIT-Kette als WGSL ohne wgpu-/librashader-Version),
+  weil der Port vorerst auf wgpu 24 bleibt; `docs/integration/terranigma.md` nennt den zweiten
+  Weg. Am Code und an den Shadern von roehre nichts geändert.
+
 ## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Schattenwurf draußen und drinnen
 - Rückmeldung: Bank mitten auf dem Weg ohne Schatten, quer zum Weg; insgesamt zu künstlich,
   es fehlen Schatten.

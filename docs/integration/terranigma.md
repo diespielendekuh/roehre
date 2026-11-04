@@ -1,7 +1,9 @@
 # Terranigma PC-Port
 
 - **Repository:** `diespielendekuh/Tenchi-Souzou-Deutsch-mod-tool`, Kiste `crates/terranigma-spiel`
-- **Stand:** noch nicht eingebaut (Wunsch W-002); Einbauweg unten
+- **Stand:** noch nicht eingebaut (Wunsch W-002); Einbauweg unten. **Zweiter Weg ohne Anheben**
+  (Wunsch W-009, 2026-11-04): die MIT-Kette als WGSL, vom Port auf wgpu 24 selbst ausgeführt —
+  ob angehoben wird, entscheidet der Leiter des Ports
 - **Bild:** 256×224, Pixel 8:7 (NTSC); der Port beschneidet den Rand selbst (Werksbeschnitt 8/8/0/1)
 - **Grafik:** winit 0.30, egui 0.31, egui-wgpu 0.31, **wgpu 24** (D3D12 unter Windows,
   Vulkan/GL unter Linux). roehre braucht wgpu 30 → Port auf egui 0.37 / wgpu 30 anheben.
