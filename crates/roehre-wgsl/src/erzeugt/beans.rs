@@ -1,6 +1,7 @@
 // ERZEUGT von `roehre-pruefstand wgsl-erzeugen` aus den slang-Presets von crt-beans
 // (Andrew Duffey, MIT, shader/fremd/mit/crt-beans/LICENSE) und dem eigenen Pass
-// helligkeit.slang. Nicht von Hand ändern — neu erzeugen.
+// helligkeit.slang.
+// Nicht von Hand ändern — neu erzeugen.
 // SPDX-License-Identifier: MIT
 
 use crate::kette::*;

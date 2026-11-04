@@ -1,4 +1,4 @@
-// ERZEUGT aus crt-beans (Andrew Duffey, MIT) bzw. roehre (MIT OR Apache-2.0) — eigen/beans/rgb.slangp, Pass 2 »calculate_widths«.
+// ERZEUGT aus fremden MIT-Shadern bzw. roehre (MIT OR Apache-2.0) — eigen/beans/rgb.slangp, Pass 2 »calculate_widths« (Herkunft: shader/fremd/mit/).
 // Übersetzt von librashader 0.12.1 (slang → SPIR-V → naga → WGSL). Nicht von Hand ändern.
 diagnostic(off, derivative_uniformity);
 struct Push {

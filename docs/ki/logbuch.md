@@ -2,6 +2,16 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · ScaleFX und OmniScale
+- Lizenzen der Pixelkunst-Vergrößerer in libretro `slang-shaders` `3685eda` aus den Dateiköpfen
+  gelesen: xBR/Super-xBR, HQx, SABR, 2xSaI/Eagle, xSoft **GPL** (nicht übernommen); **ScaleFX**
+  (Sp00kyFox) und **OmniScale** (Lior Halphon, slang von hunterk) **MIT** — unverändert unter
+  `shader/fremd/mit/{scalefx,omniscale}`, Presets `shader/eigen/{scalefx,omniscale}.slangp`
+  (ScaleFX: `stock.slang` durch das eigene `durchreichen.slang` ersetzt).
+- `wgsl-erzeugen` kennt Gruppen; neue Datei `src/erzeugt/pixelkunst.rs` (`SCALEFX`, 6 Pässe;
+  `OMNISCALE`, 1 Pass). Gegen librashader: **0 Abweichung** (zwei Testbilder, drei Größen).
+- `pruefe` bestanden.
+
 ## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · MMPX gegen die Fassung der Autoren
 - `shader/fremd/mit/mmpx/mmpx.slang` (MIT, McGuire & Gagiu, slang von hunterk, unverändert aus
   libretro `3685eda`) als **Prüfstein**; Preset `shader/eigen/mmpx-pruefung.slangp` (ein Pass,

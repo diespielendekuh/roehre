@@ -1,4 +1,4 @@
-// ERZEUGT aus crt-beans (Andrew Duffey, MIT) bzw. roehre (MIT OR Apache-2.0) — eigen/beans/rgb.slangp, Pass 10 »bilinear_upsample«.
+// ERZEUGT aus fremden MIT-Shadern bzw. roehre (MIT OR Apache-2.0) — eigen/beans/rgb.slangp, Pass 10 »bilinear_upsample« (Herkunft: shader/fremd/mit/).
 // Übersetzt von librashader 0.12.1 (slang → SPIR-V → naga → WGSL). Nicht von Hand ändern.
 diagnostic(off, derivative_uniformity);
 struct gl_PerVertex {

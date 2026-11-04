@@ -18,10 +18,18 @@ use librashader::{FilterMode, ImageFormat, WrapMode};
 type Fehler = Box<dyn std::error::Error + Send + Sync>;
 
 /// Die Ketten, die erzeugt werden: (Kurzname, Rust-Name, Preset relativ zu shader/).
-const KETTEN: &[(&str, &str, &str)] = &[
-    ("beans-rgb", "BEANS_RGB", "eigen/beans/rgb.slangp"),
-    ("beans-signal", "BEANS_SIGNAL", "eigen/beans/signal.slangp"),
-    ("beans-schnell", "BEANS_SCHNELL", "eigen/beans/schnell.slangp"),
+/// Gruppen: (Datei unter `src/erzeugt/`, Kopfzeile der Herkunft, Ketten).
+const GRUPPEN: &[(&str, &str, &[(&str, &str, &str)])] = &[
+    (
+        "beans",
+        "aus den slang-Presets von crt-beans\n// (Andrew Duffey, MIT, shader/fremd/mit/crt-beans/LICENSE) und dem eigenen Pass\n// helligkeit.slang",
+        &[("beans-rgb", "BEANS_RGB", "eigen/beans/rgb.slangp"), ("beans-signal", "BEANS_SIGNAL", "eigen/beans/signal.slangp"), ("beans-schnell", "BEANS_SCHNELL", "eigen/beans/schnell.slangp")],
+    ),
+    (
+        "pixelkunst",
+        "aus ScaleFX (Sp00kyFox, MIT) und OmniScale\n// (Lior Halphon, MIT; slang von hunterk), shader/fremd/mit/{scalefx,omniscale}",
+        &[("scalefx", "SCALEFX", "eigen/scalefx.slangp"), ("omniscale", "OMNISCALE", "eigen/omniscale.slangp")],
+    ),
 ];
 
 fn rand(w: WrapMode) -> &'static str {
@@ -73,14 +81,11 @@ pub fn erzeugen(shader: &Path, ziel: &Path) -> crate::Ergebnis {
 }
 
 fn innen(shader: &Path, ziel: &Path) -> Result<(), Fehler> {
-    let mut rs = String::from(
-        "// ERZEUGT von `roehre-pruefstand wgsl-erzeugen` aus den slang-Presets von crt-beans\n\
-         // (Andrew Duffey, MIT, shader/fremd/mit/crt-beans/LICENSE) und dem eigenen Pass\n\
-         // helligkeit.slang. Nicht von Hand ändern — neu erzeugen.\n\
-         // SPDX-License-Identifier: MIT\n\n\
-         use crate::kette::*;\n\n",
+    for &(datei, herkunft, ketten) in GRUPPEN {
+    let mut rs = format!(
+        "// ERZEUGT von `roehre-pruefstand wgsl-erzeugen` {herkunft}.\n// Nicht von Hand ändern — neu erzeugen.\n// SPDX-License-Identifier: MIT\n\nuse crate::kette::*;\n\n"
     );
-    for &(kurz, rust, preset_pfad) in KETTEN {
+    for &(kurz, rust, preset_pfad) in ketten {
         let preset = ShaderPreset::try_parse(shader.join(preset_pfad), ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS | ShaderFeatures::FRAMETIME_UNIFORMS)?;
         let dateinamen: Vec<String> = preset.passes.iter().map(|p| p.path.file_stem().map_or("pass".into(), |s| s.to_string_lossy().to_string())).collect();
         let pack = ShaderPresetPack::load_from_preset::<Fehler>(preset)?;
@@ -103,7 +108,7 @@ fn innen(shader: &Path, ziel: &Path) -> Result<(), Fehler> {
             let name = dateinamen.get(index).cloned().unwrap_or_else(|| format!("pass{index}"));
             let stamm = format!("{index:02}-{name}");
             let kopf = format!(
-                "// ERZEUGT aus crt-beans (Andrew Duffey, MIT) bzw. roehre (MIT OR Apache-2.0) — {preset_pfad}, Pass {index} »{name}«.\n// Übersetzt von librashader 0.12.1 (slang → SPIR-V → naga → WGSL). Nicht von Hand ändern.\n"
+                "// ERZEUGT aus fremden MIT-Shadern bzw. roehre (MIT OR Apache-2.0) — {preset_pfad}, Pass {index} »{name}« (Herkunft: shader/fremd/mit/).\n// Übersetzt von librashader 0.12.1 (slang → SPIR-V → naga → WGSL). Nicht von Hand ändern.\n"
             );
             std::fs::write(ordner.join(format!("{stamm}.ecke.wgsl")), format!("{kopf}{}", wgsl.vertex))?;
             std::fs::write(ordner.join(format!("{stamm}.punkt.wgsl")), format!("{kopf}{}", wgsl.fragment))?;
@@ -226,6 +231,7 @@ fn innen(shader: &Path, ziel: &Path) -> Result<(), Fehler> {
         eprintln!("{kurz}: {} Pässe, {} Nachschlagebilder, {} Regler", pass_texte.len(), luts.len(), regler.len());
     }
     std::fs::create_dir_all(ziel.join("src/erzeugt"))?;
-    std::fs::write(ziel.join("src/erzeugt/beans.rs"), rs)?;
+    std::fs::write(ziel.join(format!("src/erzeugt/{datei}.rs")), rs)?;
+    }
     Ok(())
 }

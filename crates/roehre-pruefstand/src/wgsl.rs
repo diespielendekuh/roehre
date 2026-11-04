@@ -285,20 +285,22 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
 fn erzeugte_vergleichen(gpu: &Gpu, shader: &std::path::Path, fehler: &mut Vec<String>) -> Ergebnis {
     use librashader::runtime::wgpu::{FilterChain, FilterChainOptions, FrameOptions, WgpuOutputView};
     use librashader::runtime::{FilterChainParameters, Viewport};
-    use roehre_kette::Kette;
-    let faelle: [(&'static roehre_wgsl::kette::Erzeugt, Kette, &str); 3] = [
-        (&roehre_wgsl::erzeugt::beans::BEANS_RGB, Kette::BeansRgb, "mit-rgb"),
-        (&roehre_wgsl::erzeugt::beans::BEANS_SIGNAL, Kette::BeansSignal, "mit-composite"),
-        (&roehre_wgsl::erzeugt::beans::BEANS_SCHNELL, Kette::BeansSchnell, "mit-rgb"),
+    // (Kette, Voreinstellung von roehre für geplante Regler, wenn es eine gibt)
+    let faelle: [(&'static roehre_wgsl::kette::Erzeugt, Option<&str>); 5] = [
+        (&roehre_wgsl::erzeugt::beans::BEANS_RGB, Some("mit-rgb")),
+        (&roehre_wgsl::erzeugt::beans::BEANS_SIGNAL, Some("mit-composite")),
+        (&roehre_wgsl::erzeugt::beans::BEANS_SCHNELL, Some("mit-rgb")),
+        (&roehre_wgsl::erzeugt::pixelkunst::SCALEFX, None),
+        (&roehre_wgsl::erzeugt::pixelkunst::OMNISCALE, None),
     ];
-    for (erzeugt, kette, voreinstellung) in faelle {
+    for (erzeugt, voreinstellung) in faelle {
         for name in ["pixelszene", "schrift"] {
             let bild = crate::lade_bild(name)?;
             for g in [(960u32, 720u32), (1440, 1080), (935, 701)] {
-                for geplant in [false, true] {
+                for geplant in [false, voreinstellung.is_some()].into_iter().collect::<std::collections::BTreeSet<_>>() {
                     let mut regler: Vec<(String, f32)> = vec![];
                     if geplant {
-                        let e = Einstellungen::voreinstellung(voreinstellung)?;
+                        let e = Einstellungen::voreinstellung(voreinstellung.expect("geplant nur mit Voreinstellung"))?;
                         let k = roehre_kette::Kontext { eingang: (bild.breite, bild.hoehe), flaeche: g, hdr: false, flaeche_modus: false };
                         regler = roehre_kette::plane(&e, &k).parameter.iter().map(|(n, w)| (n.to_string(), *w)).collect();
                     }
@@ -306,7 +308,7 @@ fn erzeugte_vergleichen(gpu: &Gpu, shader: &std::path::Path, fehler: &mut Vec<St
                     let seite = bild.breite as f32 * bild.pixel_seitenverhaeltnis as f32 / bild.hoehe as f32;
                     // librashader
                     let mut kette_l = FilterChain::load_from_preset(
-                        kette.lade(shader)?,
+                        librashader::presets::ShaderPreset::try_parse(shader.join(erzeugt.preset), librashader::presets::ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS | librashader::presets::ShaderFeatures::FRAMETIME_UNIFORMS)?,
                         &gpu.device,
                         &gpu.queue,
                         Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: false, adapter_info: None }),
@@ -349,7 +351,7 @@ fn erzeugte_vergleichen(gpu: &Gpu, shader: &std::path::Path, fehler: &mut Vec<St
                         erzeugt.name,
                         g.0,
                         g.1,
-                        if geplant { voreinstellung } else { "Standardregler" },
+                        if geplant { voreinstellung.unwrap_or("") } else { "Standardregler" },
                         g.0 * g.1
                     );
                     if groesste > 2 {
