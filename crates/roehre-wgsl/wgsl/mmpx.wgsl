@@ -38,11 +38,10 @@ fn gl(a: vec3<f32>, b: vec3<f32>) -> bool {
     return all(a == b);
 }
 
-// Helligkeit für die Vergleiche: r + g + b in Stufen 0–255, ganzzahlig
-// gerundet — sonst könnten gleiche Summen aus verschiedenen Farben durch
-// Rundung der Gleitkommazahlen ungleich ausfallen.
+// Helligkeit nach BT.709 in ganzen Zahlen (2126·r + 7152·g + 722·b auf
+// Stufen 0–255): bis 2 550 000 exakt in f32, darum gleich der CPU-Fassung.
 fn hell(a: vec3<f32>) -> f32 {
-    return round(dot(a, vec3<f32>(255.0)));
+    return dot(round(a * 255.0), vec3<f32>(2126.0, 7152.0, 722.0));
 }
 
 @fragment

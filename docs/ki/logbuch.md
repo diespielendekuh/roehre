@@ -2,6 +2,16 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · MMPX gegen die Fassung der Autoren
+- `shader/fremd/mit/mmpx/mmpx.slang` (MIT, McGuire & Gagiu, slang von hunterk, unverändert aus
+  libretro `3685eda`) als **Prüfstein**; Preset `shader/eigen/mmpx-pruefung.slangp` (ein Pass,
+  doppelte Größe, `clamp_to_edge` wie die eigene Stufe).
+- `roehre-pruefstand wgsl` fährt sie über librashader und vergleicht mit `mmpx.wgsl`: **0 Punkte
+  anders** auf drei Testbildern. Dafür wiegt die Helligkeit für die Vergleiche jetzt nach BT.709
+  wie dort (vorher r+g+b aus dem Gedächtnis — die Referenz war beim Bau nicht erreichbar), in
+  ganzen Zahlen (2126·r + 7152·g + 722·b, in f32 exakt, GPU = CPU).
+- `pruefe` bestanden.
+
 ## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `farbe`
 - Eigene Stufe `crates/roehre-wgsl/wgsl/farbe.wgsl` (MIT OR Apache-2.0): Farbkorrektur hinter
   jedem Filter, 1:1 — Helligkeit, Kontrast (um Mittelgrau 0,18), Sättigung (BT.709), Wärme

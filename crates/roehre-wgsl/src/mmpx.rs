@@ -10,7 +10,10 @@
 //! Fehler ist nicht übernommen: sie liest `P` (zwei darüber) und `S` (zwei
 //! darunter) nur für die erste Spalte einer Zeile. Gegen die Referenz der
 //! Autoren selbst ist **nicht** Punkt für Punkt geprüft (ihre Seite war beim
-//! Bau nicht erreichbar). Helligkeit für die Vergleiche: `r + g + b`.
+//! Bau nicht erreichbar); Regel für Regel abgeglichen mit der slang-Fassung
+//! von hunterk (»adapted for slang«, MIT, libretro `edge-smoothing/scalenx/
+//! shaders/mmpx.slang`), gegen die `roehre-pruefstand wgsl` Punkt für Punkt
+//! vergleicht. Helligkeit für die Vergleiche: BT.709 wie dort.
 //!
 //! Nachbarschaft um `E`:
 //!
@@ -25,8 +28,12 @@
 /// Ein Punkt als `0xRRGGBB` — Gleichheit ist die Regel, nicht Nähe.
 type Punkt = u32;
 
+/// Helligkeit nach BT.709 in ganzen Zahlen (2126·r + 7152·g + 722·b,
+/// höchstens 2 550 000 — auch als f32 exakt, darum rechnen GPU und CPU
+/// gleich). So wiegen beide verfügbaren Abschriften der Autoren-Fassung
+/// (`mmpx` 0.2.0 über `image::to_luma`, die slang-Fassung von hunterk).
 fn hell(p: Punkt) -> u32 {
-    (p >> 16 & 0xFF) + (p >> 8 & 0xFF) + (p & 0xFF)
+    2126 * (p >> 16 & 0xFF) + 7152 * (p >> 8 & 0xFF) + 722 * (p & 0xFF)
 }
 
 /// Verdoppelt den Ausschnitt `x0..x1 × y0..y1` eines RGBA-Bilds der Breite

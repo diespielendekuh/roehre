@@ -176,6 +176,36 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
             }
         }
     }
+    // 2a. mmpx gegen die Fassung der Autoren (slang von hunterk, MIT) über
+    // librashader — der eigentliche Prüfstein der Regeln.
+    {
+        use librashader::runtime::wgpu::{FilterChain, FilterChainOptions, WgpuOutputView};
+        use librashader::runtime::Viewport;
+        let preset = librashader::presets::ShaderPreset::try_parse(shader.join("eigen/mmpx-pruefung.slangp"), librashader::presets::ShaderFeatures::NONE)?;
+        let mut kette = FilterChain::load_from_preset(preset, &gpu.device, &gpu.queue, Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: false, adapter_info: None }))?;
+        for name in ["pixelszene", "schrift", "farbbalken"] {
+            let bild = crate::lade_bild(name)?;
+            let eingang = gpu.eingang(&bild);
+            let g = (2 * bild.breite, 2 * bild.hoehe);
+            let ziel_l = ziel_roh(&gpu, g.0, g.1);
+            let ansicht = ziel_l.create_view(&Default::default());
+            let aus = WgpuOutputView::new_from_raw(&ansicht, librashader::runtime::Size::new(g.0, g.1), wgpu::TextureFormat::Rgba8Unorm);
+            let vp = Viewport::new_render_target_sized_origin(aus, None).expect("Größe bekannt");
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            kette.frame(&eingang, &vp, &mut enc, 0, None)?;
+            gpu.queue.submit([enc.finish()]);
+            let a = gpu.lies(&ziel_l);
+            let roh = ziel_roh(&gpu, g.0, g.1);
+            stufe_ausfuehren(&gpu, &roehre_wgsl::MMPX, &eingang, &Rahmen::neu((bild.breite, bild.hoehe), g), &roh, None);
+            let b = gpu.lies(&roh);
+            let anders = a.pixels().zip(b.pixels()).filter(|(p, q)| p.0[..3] != q.0[..3]).count();
+            eprintln!("mmpx {name}: gegen die Fassung der Autoren {anders} von {} Punkten anders", g.0 * g.1);
+            if anders > 0 {
+                fehler.push(format!("mmpx {name}: {anders} Punkte anders als die Autoren-Fassung"));
+            }
+        }
+    }
+
     // 2b. lcd-raster: Fotos (WGSL_FOTOS) und ein Maß gegen Moiré — auf einer
     // weißen Fläche muß jede Zellreihe gleich hell sein (Mittel je Zelle).
     {
