@@ -2556,6 +2556,7 @@ name = "roehre-pruefstand"
 version = "0.1.0"
 dependencies = [
  "image",
+ "librashader",
  "pollster 0.4.0",
  "roehre-kette",
  "roehre-modell",

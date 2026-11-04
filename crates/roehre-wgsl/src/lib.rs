@@ -22,6 +22,8 @@
 //! Die Dateien liegen **in** der Kiste (`wgsl/`), nicht unter `shader/`:
 //! wer die Kiste mitpackt (`cargo vendor`), bekommt nur ihren Ordner.
 
+pub mod erzeugt;
+pub mod kette;
 pub mod mmpx;
 
 /// Der gemeinsame Kopf jeder Stufe: Rahmen, Bindungen, Eckenfunktion.

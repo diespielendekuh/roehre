@@ -2,6 +2,27 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-04 nachts · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 2: crt-beans erzeugt
+- `roehre-pruefstand wgsl-erzeugen` übersetzt die drei MIT-Ketten (`eigen/beans/rgb.slangp`,
+  `signal.slangp`, `schnell.slangp`: 13, 13 und 4 Pässe samt `helligkeit.slang`) mit
+  **librashaders eigener Übersetzung** (slang → SPIR-V → naga → WGSL, dieselben Optionen wie
+  sein wgpu-Unterbau) und schreibt WGSL-Texte nach `crates/roehre-wgsl/wgsl/erzeugt/` und die
+  Pass-Beschreibung (Größenregel, Format, Abtaster, Bindungen, Lage jedes Werts und Reglers,
+  Nachschlagebild BlueNoiseTex roh als RGBA) nach `src/erzeugt/beans.rs`. Nichts ist von Hand
+  abgeschrieben; was ein Ausführer nicht kennt (Verlauf, Rückkopplung, Mipmaps, seltene
+  Werte), bricht das Erzeugen ab. Lizenztext von crt-beans liegt in der Kiste.
+- `roehre_wgsl::kette` beschreibt, was ein Ausführer von librashader nachbilden muß (gelesen
+  in librashader 0.12.1): Eckdaten und MVP, Größenrechnung, welcher Abtaster zu welchem Bild.
+- `crates/roehre-pruefstand/src/wgsl_kette.rs`: ein Ausführer auf wgpu 30. **Prüfstein:**
+  `roehre-pruefstand wgsl` zeichnet jede Kette einmal über librashaders `FilterChain`, einmal
+  über den Ausführer — zwei Testbilder, 960×720, 1440×1080, 935×701, Standardregler und die
+  von `roehre_kette::plane` für `mit-rgb`/`mit-composite` geplanten: **0 Abweichung** in jedem
+  Fall (Rgba8Unorm, lavapipe).
+- `roehre-kette`: librashader hinter das Standard-Merkmal `librashader` (Standard an, nichts
+  ändert sich für bestehende Nutzer); ohne es bleiben Kettenwahl und `plane` — ein Spiel
+  plant die Regler damit genau wie roehre, ohne librashader zu ziehen.
+- Ungeprüft: echte GPU; ältere naga-Fassungen (Terranigma: wgpu 24) prüft der Port.
+
 ## 2026-11-04 abends · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 1: Kiste `roehre-wgsl`
 - Neue Kiste `crates/roehre-wgsl` **ohne Abhängigkeiten**: WGSL-Text der Stufen samt
   Beschreibung (Größe des Ziels, Abtastung, Lizenz), Ketten für das Menü eines Spiels

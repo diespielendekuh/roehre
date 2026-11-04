@@ -176,6 +176,8 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
             }
         }
     }
+    // 3. Erzeugte Ketten (crt-beans) gegen librashaders eigene FilterChain.
+    erzeugte_vergleichen(&gpu, shader, &mut fehler)?;
     let _ = Bild::neu;
     if fehler.is_empty() {
         eprintln!("roehre-wgsl: alle Vergleiche bestanden");
@@ -183,4 +185,87 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
     } else {
         Err(fehler.join("\n").into())
     }
+}
+
+/// Dieselbe Kette einmal über librashader, einmal über den Ausführer der
+/// erzeugten WGSL-Pässe; Standardregler und die Regler, die roehre für die
+/// MIT-Voreinstellungen plant.
+fn erzeugte_vergleichen(gpu: &Gpu, shader: &std::path::Path, fehler: &mut Vec<String>) -> Ergebnis {
+    use librashader::runtime::wgpu::{FilterChain, FilterChainOptions, FrameOptions, WgpuOutputView};
+    use librashader::runtime::{FilterChainParameters, Viewport};
+    use roehre_kette::Kette;
+    let faelle: [(&'static roehre_wgsl::kette::Erzeugt, Kette, &str); 3] = [
+        (&roehre_wgsl::erzeugt::beans::BEANS_RGB, Kette::BeansRgb, "mit-rgb"),
+        (&roehre_wgsl::erzeugt::beans::BEANS_SIGNAL, Kette::BeansSignal, "mit-composite"),
+        (&roehre_wgsl::erzeugt::beans::BEANS_SCHNELL, Kette::BeansSchnell, "mit-rgb"),
+    ];
+    for (erzeugt, kette, voreinstellung) in faelle {
+        for name in ["pixelszene", "schrift"] {
+            let bild = crate::lade_bild(name)?;
+            for g in [(960u32, 720u32), (1440, 1080), (935, 701)] {
+                for geplant in [false, true] {
+                    let mut regler: Vec<(String, f32)> = vec![];
+                    if geplant {
+                        let e = Einstellungen::voreinstellung(voreinstellung)?;
+                        let k = roehre_kette::Kontext { eingang: (bild.breite, bild.hoehe), flaeche: g, hdr: false, flaeche_modus: false };
+                        regler = roehre_kette::plane(&e, &k).parameter.iter().map(|(n, w)| (n.to_string(), *w)).collect();
+                    }
+                    let eingang = gpu.eingang(&bild);
+                    let seite = bild.breite as f32 * bild.pixel_seitenverhaeltnis as f32 / bild.hoehe as f32;
+                    // librashader
+                    let mut kette_l = FilterChain::load_from_preset(
+                        kette.lade(shader)?,
+                        &gpu.device,
+                        &gpu.queue,
+                        Some(&FilterChainOptions { force_no_mipmaps: true, enable_cache: false, adapter_info: None }),
+                    )?;
+                    for (n, w) in &regler {
+                        kette_l.parameters().set_parameter_value(n, *w);
+                    }
+                    let ziel_l = ziel_roh(gpu, g.0, g.1);
+                    let ansicht_l = ziel_l.create_view(&Default::default());
+                    let aus = WgpuOutputView::new_from_raw(&ansicht_l, librashader::runtime::Size::new(g.0, g.1), wgpu::TextureFormat::Rgba8Unorm);
+                    let vp = Viewport::new_render_target_sized_origin(aus, None).expect("Größe bekannt");
+                    let mut enc = gpu.device.create_command_encoder(&Default::default());
+                    kette_l.frame(&eingang, &vp, &mut enc, 3, Some(&FrameOptions { aspect_ratio: seite, ..Default::default() }))?;
+                    gpu.queue.submit([enc.finish()]);
+                    let a = gpu.lies(&ziel_l);
+                    // Ausführer der erzeugten Pässe
+                    let mut ausf = crate::wgsl_kette::Ausfuehrer::neu(&gpu.device, &gpu.queue, erzeugt, wgpu::TextureFormat::Rgba8Unorm);
+                    let ziel_w = ziel_roh(gpu, g.0, g.1);
+                    let ansicht_w = ziel_w.create_view(&Default::default());
+                    let karte: std::collections::HashMap<&str, f32> = regler.iter().map(|(n, w)| (n.as_str(), *w)).collect();
+                    let mut enc = gpu.device.create_command_encoder(&Default::default());
+                    ausf.zeichne(&gpu.device, &gpu.queue, &mut enc, &eingang, &ansicht_w, g, 3, seite, &karte);
+                    gpu.queue.submit([enc.finish()]);
+                    let b = gpu.lies(&ziel_w);
+                    if let Some(ordner) = std::env::var_os("WGSL_FOTOS") {
+                        let _ = b.save(std::path::Path::new(&ordner).join(format!("{}-{name}-{}x{}-{}.png", erzeugt.name, g.0, g.1, geplant)));
+                    }
+                    let hell: u64 = b.pixels().map(|p| u64::from(p.0[0]) + u64::from(p.0[1]) + u64::from(p.0[2])).sum();
+                    if hell == 0 {
+                        fehler.push(format!("{} {name}: Bild ganz schwarz", erzeugt.name));
+                    }
+                    let (mut groesste, mut ueber1) = (0u8, 0usize);
+                    for (p, q) in a.pixels().zip(b.pixels()) {
+                        let d = (0..4).map(|c| p.0[c].abs_diff(q.0[c])).max().unwrap_or(0);
+                        groesste = groesste.max(d);
+                        ueber1 += usize::from(d > 1);
+                    }
+                    eprintln!(
+                        "{} {name} {}×{} {}: größte Abweichung {groesste}, über 1: {ueber1} von {}",
+                        erzeugt.name,
+                        g.0,
+                        g.1,
+                        if geplant { voreinstellung } else { "Standardregler" },
+                        g.0 * g.1
+                    );
+                    if groesste > 2 {
+                        fehler.push(format!("{} {name} {}×{}: Abweichung {groesste}", erzeugt.name, g.0, g.1));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

@@ -16,6 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "librashader")]
 use librashader::presets::{ShaderFeatures, ShaderPreset};
 use roehre_modell::Einstellungen;
 
@@ -24,6 +25,7 @@ use roehre_modell::Einstellungen;
 pub enum Fehler {
     #[error("Shader-Ordner „{0}“ fehlt oder ist unvollständig (erwartet: {1})")]
     ShaderOrdner(PathBuf, PathBuf),
+    #[cfg(feature = "librashader")]
     #[error("Preset nicht lesbar: {0}")]
     Preset(#[from] librashader::presets::ParsePresetError),
 }
@@ -83,6 +85,7 @@ impl Kette {
     ];
 
     /// Lädt das Preset aus dem Shader-Ordner.
+    #[cfg(feature = "librashader")]
     pub fn lade(self, shader_ordner: &Path) -> Result<ShaderPreset, Fehler> {
         let pfad = shader_ordner.join(self.preset_pfad());
         if !pfad.is_file() {
@@ -96,6 +99,7 @@ impl Kette {
 pub const VORSTUFE_PFAD: &str = "eigen/virtuelle-zeilen.slangp";
 
 /// Lädt das Preset der Vorstufe.
+#[cfg(feature = "librashader")]
 pub fn lade_vorstufe(shader_ordner: &Path) -> Result<ShaderPreset, Fehler> {
     let pfad = shader_ordner.join(VORSTUFE_PFAD);
     if !pfad.is_file() {

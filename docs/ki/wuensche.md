@@ -22,7 +22,10 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 - **Status:** in Arbeit (Helfer-KI des Terranigma-Ports, Branch `helfer/terranigma`): Kiste
   `crates/roehre-wgsl` steht mit `scharf-bilinear` (gegen librashader ±1 in jeder Größe) und
   `mmpx` (GPU punktgleich mit der CPU-Referenz), Prüfbefehl `roehre-pruefstand wgsl`;
-  offen: crt-beans (`mit-rgb`, `mit-composite`), `virtuelle-zeilen`, Regler-Beschreibung.
+  Teil 2: crt-beans (`beans-rgb`, `beans-signal`, `beans-schnell`) erzeugt, gegen librashader
+  0 Abweichung; offen: `virtuelle-zeilen`, das Zusammensetzen (Lage, Hintergrund, SDR/HDR) und
+  die Reglerplanung ohne librashader — erledigt: `roehre-kette` mit
+  `default-features = false` hat `plane` ohne librashader.
 - **Was fehlt:** Eine Fassung der GPL-freien Kette (crt-beans und die eigenen Stufen
   `scharf-bilinear`, `virtuelle-zeilen`), die **keine wgpu- und keine librashader-Version**
   voraussetzt: die Pässe als WGSL-Text, dazu eine Beschreibung der Pass-Folge (Größe und Format

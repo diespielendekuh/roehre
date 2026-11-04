@@ -46,3 +46,7 @@ Der Port bleibt vorerst auf wgpu 24. Statt `roehre-wgpu` liest er die Stufen als
    und `mmpx` lesen keinen Punkt von außerhalb.
 4. Wie die Kiste in den offline gebauten Port kommt (Git-Abhängigkeit, beim Packen
    mitgelegt), entscheidet der Leiter des Ports.
+5. **Röhre ohne librashader (Teil 2):** `roehre_wgsl::erzeugt::beans::{BEANS_RGB, BEANS_SIGNAL,
+   BEANS_SCHNELL}` mit dem Ausführer nach `crates/roehre-pruefstand/src/wgsl_kette.rs`
+   (gegen librashader punktgleich). Die Regler plant heute `roehre_kette::plane`; solange
+   diese Kiste librashader zieht, braucht der Port dafür einen Weg ohne (siehe W-009).

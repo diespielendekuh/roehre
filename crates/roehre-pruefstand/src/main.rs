@@ -18,6 +18,8 @@ mod leistung;
 mod moire;
 mod szene3d;
 mod wgsl;
+mod wgsl_erzeugen;
+mod wgsl_kette;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -80,6 +82,7 @@ fn main() {
         ),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
         "wgsl" => wgsl::pruefen(&shader_ordner()),
+        "wgsl-erzeugen" => wgsl_erzeugen::erzeugen(&shader_ordner(), &Path::new(env!("CARGO_MANIFEST_DIR")).join("../roehre-wgsl")),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!(
