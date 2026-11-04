@@ -2,6 +2,13 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `farbe`
+- Eigene Stufe `crates/roehre-wgsl/wgsl/farbe.wgsl` (MIT OR Apache-2.0): Farbkorrektur hinter
+  jedem Filter, 1:1 — Helligkeit, Kontrast (um Mittelgrau 0,18), Sättigung (BT.709), Wärme
+  (Rot/Blau gegeneinander ±10 %, eine Annäherung, keine Farbmetrik), in linearem Licht.
+  `Stufe::neutral` sagt, wann ein Ausführer sie weglassen darf.
+- `roehre-pruefstand wgsl`: neutral 0 Abweichung, Sättigung 0 exakt grau. `pruefe` bestanden.
+
 ## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `lcd-raster`, Regler je Stufe
 - Neue eigene Stufe `crates/roehre-wgsl/wgsl/lcd-raster.wgsl` (MIT OR Apache-2.0) für die
   Bildfilter-Vielfalt (Wunsch E3b des Terranigma-Anwenders): Handheld-/LCD-Bild, jeder

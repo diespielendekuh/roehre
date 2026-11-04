@@ -216,6 +216,28 @@ pub fn pruefen(shader: &std::path::Path) -> Ergebnis {
         }
     }
 
+    // 2c. farbe: neutral = Bild unverändert (±1 Rundung), Sättigung 0 = grau.
+    {
+        let bild = crate::lade_bild("farbbalken")?;
+        let eingang = gpu.eingang(&bild);
+        for (name, werte, grau) in [("neutral", vec![], false), ("grau", vec![("saettigung", 0.0f32)], true)] {
+            let roh = ziel_roh(&gpu, bild.breite, bild.hoehe);
+            let rahmen = Rahmen::neu((bild.breite, bild.hoehe), (bild.breite, bild.hoehe)).mit_reglern(&roehre_wgsl::FARBE, &werte);
+            stufe_ausfuehren(&gpu, &roehre_wgsl::FARBE, &eingang, &rahmen, &roh, None);
+            let a = gpu.lies(&roh);
+            let mut groesste = 0u8;
+            for (i, p) in a.pixels().enumerate() {
+                let q = &bild.rgba[i * 4..i * 4 + 3];
+                let d = if grau { p.0[0].abs_diff(p.0[1]).max(p.0[1].abs_diff(p.0[2])) } else { (0..3).map(|c| p.0[c].abs_diff(q[c])).max().unwrap_or(0) };
+                groesste = groesste.max(d);
+            }
+            eprintln!("farbe {name}: größte Abweichung {groesste}");
+            if groesste > 1 {
+                fehler.push(format!("farbe {name}: Abweichung {groesste}"));
+            }
+        }
+    }
+
     // 3. Erzeugte Ketten (crt-beans) gegen librashaders eigene FilterChain.
     erzeugte_vergleichen(&gpu, shader, &mut fehler)?;
     let _ = Bild::neu;

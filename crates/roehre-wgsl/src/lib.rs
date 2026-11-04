@@ -121,6 +121,31 @@ pub const LCD_RASTER: Stufe = Stufe {
     ],
 };
 
+/// Farbkorrektur hinter jedem Filter (1:1): Helligkeit, Kontrast, Sättigung,
+/// Wärme, in linearem Licht. Bei den Voreinstellungen unverändert bis auf die
+/// 8-Bit-Rundung; ein Ausführer läßt sie dann weg ([`Stufe::neutral`]).
+pub const FARBE: Stufe = Stufe {
+    name: "farbe",
+    rumpf: include_str!("../wgsl/farbe.wgsl"),
+    groesse: Groesse::Ziel,
+    abtastung: Abtastung::Naechster,
+    lizenz: "MIT OR Apache-2.0",
+    regler: &[
+        StufenRegler { name: "helligkeit", titel: "Helligkeit", beschreibung: "Mehr oder weniger Licht für das ganze Bild.", kleinst: 0.5, groesst: 1.5, schritt: 0.05, standard: 1.0 },
+        StufenRegler { name: "kontrast", titel: "Kontrast", beschreibung: "Spreizt helle und dunkle Töne um Mittelgrau.", kleinst: 0.5, groesst: 1.5, schritt: 0.05, standard: 1.0 },
+        StufenRegler { name: "saettigung", titel: "Sättigung", beschreibung: "0 ist grau, 1 die Farben des Spiels, darüber kräftiger.", kleinst: 0.0, groesst: 2.0, schritt: 0.05, standard: 1.0 },
+        StufenRegler { name: "waerme", titel: "Farbwärme", beschreibung: "Kühler (blauer) oder wärmer (röter), wie die Farbtemperatur eines Fernsehers.", kleinst: -1.0, groesst: 1.0, schritt: 0.1, standard: 0.0 },
+    ],
+};
+
+impl Stufe {
+    /// Stehen alle Regler auf ihrer Voreinstellung? (Dann darf ein Ausführer
+    /// eine Stufe wie [`FARBE`] weglassen.)
+    pub fn neutral(&self, werte: &[(&str, f32)]) -> bool {
+        self.regler.iter().all(|r| werte.iter().find(|(n, _)| *n == r.name).is_none_or(|(_, w)| (w - r.standard).abs() < r.schritt / 2.0))
+    }
+}
+
 /// Stufen in Reihenfolge, als ein Bildfilter.
 #[derive(Debug, Clone, Copy)]
 pub struct Kette {
@@ -228,8 +253,8 @@ mod proben {
     /// Einstiegen — geprüft mit naga (dem Übersetzer in wgpu).
     #[test]
     fn jede_stufe_ist_gueltiges_wgsl() {
-        for k in KETTEN {
-            for s in k.stufen {
+        for s in KETTEN.iter().flat_map(|k| k.stufen.iter()).chain([&FARBE]) {
+            {
                 let text = s.wgsl();
                 let modul = naga::front::wgsl::parse_str(&text).unwrap_or_else(|e| panic!("{}: {}", s.name, e.emit_to_string(&text)));
                 naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::empty())
