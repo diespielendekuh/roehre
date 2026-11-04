@@ -20,6 +20,7 @@ mod szene3d;
 mod wgsl;
 mod wgsl_erzeugen;
 mod wgsl_kette;
+mod wgsl_leistung;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -85,6 +86,10 @@ fn main() {
         ),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
         "wgsl" => wgsl::pruefen(&shader_ordner()),
+        "wgsl-leistung" => wgsl_leistung::messen(
+            Path::new(&opt("-o").unwrap_or("wgsl-leistung.md".into())),
+            opt("-n").and_then(|n| n.parse().ok()).unwrap_or(60),
+        ),
         "wgsl-erzeugen" => wgsl_erzeugen::erzeugen(
             &shader_ordner(),
             &Path::new(env!("CARGO_MANIFEST_DIR")).join("../roehre-wgsl"),
@@ -96,6 +101,7 @@ fn main() {
                  leistung [-o leistung.md] [-n 120] [--nur-1080p]   Leistung messen (Filter, 3D-Raum, Kosten je Regler)\n\
                  pruefe [--neu]                                    Referenzbilder, Moiré, Helligkeit, Strahl\n\
                  wgsl                                              versionsfreie Stufen (roehre-wgsl) gegen librashader und CPU\n\
+                 wgsl-leistung [-o wgsl-leistung.md] [-n 60]       Zeit je Bild jeder versionsfreien Kette (1080p, 4K)\n\
                  foto, bogen, raum, kamera, testbilder            Fotos\n\
                  moire, helligkeit, hdr, bewegung, umschalten      Einzelmessungen"
             );

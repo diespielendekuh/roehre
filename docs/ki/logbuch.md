@@ -2,6 +2,14 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Zeit je Bild der versionsfreien Ketten
+- Neuer Befehl `roehre-pruefstand wgsl-leistung [-o datei.md] [-n 60]`: jede Kette aus `KETTEN`,
+  die erzeugten (crt-beans, ScaleFX, OmniScale) und die Stufen hinter einem Filter (Leuchten bei
+  Weite 1,5 und 4, Farbe), Eingang 256 × 224, Ziel 4:3 in 1080p und 4K; Messung wie `leistung`
+  (Zeitstempel, sonst Wanduhr), Pipelines vorab gebaut. `Messer`/`Kennzahl` dafür `pub(crate)`.
+- Hier nur lavapipe gemessen (Zahlen sagen nichts über echte Karten); laufen lassen muß ihn der
+  Anwender auf seinem Rechner.
+
 ## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Weichheit und Leuchten
 - `scharf-bilinear` hat den Regler **»weichheit«** (0 … 1, Voreinstellung 0 = Saum ein Bildpunkt,
   unverändert): 1 rechnet wie `linear` (größte Abweichung 1), 0,5 liegt dazwischen.

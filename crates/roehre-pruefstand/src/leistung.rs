@@ -18,18 +18,18 @@ use crate::gpu::Gpu;
 
 /// Kennzahlen einer Messreihe in Millisekunden.
 #[derive(Clone, Copy, Debug)]
-struct Kennzahl {
-    median: f64,
-    p95: f64,
-    mittel: f64,
+pub(crate) struct Kennzahl {
+    pub(crate) median: f64,
+    pub(crate) p95: f64,
+    pub(crate) mittel: f64,
 }
 
-struct Messer {
+pub(crate) struct Messer {
     abfrage: Option<(wgpu::QuerySet, wgpu::Buffer, wgpu::Buffer, f64)>,
 }
 
 impl Messer {
-    fn neu(gpu: &Gpu) -> Self {
+    pub(crate) fn neu(gpu: &Gpu) -> Self {
         let f = gpu.device.features();
         let abfrage = f
             .contains(
@@ -58,7 +58,7 @@ impl Messer {
         Self { abfrage }
     }
 
-    fn methode(&self) -> &'static str {
+    pub(crate) fn methode(&self) -> &'static str {
         if self.abfrage.is_some() {
             "Zeitstempel der Grafikkarte (reine GPU-Zeit)"
         } else {
@@ -67,7 +67,7 @@ impl Messer {
     }
 
     /// Misst `bilder` Bilder nach `bilder / 6` Bildern Anlauf.
-    fn miss(
+    pub(crate) fn miss(
         &self,
         gpu: &Gpu,
         bilder: usize,
