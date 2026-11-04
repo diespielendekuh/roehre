@@ -17,6 +17,7 @@ mod gpu;
 mod leistung;
 mod moire;
 mod szene3d;
+mod wgsl;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -78,12 +79,14 @@ fn main() {
             args.iter().any(|a| a == "--nur-1080p"),
         ),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
+        "wgsl" => wgsl::pruefen(&shader_ordner()),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!(
                 "roehre-pruefstand <befehl>\n\n\
                  leistung [-o leistung.md] [-n 120] [--nur-1080p]   Leistung messen (Filter, 3D-Raum, Kosten je Regler)\n\
                  pruefe [--neu]                                    Referenzbilder, Moiré, Helligkeit, Strahl\n\
+                 wgsl                                              versionsfreie Stufen (roehre-wgsl) gegen librashader und CPU\n\
                  foto, bogen, raum, kamera, testbilder            Fotos\n\
                  moire, helligkeit, hdr, bewegung, umschalten      Einzelmessungen"
             );

@@ -2562,6 +2562,7 @@ dependencies = [
  "roehre-raum",
  "roehre-testbilder",
  "roehre-wgpu",
+ "roehre-wgsl",
  "wgpu",
 ]
 
@@ -2604,6 +2605,13 @@ dependencies = [
  "roehre-modell",
  "thiserror 2.0.21",
  "wgpu",
+]
+
+[[package]]
+name = "roehre-wgsl"
+version = "0.1.0"
+dependencies = [
+ "naga",
 ]
 
 [[package]]

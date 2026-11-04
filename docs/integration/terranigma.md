@@ -32,3 +32,17 @@ ein (Beispiel für eframe/egui 0.37 mit wgpu 30: `crates/roehre-vorschau/src/mai
 5. **Menü:** die Optionen aus `roehre_modell::katalog()` (deutsche Namen, Grenzen, Festwerte);
    Einstellungen als TOML im Spielstandordner.
 6. **3D-Raum** (falls gewünscht): `roehre_raum::Raum` mit `Ansicht::aus_einstellungen`.
+
+## Zweiter Weg ohne Anheben: `roehre-wgsl` (W-009, ab 2026-11-04 auf `helfer/terranigma`)
+
+Der Port bleibt vorerst auf wgpu 24. Statt `roehre-wgpu` liest er die Stufen als WGSL-Text aus
+`crates/roehre-wgsl` und führt sie selbst aus (Vorbild: `crates/roehre-pruefstand/src/wgsl.rs`):
+
+1. Bindungslayout **ausdrücklich** nach der Vereinbarung anlegen (Rahmen 128 Byte uniform,
+   Quelle `texture_2d<f32>` filterbar, Abtaster filternd) — nicht ableiten lassen.
+2. Je Stufe der Kette ein Ziel der Größe `Rahmen::zielgroesse` (MMPX: Quelle × 2, Format
+   `Rgba8Unorm`), die letzte Stufe in den Bildausschnitt des Fensters (Viewport).
+3. Werksbeschnitt 8/8/0/1 über `Rahmen::ausschnitt` (Texturkoordinaten); `scharf-bilinear`
+   und `mmpx` lesen keinen Punkt von außerhalb.
+4. Wie die Kiste in den offline gebauten Port kommt (Git-Abhängigkeit, beim Packen
+   mitgelegt), entscheidet der Leiter des Ports.

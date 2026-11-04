@@ -1,0 +1,15 @@
+[package]
+name = "roehre-wgsl"
+description = "Die GPL-freien Stufen von roehre als WGSL-Text mit Pass-Beschreibung, ohne wgpu-Version (W-009)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+# Absichtlich ohne Abhängigkeiten: jede wgpu-Version (Terranigma: 24, roehre: 30)
+# soll diese Kiste einbinden können.
+[dependencies]
+
+[dev-dependencies]
+naga = { version = "30", features = ["wgsl-in"] }

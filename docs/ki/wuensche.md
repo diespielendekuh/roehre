@@ -19,7 +19,10 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ### W-009: Die MIT-Kette ohne wgpu-Version (für Terranigma auf wgpu 24)
 - **Von:** Terranigma-Port (Helfer-KI der Oberfläche, über den Anwender), 2026-11-04
-- **Status:** offen
+- **Status:** in Arbeit (Helfer-KI des Terranigma-Ports, Branch `helfer/terranigma`): Kiste
+  `crates/roehre-wgsl` steht mit `scharf-bilinear` (gegen librashader ±1 in jeder Größe) und
+  `mmpx` (GPU punktgleich mit der CPU-Referenz), Prüfbefehl `roehre-pruefstand wgsl`;
+  offen: crt-beans (`mit-rgb`, `mit-composite`), `virtuelle-zeilen`, Regler-Beschreibung.
 - **Was fehlt:** Eine Fassung der GPL-freien Kette (crt-beans und die eigenen Stufen
   `scharf-bilinear`, `virtuelle-zeilen`), die **keine wgpu- und keine librashader-Version**
   voraussetzt: die Pässe als WGSL-Text, dazu eine Beschreibung der Pass-Folge (Größe und Format

@@ -2,6 +2,28 @@
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
 
+## 2026-11-04 abends · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 1: Kiste `roehre-wgsl`
+- Neue Kiste `crates/roehre-wgsl` **ohne Abhängigkeiten**: WGSL-Text der Stufen samt
+  Beschreibung (Größe des Ziels, Abtastung, Lizenz), Ketten für das Menü eines Spiels
+  (`scharf`, `mmpx`), das Layout der Werte als 128 Byte (`Rahmen::als_bytes`). Die WGSL-Dateien
+  liegen **in** der Kiste (`wgsl/`), damit ein Spiel sie mitpacken kann (`cargo vendor` kopiert
+  nur den Kistenordner).
+- `scharf-bilinear.wgsl`: aus `shader/eigen/scharf-bilinear.slang` übertragen; einzige
+  Erweiterung ein gezeigter Ausschnitt (Overscan), bei (0,0,1,1) gleich.
+- `mmpx.wgsl` + `roehre_wgsl::mmpx` (CPU): MMPX nach McGuire & Gagiu (2021, MIT,
+  `wgsl/LIZENZ-MMPX`) — für die Bildfilter-Vielfalt (Wunsch des Terranigma-Anwenders, »der
+  Sammelort ist roehre«). Die Regeln stammen aus der Rust-Abschrift `mmpx` 0.2.0, deren Fehler
+  (Nachbarn P/S nur in Spalte 0) nicht übernommen ist; die WGSL-Regeln sind maschinell aus der
+  Rust-Fassung übertragen.
+- `roehre-pruefstand wgsl`: führt die Stufen auf wgpu 30 aus (ein schlichter Ausführer mit dem
+  Layout der Vereinbarung) und vergleicht `scharf-bilinear` mit der Voreinstellung `aus`
+  (librashader) in fünf Größen und drei Testbildern — größte Abweichung 1 —, `mmpx` mit der
+  CPU-Referenz — 0 Punkte verschieden, auch mit beschnittenem Ausschnitt.
+- Befund für Ausführer: das Bindungslayout muß ausdrücklich angelegt werden; ein abgeleitetes
+  Layout läßt den Abtaster weg, wo eine Stufe ihn nicht liest (mmpx).
+- Ungeprüft: die Referenz der MMPX-Autoren selbst (Seite beim Bau nicht erreichbar); naga 24
+  (Terranigma) prüft der Port beim Einbinden.
+
 ## 2026-11-04 · Terranigma-Port (Helfer-KI der Oberfläche) · Wunsch W-009
 - Nur Doku: Wunsch W-009 eingetragen (die MIT-Kette als WGSL ohne wgpu-/librashader-Version),
   weil der Port vorerst auf wgpu 24 bleibt; `docs/integration/terranigma.md` nennt den zweiten
