@@ -121,6 +121,13 @@ pub const LCD_RASTER: Stufe = Stufe {
     ],
 };
 
+/// Nächster Punkt, ohne weitere Rechnung (bei krummen Faktoren ungleich
+/// breite Punkte).
+pub const NAECHSTER: Stufe = Stufe { name: "naechster", rumpf: include_str!("../wgsl/abtasten.wgsl"), groesse: Groesse::Ziel, abtastung: Abtastung::Naechster, lizenz: "MIT OR Apache-2.0", regler: &[] };
+
+/// Linear eingepaßt (weich).
+pub const LINEAR: Stufe = Stufe { name: "linear", rumpf: include_str!("../wgsl/abtasten.wgsl"), groesse: Groesse::Ziel, abtastung: Abtastung::Linear, lizenz: "MIT OR Apache-2.0", regler: &[] };
+
 /// Farbkorrektur hinter jedem Filter (1:1): Helligkeit, Kontrast, Sättigung,
 /// Wärme, in linearem Licht. Bei den Voreinstellungen unverändert bis auf die
 /// 8-Bit-Rundung; ein Ausführer läßt sie dann weg ([`Stufe::neutral`]).
@@ -172,6 +179,8 @@ pub const KETTEN: &[Kette] = &[
         beschreibung: "Treppen an schrägen Kanten geglättet, ohne neue Farben; danach scharf eingepaßt.",
         stufen: &[MMPX, SCHARF_BILINEAR],
     },
+    Kette { name: "pixel", titel: "Pixel", beschreibung: "Nächster Punkt — bei krummen Faktoren ungleich breite Punkte.", stufen: &[NAECHSTER] },
+    Kette { name: "weich", titel: "Weich", beschreibung: "Linear geglättet.", stufen: &[LINEAR] },
     Kette {
         name: "lcd",
         titel: "LCD-Raster",
