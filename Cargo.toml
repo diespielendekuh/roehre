@@ -9,6 +9,7 @@ members = [
     "crates/roehre-raum",
     "crates/roehre-vorschau",
     "crates/roehre-c",
+    "crates/roehre-wgsl",
 ]
 
 [workspace.package]
@@ -24,6 +25,7 @@ roehre-kette = { path = "crates/roehre-kette" }
 roehre-wgpu = { path = "crates/roehre-wgpu" }
 roehre-testbilder = { path = "crates/roehre-testbilder" }
 roehre-raum = { path = "crates/roehre-raum" }
+roehre-wgsl = { path = "crates/roehre-wgsl" }
 librashader = { version = "0.12.1", default-features = false }
 wgpu = { version = "30", default-features = false }
 serde = { version = "1", features = ["derive"] }

@@ -1,7 +1,9 @@
 # Terranigma PC-Port
 
 - **Repository:** `diespielendekuh/Tenchi-Souzou-Deutsch-mod-tool`, Kiste `crates/terranigma-spiel`
-- **Stand:** noch nicht eingebaut (Wunsch W-002); Einbauweg unten
+- **Stand:** noch nicht eingebaut (Wunsch W-002); Einbauweg unten. **Zweiter Weg ohne Anheben**
+  (Wunsch W-009, 2026-11-04): die MIT-Kette als WGSL, vom Port auf wgpu 24 selbst ausgeführt —
+  ob angehoben wird, entscheidet der Leiter des Ports
 - **Bild:** 256×224, Pixel 8:7 (NTSC); der Port beschneidet den Rand selbst (Werksbeschnitt 8/8/0/1)
 - **Grafik:** winit 0.30, egui 0.31, egui-wgpu 0.31, **wgpu 24** (D3D12 unter Windows,
   Vulkan/GL unter Linux). roehre braucht wgpu 30 → Port auf egui 0.37 / wgpu 30 anheben.
@@ -30,3 +32,21 @@ ein (Beispiel für eframe/egui 0.37 mit wgpu 30: `crates/roehre-vorschau/src/mai
 5. **Menü:** die Optionen aus `roehre_modell::katalog()` (deutsche Namen, Grenzen, Festwerte);
    Einstellungen als TOML im Spielstandordner.
 6. **3D-Raum** (falls gewünscht): `roehre_raum::Raum` mit `Ansicht::aus_einstellungen`.
+
+## Zweiter Weg ohne Anheben: `roehre-wgsl` (W-009, ab 2026-11-04 auf `helfer/terranigma`)
+
+Der Port bleibt vorerst auf wgpu 24. Statt `roehre-wgpu` liest er die Stufen als WGSL-Text aus
+`crates/roehre-wgsl` und führt sie selbst aus (Vorbild: `crates/roehre-pruefstand/src/wgsl.rs`):
+
+1. Bindungslayout **ausdrücklich** nach der Vereinbarung anlegen (Rahmen 128 Byte uniform,
+   Quelle `texture_2d<f32>` filterbar, Abtaster filternd) — nicht ableiten lassen.
+2. Je Stufe der Kette ein Ziel der Größe `Rahmen::zielgroesse` (MMPX: Quelle × 2, Format
+   `Rgba8Unorm`), die letzte Stufe in den Bildausschnitt des Fensters (Viewport).
+3. Werksbeschnitt 8/8/0/1 über `Rahmen::ausschnitt` (Texturkoordinaten); `scharf-bilinear`
+   und `mmpx` lesen keinen Punkt von außerhalb.
+4. Wie die Kiste in den offline gebauten Port kommt (Git-Abhängigkeit, beim Packen
+   mitgelegt), entscheidet der Leiter des Ports.
+5. **Röhre ohne librashader (Teil 2):** `roehre_wgsl::erzeugt::beans::{BEANS_RGB, BEANS_SIGNAL,
+   BEANS_SCHNELL}` mit dem Ausführer nach `crates/roehre-pruefstand/src/wgsl_kette.rs`
+   (gegen librashader punktgleich). Die Regler plant heute `roehre_kette::plane`; solange
+   diese Kiste librashader zieht, braucht der Port dafür einen Weg ohne (siehe W-009).

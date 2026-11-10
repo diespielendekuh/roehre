@@ -38,6 +38,13 @@ Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, w
   erkennen, das Gehäuse der Konsole weniger. Weitere Konsolen (SNES, PlayStation …) fehlen; wer
   ein Spiel eines anderen Systems einbaut, modelliert dessen Konsole nach dem Original dazu.
 
+## 2026-11-10 · Ghost Return (KI des Projekts) · Zweige zusammengeführt
+- Auftrag des Anwenders: Die drei auseinanderlaufenden Zweige werden ein Stand. `helfer/terranigma` (10 Commits:
+  `roehre-wgsl`, ScaleFX, OmniScale, `wgsl-leistung`) ist in `ki/ghost-return-bgra` (5 Commits: BGRA, Bild überstrahlt
+  nicht, Fernseher in jedem Bildformat, `raum.bildhelligkeit`, `raum.konsole`) gemischt; das Ergebnis steht auf dem
+  Standardzweig. Konflikte nur im Hilfetext und in `formate` des Prüfstands sowie in dieser Doku; beides behalten.
+- Geprüft: `cargo test --workspace` und `roehre-pruefstand pruefe` (Ergebnis im Commit-Text).
+
 ## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Bild überstrahlt nicht mehr; Fernseher in jedem Bildformat
 - **Rückmeldung des Anwenders:** Das Bild auf dem Fernseher war zu grell („man sieht nur weiß“),
   früher musste man es auf die niedrigste Stufe stellen. Es soll etwas grell sein, aber mit
@@ -83,6 +90,136 @@ Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, w
 - Ungeprüft: BGRA unter Vulkan (nur Formatzuordnung ergänzt, nie gelaufen); ob FXC bei allen
   Voreinstellungen alle Shader übersetzt (gesehen: `scart-rgb`, flach und Raum); Leistung im Spiel.
 
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Zeit je Bild der versionsfreien Ketten
+- Neuer Befehl `roehre-pruefstand wgsl-leistung [-o datei.md] [-n 60]`: jede Kette aus `KETTEN`,
+  die erzeugten (crt-beans, ScaleFX, OmniScale) und die Stufen hinter einem Filter (Leuchten bei
+  Weite 1,5 und 4, Farbe), Eingang 256 × 224, Ziel 4:3 in 1080p und 4K; Messung wie `leistung`
+  (Zeitstempel, sonst Wanduhr), Pipelines vorab gebaut. `Messer`/`Kennzahl` dafür `pub(crate)`.
+- Hier nur lavapipe gemessen (Zahlen sagen nichts über echte Karten); laufen lassen muß ihn der
+  Anwender auf seinem Rechner.
+
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Weichheit und Leuchten
+- `scharf-bilinear` hat den Regler **»weichheit«** (0 … 1, Voreinstellung 0 = Saum ein Bildpunkt,
+  unverändert): 1 rechnet wie `linear` (größte Abweichung 1), 0,5 liegt dazwischen.
+- Neue Stufen **`leuchten`** (leichtes Leuchten/Bloom hinter einem Filter, Stärke 0 = aus) und
+  **`leuchten-hof`** (der Hof in Spielauflösung, Gauß bis 3 σ, Teil über der Schwelle). Die
+  Vereinbarung bekommt dafür das Feld `Stufe::zusatz` und die optionale Bindung 3: das Ergebnis
+  der Zusatzstufe auf dem Original. Der Hof entsteht in Spielpunkten — unabhängig von der
+  Fenstergröße und unsichtbar für Kantenglätter davor.
+- `roehre-pruefstand wgsl`: Stärke 0 = Bild unverändert (0), Punktprobe symmetrisch (±1), nach
+  außen nie zunehmend, jenseits 3 σ schwarz, Halbwertsbreite in Spielpunkten bei ×3 und ×6 gleich
+  (2,67); Grau unter der Schwelle unverändert. Ein erster Entwurf in einem Pass (9 × 9 Abtastungen
+  im Abstand 0,75 σ) zeigte Wellen im Hof — verworfen.
+- Ungeprüft: echte Grafikkarte.
+
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · ScaleFX und OmniScale
+- Lizenzen der Pixelkunst-Vergrößerer in libretro `slang-shaders` `3685eda` aus den Dateiköpfen
+  gelesen: xBR/Super-xBR, HQx, SABR, 2xSaI/Eagle, xSoft **GPL** (nicht übernommen); **ScaleFX**
+  (Sp00kyFox) und **OmniScale** (Lior Halphon, slang von hunterk) **MIT** — unverändert unter
+  `shader/fremd/mit/{scalefx,omniscale}`, Presets `shader/eigen/{scalefx,omniscale}.slangp`
+  (ScaleFX: `stock.slang` durch das eigene `durchreichen.slang` ersetzt).
+- `wgsl-erzeugen` kennt Gruppen; neue Datei `src/erzeugt/pixelkunst.rs` (`SCALEFX`, 6 Pässe;
+  `OMNISCALE`, 1 Pass). Gegen librashader: **0 Abweichung** (zwei Testbilder, drei Größen).
+- `pruefe` bestanden.
+
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · MMPX gegen die Fassung der Autoren
+- `shader/fremd/mit/mmpx/mmpx.slang` (MIT, McGuire & Gagiu, slang von hunterk, unverändert aus
+  libretro `3685eda`) als **Prüfstein**; Preset `shader/eigen/mmpx-pruefung.slangp` (ein Pass,
+  doppelte Größe, `clamp_to_edge` wie die eigene Stufe).
+- `roehre-pruefstand wgsl` fährt sie über librashader und vergleicht mit `mmpx.wgsl`: **0 Punkte
+  anders** auf drei Testbildern. Dafür wiegt die Helligkeit für die Vergleiche jetzt nach BT.709
+  wie dort (vorher r+g+b aus dem Gedächtnis — die Referenz war beim Bau nicht erreichbar), in
+  ganzen Zahlen (2126·r + 7152·g + 722·b, in f32 exakt, GPU = CPU).
+- `pruefe` bestanden.
+
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `farbe`
+- Eigene Stufe `crates/roehre-wgsl/wgsl/farbe.wgsl` (MIT OR Apache-2.0): Farbkorrektur hinter
+  jedem Filter, 1:1 — Helligkeit, Kontrast (um Mittelgrau 0,18), Sättigung (BT.709), Wärme
+  (Rot/Blau gegeneinander ±10 %, eine Annäherung, keine Farbmetrik), in linearem Licht.
+  `Stufe::neutral` sagt, wann ein Ausführer sie weglassen darf.
+- `roehre-pruefstand wgsl`: neutral 0 Abweichung, Sättigung 0 exakt grau. `pruefe` bestanden.
+
+## 2026-11-05 · Terranigma-Port (Helfer-KI der Oberfläche) · Stufe `lcd-raster`, Regler je Stufe
+- Neue eigene Stufe `crates/roehre-wgsl/wgsl/lcd-raster.wgsl` (MIT OR Apache-2.0) für die
+  Bildfilter-Vielfalt (Wunsch E3b des Terranigma-Anwenders): Handheld-/LCD-Bild, jeder
+  Spielpunkt eine Zelle mit dunklen Lücken, wahlweise RGB-Streifen. Gegen Moiré wird der Anteil
+  der Lücken und Streifen am Ausgabepunkt je Achse **exakt integriert** (Kastenfilter), nicht
+  abgetastet. Kette `lcd` in `KETTEN`.
+- Stufen tragen jetzt beschriebene Regler (`StufenRegler`: Name, deutscher Titel und Satz,
+  Grenzen, Schritt, Voreinstellung); `Rahmen::mit_reglern` legt sie in `rahmen.regler`.
+- `roehre-pruefstand wgsl` misst das Raster auf einer weißen Fläche: Helligkeit über genau vier
+  Zellperioden (gebrochene Fenster mit Bruchteilen gewogen) — 1440×1080 0,00 %, 935×701 0,84 %
+  (Rest = 8-Bit-Rundung; Grenze 1 %, roehres Moiré-Grenze ist 1,1 %). Fotos mit `WGSL_FOTOS`.
+- `pruefe` bestanden.
+
+## 2026-11-04 nachts · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 2: crt-beans erzeugt
+- `roehre-pruefstand wgsl-erzeugen` übersetzt die drei MIT-Ketten (`eigen/beans/rgb.slangp`,
+  `signal.slangp`, `schnell.slangp`: 13, 13 und 4 Pässe samt `helligkeit.slang`) mit
+  **librashaders eigener Übersetzung** (slang → SPIR-V → naga → WGSL, dieselben Optionen wie
+  sein wgpu-Unterbau) und schreibt WGSL-Texte nach `crates/roehre-wgsl/wgsl/erzeugt/` und die
+  Pass-Beschreibung (Größenregel, Format, Abtaster, Bindungen, Lage jedes Werts und Reglers,
+  Nachschlagebild BlueNoiseTex roh als RGBA) nach `src/erzeugt/beans.rs`. Nichts ist von Hand
+  abgeschrieben; was ein Ausführer nicht kennt (Verlauf, Rückkopplung, Mipmaps, seltene
+  Werte), bricht das Erzeugen ab. Lizenztext von crt-beans liegt in der Kiste.
+- `roehre_wgsl::kette` beschreibt, was ein Ausführer von librashader nachbilden muß (gelesen
+  in librashader 0.12.1): Eckdaten und MVP, Größenrechnung, welcher Abtaster zu welchem Bild.
+- `crates/roehre-pruefstand/src/wgsl_kette.rs`: ein Ausführer auf wgpu 30. **Prüfstein:**
+  `roehre-pruefstand wgsl` zeichnet jede Kette einmal über librashaders `FilterChain`, einmal
+  über den Ausführer — zwei Testbilder, 960×720, 1440×1080, 935×701, Standardregler und die
+  von `roehre_kette::plane` für `mit-rgb`/`mit-composite` geplanten: **0 Abweichung** in jedem
+  Fall (Rgba8Unorm, lavapipe).
+- `roehre-kette`: librashader hinter das Standard-Merkmal `librashader` (Standard an, nichts
+  ändert sich für bestehende Nutzer); ohne es bleiben Kettenwahl und `plane` — ein Spiel
+  plant die Regler damit genau wie roehre, ohne librashader zu ziehen.
+- Ungeprüft: echte GPU; ältere naga-Fassungen (Terranigma: wgpu 24) prüft der Port.
+
+## 2026-11-04 abends · Terranigma-Port (Helfer-KI der Oberfläche) · W-009 Teil 1: Kiste `roehre-wgsl`
+- Neue Kiste `crates/roehre-wgsl` **ohne Abhängigkeiten**: WGSL-Text der Stufen samt
+  Beschreibung (Größe des Ziels, Abtastung, Lizenz), Ketten für das Menü eines Spiels
+  (`scharf`, `mmpx`), das Layout der Werte als 128 Byte (`Rahmen::als_bytes`). Die WGSL-Dateien
+  liegen **in** der Kiste (`wgsl/`), damit ein Spiel sie mitpacken kann (`cargo vendor` kopiert
+  nur den Kistenordner).
+- `scharf-bilinear.wgsl`: aus `shader/eigen/scharf-bilinear.slang` übertragen; einzige
+  Erweiterung ein gezeigter Ausschnitt (Overscan), bei (0,0,1,1) gleich.
+- `mmpx.wgsl` + `roehre_wgsl::mmpx` (CPU): MMPX nach McGuire & Gagiu (2021, MIT,
+  `wgsl/LIZENZ-MMPX`) — für die Bildfilter-Vielfalt (Wunsch des Terranigma-Anwenders, »der
+  Sammelort ist roehre«). Die Regeln stammen aus der Rust-Abschrift `mmpx` 0.2.0, deren Fehler
+  (Nachbarn P/S nur in Spalte 0) nicht übernommen ist; die WGSL-Regeln sind maschinell aus der
+  Rust-Fassung übertragen.
+- `roehre-pruefstand wgsl`: führt die Stufen auf wgpu 30 aus (ein schlichter Ausführer mit dem
+  Layout der Vereinbarung) und vergleicht `scharf-bilinear` mit der Voreinstellung `aus`
+  (librashader) in fünf Größen und drei Testbildern — größte Abweichung 1 —, `mmpx` mit der
+  CPU-Referenz — 0 Punkte verschieden, auch mit beschnittenem Ausschnitt.
+- Befund für Ausführer: das Bindungslayout muß ausdrücklich angelegt werden; ein abgeleitetes
+  Layout läßt den Abtaster weg, wo eine Stufe ihn nicht liest (mmpx).
+- Ungeprüft: die Referenz der MMPX-Autoren selbst (Seite beim Bau nicht erreichbar); naga 24
+  (Terranigma) prüft der Port beim Einbinden.
+
+## 2026-11-04 · Terranigma-Port (Helfer-KI der Oberfläche) · Wunsch W-009
+- Nur Doku: Wunsch W-009 eingetragen (die MIT-Kette als WGSL ohne wgpu-/librashader-Version),
+  weil der Port vorerst auf wgpu 24 bleibt; `docs/integration/terranigma.md` nennt den zweiten
+  Weg. Am Code und an den Shadern von roehre nichts geändert.
+
+## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Schattenwurf draußen und drinnen
+- Rückmeldung: Bank mitten auf dem Weg ohne Schatten, quer zum Weg; insgesamt zu künstlich,
+  es fehlen Schatten.
+- Park mit echtem Licht statt aufgemalter Helligkeit: Hang, Bäume, Laternenmasten, Bank und
+  Auto haben nur noch Grundfarben; der Shader beleuchtet sie mit Himmel, Mond (von Wolken
+  gedämpft) und den drei Laternen (Lichtkegel nach unten, Inseln von gut drei Metern). Jeder
+  Lichtstrahl wird gegen alle Kulissen (Alpha der Textur) und die Kästen der Bank geprüft:
+  Schatten von Bäumen, Masten und Bank. Daten im Uniform `park` (`park_kulissen`,
+  `parkbank_kaesten`). Dunst nach hinten.
+- Bank ist jetzt ein 3D-Modell (Holzlatten, gusseiserne Wangen, Armlehnen), steht auf dem
+  Rasen neben dem Weg, längs zu ihm und mit der Sitzfläche zum Weg (`szene::parkbank`).
+  Ein junger Baum vorn rechts dazu.
+- Drinnen: zweite Schattenkarte für das Bildschirmlicht (Tasse, Fernbedienung, Kassetten
+  werfen Schatten vom Fernseher weg), dazu Umgebungsverdeckung im Nachbearbeitungspass
+  (Kontaktschatten unter Gegenständen, in Kehlen und am Bildtunnel; aus der Entfernung im
+  Alpha, Paare gegenüberliegender Nachbarn, Tiefensprünge über 0,25 m zählen nicht).
+- Ehrlich: Laternen und Bank stehen nahe beieinander, der Schatten der Bank liegt daher
+  großteils unter ihr; die Mondschatten sind gegen das Laternenlicht schwach. Leistung
+  ungeprüft (ein Schattenpass mehr, Strahltests draußen nur im Fensterausschnitt, 16
+  Abtastungen je Pixel für die Verdeckung).
 ## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Schattenwurf draußen und drinnen
 - Rückmeldung: Bank mitten auf dem Weg ohne Schatten, quer zum Weg; insgesamt zu künstlich,
   es fehlen Schatten.

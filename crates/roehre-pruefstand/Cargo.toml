@@ -12,6 +12,8 @@ roehre-wgpu.workspace = true
 roehre-kette.workspace = true
 roehre-testbilder.workspace = true
 roehre-raum.workspace = true
+roehre-wgsl.workspace = true
+librashader = { workspace = true, features = ["presets", "reflect-naga", "runtime-wgpu"] }
 wgpu.workspace = true
 image.workspace = true
 pollster.workspace = true

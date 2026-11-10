@@ -17,6 +17,34 @@ Nummer, erledigte nicht löschen, sondern mit Commit markieren.
 
 ## Einträge
 
+### W-009: Die MIT-Kette ohne wgpu-Version (für Terranigma auf wgpu 24)
+- **Von:** Terranigma-Port (Helfer-KI der Oberfläche, über den Anwender), 2026-11-04
+- **Status:** in Arbeit (Helfer-KI des Terranigma-Ports, Branch `helfer/terranigma`): Kiste
+  `crates/roehre-wgsl` steht mit `scharf-bilinear` (gegen librashader ±1 in jeder Größe) und
+  `mmpx` (GPU punktgleich mit der CPU-Referenz), Prüfbefehl `roehre-pruefstand wgsl`;
+  Teil 2: crt-beans (`beans-rgb`, `beans-signal`, `beans-schnell`) erzeugt, gegen librashader
+  0 Abweichung; offen: `virtuelle-zeilen`, das Zusammensetzen (Lage, Hintergrund, SDR/HDR) und
+  die Reglerplanung ohne librashader — erledigt: `roehre-kette` mit
+  `default-features = false` hat `plane` ohne librashader.
+  Dazu für E3b des Ports: `lcd-raster`, `farbe`, `leuchten`/`leuchten-hof`, ScaleFX,
+  OmniScale, Regler »weichheit« an `scharf-bilinear`.
+- **Was fehlt:** Eine Fassung der GPL-freien Kette (crt-beans und die eigenen Stufen
+  `scharf-bilinear`, `virtuelle-zeilen`), die **keine wgpu- und keine librashader-Version**
+  voraussetzt: die Pässe als WGSL-Text, dazu eine Beschreibung der Pass-Folge (Größe und Format
+  jedes Zwischenbilds, Abtastung, welche Eingaben ein Pass liest) und der Parameter (Schlüssel,
+  Grenzen, Voreinstellung, deutscher Text aus `roehre-modell`), z. B. als Kiste `roehre-wgsl`
+  ohne GPU-Abhängigkeit.
+- **Warum:** Der Port soll vorerst **nicht** auf wgpu 30 / egui 0.37 angehoben werden (Entscheid
+  seines Leiters steht aus, W-002). Mit Shader-Text und Pass-Beschreibung kann der Port die
+  Röhre auf seinem wgpu 24 selbst ausführen — ohne Kopie und Umbau der Shader im Spielrepository
+  (AGENTS.md §2): der Port liest sie aus roehre.
+- **Vorschlag:** crt-beans ist slang; für die MIT-Voreinstellungen `mit-rgb` und `mit-composite`
+  die Pässe einmal nach WGSL übertragen (naga kann slang→SPIR-V→WGSL, Handarbeit wohl nötig) und
+  mit `roehre-pruefstand pruefe` gegen dieselben Referenzbilder halten wie die librashader-Kette.
+  GPL-Teile bleiben außen vor.
+- **Ansprechpartner im Port:** `tools/koordination/helfer/bericht-helfer.md`, Abschnitt
+  »Wünsche an roehre«.
+
 ### W-008: Leistung getrennt messen (nur Filter / 3D-Raum, 1080p / 4K, Kosten je Regler)
 - **Von:** Mission: Impossible (KI des Projekts, über den Anwender), 2026-11-02
 - **Status:** erledigt für Vulkan auf RTX 5070 Ti (Etappe 8): `docs/ki/STAND.md` Abschnitt 2a,

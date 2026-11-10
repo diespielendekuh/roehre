@@ -15,6 +15,10 @@ eingebettet) und werden mit dem Spiel als Ordner `shader/` ausgeliefert.
 | crt-beans | Andrew Duffey | MIT (`blue_noise.png`: CC0) | https://github.com/libretro/slang-shaders | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/crt-beans/` |
 | Cathode Retro (slang-Portierung) | Joshua Jersild / DeadlyRedCube (Original), hunterk (Portierung) | MIT (Stand aus der MIT-Zeit des Originals, siehe HERKUNFT.md; das Original steht seit 2025-12-01 unter BSL-1.0) | https://github.com/libretro/slang-shaders, Original https://github.com/DeadlyRedCube/Cathode-Retro | `a02157c6ca60c982229af01ad706302761bf482c` | `shader/fremd/mit/cathode-retro/` |
 | CRT Beam Simulator (Shaderdatei; Algorithmus zusätzlich übertragen nach `crates/roehre-wgpu/src/zusammensetzen.wgsl`, mit Lizenztext) | Mark Rejhon (Blur Busters), Timothy Lottes | MIT | https://github.com/blurbusters/crt-beam-simulator | `734786a6c48f954af11cb390e38a9e06107ffdd9` | `shader/fremd/mit/crt-beam-simulator/` |
+| MMPX (Algorithmus; Regeln über die Rust-Abschrift `mmpx` 0.2.0 von Kyle Moore, MIT, übertragen nach `crates/roehre-wgsl/wgsl/mmpx.wgsl` und `src/mmpx.rs`) | Morgan McGuire & Mara Gagiu | MIT (`crates/roehre-wgsl/wgsl/LIZENZ-MMPX`) | https://casual-effects.com/research/McGuire2021PixelArt/ , https://crates.io/crates/mmpx | 0.2.0 | `crates/roehre-wgsl/` |
+| MMPX, slang-Fassung (nur Prüfstein für `crates/roehre-wgsl/wgsl/mmpx.wgsl`) | Morgan McGuire & Mara Gagiu, übertragen von hunterk | MIT | https://github.com/libretro/slang-shaders | `3685eda59ffd2ebe1b12cc4640581dc23552ce88` | `shader/fremd/mit/mmpx/` |
+| ScaleFX | Sp00kyFox | MIT (Text im Kopf jeder Datei) | https://github.com/libretro/slang-shaders | `3685eda59ffd2ebe1b12cc4640581dc23552ce88` | `shader/fremd/mit/scalefx/` (als WGSL erzeugt in `crates/roehre-wgsl/wgsl/erzeugt/scalefx/`) |
+| OmniScale (slang von hunterk) | Lior Halphon | MIT (Text im Kopf der Datei) | https://github.com/libretro/slang-shaders | `3685eda59ffd2ebe1b12cc4640581dc23552ce88` | `shader/fremd/mit/omniscale/` (als WGSL erzeugt in `crates/roehre-wgsl/wgsl/erzeugt/omniscale/`) |
 
 ## Abhängigkeiten über Cargo (nicht im Repository)
 

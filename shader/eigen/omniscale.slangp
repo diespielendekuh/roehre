@@ -1,0 +1,7 @@
+# roehre – OmniScale (Lior Halphon, MIT): Abschrift von libretro
+# edge-smoothing/omniscale/omniscale.slangp mit geändertem Pfad.
+shaders = 1
+
+shader0 = ../fremd/mit/omniscale/omniscale.slang
+scale_type0 = viewport
+filter_linear0 = false

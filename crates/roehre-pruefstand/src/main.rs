@@ -17,6 +17,10 @@ mod gpu;
 mod leistung;
 mod moire;
 mod szene3d;
+mod wgsl;
+mod wgsl_erzeugen;
+mod wgsl_kette;
+mod wgsl_leistung;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -29,7 +33,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let befehl = args.first().map(String::as_str).unwrap_or("hilfe");
     let opt = |kurz: &str| -> Option<String> {
-        args.iter().position(|a| a == kurz).and_then(|i| args.get(i + 1)).cloned()
+        args.iter()
+            .position(|a| a == kurz)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
     };
     let ergebnis = match befehl {
         "foto" => foto(
@@ -83,12 +90,23 @@ fn main() {
             args.iter().any(|a| a == "--nur-1080p"),
         ),
         "pruefe" => pruefe(args.iter().any(|a| a == "--neu")),
+        "wgsl" => wgsl::pruefen(&shader_ordner()),
+        "wgsl-leistung" => wgsl_leistung::messen(
+            Path::new(&opt("-o").unwrap_or("wgsl-leistung.md".into())),
+            opt("-n").and_then(|n| n.parse().ok()).unwrap_or(60),
+        ),
+        "wgsl-erzeugen" => wgsl_erzeugen::erzeugen(
+            &shader_ordner(),
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../roehre-wgsl"),
+        ),
         "hdr" => hdr_messen(groesse(&opt("-g").unwrap_or("1920x1080".into()))),
         _ => {
             eprintln!(
                 "roehre-pruefstand <befehl>\n\n\
                  leistung [-o leistung.md] [-n 120] [--nur-1080p]   Leistung messen (Filter, 3D-Raum, Kosten je Regler)\n\
                  pruefe [--neu]                                    Referenzbilder, Moiré, Helligkeit, Strahl\n\
+                 wgsl                                              versionsfreie Stufen (roehre-wgsl) gegen librashader und CPU\n\
+                 wgsl-leistung [-o wgsl-leistung.md] [-n 60]       Zeit je Bild jeder versionsfreien Kette (1080p, 4K)\n\
                  foto, bogen, raum, formate, kamera, testbilder   Fotos\n\
                  moire, helligkeit, hdr, bewegung, umschalten      Einzelmessungen"
             );
@@ -114,7 +132,10 @@ fn shader_ordner() -> PathBuf {
     if let Some(p) = std::env::var_os("ROEHRE_SHADER") {
         return PathBuf::from(p);
     }
-    if let Some(neben) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("shader"))) {
+    if let Some(neben) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("shader")))
+    {
         if neben.join("eigen").is_dir() {
             return neben;
         }
@@ -146,12 +167,22 @@ fn lade_bild(b: &str) -> Result<Bild, Box<dyn std::error::Error>> {
 }
 
 fn eingang_von(bild: &Bild) -> Eingang {
-    Eingang { breite: bild.breite, hoehe: bild.hoehe, pixel_seitenverhaeltnis: bild.pixel_seitenverhaeltnis }
+    Eingang {
+        breite: bild.breite,
+        hoehe: bild.hoehe,
+        pixel_seitenverhaeltnis: bild.pixel_seitenverhaeltnis,
+    }
 }
 
 /// Rendert `bilder` Bilder hintereinander (Nachglühen und Verlauf brauchen Vorgänger) und
 /// liefert das letzte.
-fn rendere(gpu: &Gpu, roehre: &mut Roehre, bild: &Bild, g: (u32, u32), bilder: usize) -> Result<image::RgbaImage, Box<dyn std::error::Error>> {
+fn rendere(
+    gpu: &Gpu,
+    roehre: &mut Roehre,
+    bild: &Bild,
+    g: (u32, u32),
+    bilder: usize,
+) -> Result<image::RgbaImage, Box<dyn std::error::Error>> {
     let eingang = gpu.eingang(bild);
     let ziel = gpu.ziel(g.0, g.1);
     let ansicht = ziel.create_view(&Default::default());
@@ -166,11 +197,25 @@ fn rendere(gpu: &Gpu, roehre: &mut Roehre, bild: &Bild, g: (u32, u32), bilder: u
 fn foto(v: &str, b: &str, g: (u32, u32), aus: &Path, bilder: usize) -> Ergebnis {
     let gpu = Gpu::neu();
     let bild = lade_bild(b)?;
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        lade_einstellungen(v)?,
+        gpu::ZIELFORMAT,
+    )?;
     let t = Instant::now();
     let ergebnis = rendere(&gpu, &mut roehre, &bild, g, bilder)?;
     ergebnis.save(aus)?;
-    eprintln!("{} → {} ({}×{}, {:.1} s auf {})", v, aus.display(), g.0, g.1, t.elapsed().as_secs_f64(), gpu.adapter_name);
+    eprintln!(
+        "{} → {} ({}×{}, {:.1} s auf {})",
+        v,
+        aus.display(),
+        g.0,
+        g.1,
+        t.elapsed().as_secs_f64(),
+        gpu.adapter_name
+    );
     if let Some(plan) = roehre.letzter_plan() {
         eprintln!("Kette: {:?}, Maske: {:?}", plan.kette, plan.maske);
     }
@@ -191,9 +236,18 @@ fn bogen(g: (u32, u32), ordner: &Path, bilder: String) -> Ergebnis {
     std::fs::create_dir_all(ordner)?;
     let gpu = Gpu::neu();
     eprintln!("Adapter: {}", gpu.adapter_name);
-    let bilder: Vec<(String, Bild)> = bilder.split(',').map(|b| Ok((b.to_string(), lade_bild(b)?))).collect::<Result<_, Box<dyn std::error::Error>>>()?;
+    let bilder: Vec<(String, Bild)> = bilder
+        .split(',')
+        .map(|b| Ok((b.to_string(), lade_bild(b)?)))
+        .collect::<Result<_, Box<dyn std::error::Error>>>()?;
     let voreinstellungen = roehre_modell::voreinstellungen();
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        Einstellungen::standard(),
+        gpu::ZIELFORMAT,
+    )?;
 
     let (ab, ah) = (480u32, 270u32); // Ausschnitt 1:1
     let (gb, gh) = (480u32, 270u32); // Gesamtansicht verkleinert
@@ -216,18 +270,31 @@ fn bogen(g: (u32, u32), ordner: &Path, bilder: String) -> Ergebnis {
                 "schrift" => (0.30, 0.55),
                 _ => (0.5, 0.5),
             };
-            let ax = (r.x as f64 + r.breite as f64 * fx - ab as f64 / 2.0).clamp(0.0, (g.0 - ab) as f64) as u32;
-            let ay = (r.y as f64 + r.hoehe as f64 * fy - ah as f64 / 2.0).clamp(0.0, (g.1 - ah) as f64) as u32;
+            let ax = (r.x as f64 + r.breite as f64 * fx - ab as f64 / 2.0)
+                .clamp(0.0, (g.0 - ab) as f64) as u32;
+            let ay = (r.y as f64 + r.hoehe as f64 * fy - ah as f64 / 2.0)
+                .clamp(0.0, (g.1 - ah) as f64) as u32;
             let ausschnitt = image::imageops::crop_imm(&voll, ax, ay, ab, ah).to_image();
-            let gesamt = image::imageops::resize(&voll, gb, gh, image::imageops::FilterType::Lanczos3);
+            let gesamt =
+                image::imageops::resize(&voll, gb, gh, image::imageops::FilterType::Lanczos3);
             let basis = format!("{}_{}_{}x{}", v.schluessel, name, g.0, g.1);
             gesamt.save(ordner.join(format!("{basis}_gesamt.png")))?;
             ausschnitt.save(ordner.join(format!("{basis}_ausschnitt.png")))?;
             let x0 = spalte as u32 * (gb + ab + 8);
             let y0 = zeile as u32 * (gh + kopf);
             image::imageops::overlay(&mut uebersicht, &gesamt, x0 as i64, (y0 + kopf) as i64);
-            image::imageops::overlay(&mut uebersicht, &ausschnitt, (x0 + gb) as i64, (y0 + kopf) as i64);
-            beschrifte(&mut uebersicht, x0 + 4, y0 + 6, &format!("{} · {}", v.name(), name));
+            image::imageops::overlay(
+                &mut uebersicht,
+                &ausschnitt,
+                (x0 + gb) as i64,
+                (y0 + kopf) as i64,
+            );
+            beschrifte(
+                &mut uebersicht,
+                x0 + 4,
+                y0 + 6,
+                &format!("{} · {}", v.name(), name),
+            );
             eprintln!("{basis}: {:.1} s", t.elapsed().as_secs_f64());
         }
     }
@@ -251,14 +318,26 @@ fn umschalten() -> Ergebnis {
     let eingang = gpu.eingang(&bild);
     let ziel = gpu.ziel(1280, 720);
     let ansicht = ziel.create_view(&Default::default());
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::voreinstellung("scart-rgb")?, gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        Einstellungen::voreinstellung("scart-rgb")?,
+        gpu::ZIELFORMAT,
+    )?;
     for ziel_v in ["wohnzimmer-90er-composite", "aus", "scart-rgb"] {
         let t = Instant::now();
         roehre.uebernehme(Einstellungen::voreinstellung(ziel_v)?);
         let mut bilder_waehrenddessen = 0;
         while !roehre.ist_bereit() {
             let mut enc = gpu.device.create_command_encoder(&Default::default());
-            roehre.zeichne(&mut enc, &eingang, &eingang_von(&bild), &ansicht, (1280, 720))?;
+            roehre.zeichne(
+                &mut enc,
+                &eingang,
+                &eingang_von(&bild),
+                &ansicht,
+                (1280, 720),
+            )?;
             gpu.queue.submit([enc.finish()]);
             gpu.warte();
             bilder_waehrenddessen += 1;
@@ -280,17 +359,35 @@ fn moire_messen(nur: Option<String>) -> Result<Vec<String>, Box<dyn std::error::
     let mut verstoesse = Vec::new();
     let gpu = Gpu::neu();
     let groessen = [(1280, 720), (1920, 1080), (2560, 1440), (3840, 2160)];
-    let eingaenge: [(&str, u32, u32, f64); 3] =
-        [("SNES 256×224", 256, 224, 8.0 / 7.0), ("N64 320×240", 320, 240, 1.0), ("PAL 256×239", 256, 239, 8.0 / 7.0)];
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
-    println!("| Voreinstellung | Eingang | Ausgabe | px je Zeile | Zeilenschwebung | px je Tripel | Maskenschwebung |");
+    let eingaenge: [(&str, u32, u32, f64); 3] = [
+        ("SNES 256×224", 256, 224, 8.0 / 7.0),
+        ("N64 320×240", 320, 240, 1.0),
+        ("PAL 256×239", 256, 239, 8.0 / 7.0),
+    ];
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        Einstellungen::standard(),
+        gpu::ZIELFORMAT,
+    )?;
+    println!(
+        "| Voreinstellung | Eingang | Ausgabe | px je Zeile | Zeilenschwebung | px je Tripel | Maskenschwebung |"
+    );
     println!("|---|---|---|---:|---:|---:|---:|");
     let liste: Vec<(String, Einstellungen)> = match nur.as_deref() {
-        Some(pfad) if pfad.ends_with(".toml") => vec![(pfad.to_string(), lade_einstellungen(pfad)?)],
+        Some(pfad) if pfad.ends_with(".toml") => {
+            vec![(pfad.to_string(), lade_einstellungen(pfad)?)]
+        }
         _ => roehre_modell::voreinstellungen()
             .iter()
             .filter(|v| v.schluessel != "aus" && nur.as_deref().is_none_or(|n| n == v.schluessel))
-            .map(|v| Ok((v.schluessel.to_string(), Einstellungen::voreinstellung(v.schluessel)?)))
+            .map(|v| {
+                Ok((
+                    v.schluessel.to_string(),
+                    Einstellungen::voreinstellung(v.schluessel)?,
+                ))
+            })
             .collect::<Result<_, roehre_modell::Fehler>>()?,
     };
     for (schluessel, e) in liste {
@@ -306,19 +403,41 @@ fn moire_messen(nur: Option<String>) -> Result<Vec<String>, Box<dyn std::error::
                 // Sichtbare Zeilen: Overscan schneidet oben und unten ab
                 let (_, osy) = roehre_kette::overscan_pixel(roehre.einstellungen(), (b, h));
                 // Zeilen, die die Röhre zeichnet (Vorstufe: Zeilenverdopplung, virtuelle Zeilen)
-                let roehrenzeilen = roehre_kette::virtuelle_groesse(roehre.einstellungen(), (b, h), b as f64 * par / h as f64, g.1)
-                    .map_or(h, |v| v.1);
+                let roehrenzeilen = roehre_kette::virtuelle_groesse(
+                    roehre.einstellungen(),
+                    (b, h),
+                    b as f64 * par / h as f64,
+                    g.1,
+                )
+                .map_or(h, |v| v.1);
                 let osy = osy as f64 * roehrenzeilen as f64 / h as f64;
                 let pz = r.hoehe as f64 / (roehrenzeilen as f64 - osy);
-                let pt = roehre.letzter_plan().and_then(|p| p.maske).map(|m| m.pixel_je_triade).unwrap_or(3.0);
-                let (sz, sm) = (moire::schwebung(&zeilen, pz), moire::schwebung(&spalten, pt));
-                println!("| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |", schluessel, name, g.0, g.1, pz, sz, pt, sm);
-                let grenze = if g.1 >= 1080 { MOIRE_GRENZE.0 } else { MOIRE_GRENZE.1 };
+                let pt = roehre
+                    .letzter_plan()
+                    .and_then(|p| p.maske)
+                    .map(|m| m.pixel_je_triade)
+                    .unwrap_or(3.0);
+                let (sz, sm) = (
+                    moire::schwebung(&zeilen, pz),
+                    moire::schwebung(&spalten, pt),
+                );
+                println!(
+                    "| {} | {} | {}×{} | {:.2} | {:.2} % | {:.0} | {:.2} % |",
+                    schluessel, name, g.0, g.1, pz, sz, pt, sm
+                );
+                let grenze = if g.1 >= 1080 {
+                    MOIRE_GRENZE.0
+                } else {
+                    MOIRE_GRENZE.1
+                };
                 // bewusst verneint: ein NaN-Messwert soll als Verstoß zählen
                 #[allow(clippy::neg_cmp_op_on_partial_ord)]
                 let verstoss = !(sz <= grenze) || !(sm <= MOIRE_GRENZE.2);
                 if verstoss {
-                    verstoesse.push(format!("Moiré {schluessel} {name} {}×{}: Zeilen {sz:.2} %, Maske {sm:.2} %", g.0, g.1));
+                    verstoesse.push(format!(
+                        "Moiré {schluessel} {name} {}×{}: Zeilen {sz:.2} %, Maske {sm:.2} %",
+                        g.0, g.1
+                    ));
                 }
             }
         }
@@ -341,7 +460,11 @@ fn f16(bits: u16) -> f32 {
 /// PQ (SMPTE ST 2084) → nit.
 fn pq_zu_nit(e: f64) -> f64 {
     let (m1, m2) = (2610.0 / 16384.0, 2523.0 / 4096.0 * 128.0);
-    let (c1, c2, c3) = (3424.0 / 4096.0, 2413.0 / 4096.0 * 32.0, 2392.0 / 4096.0 * 32.0);
+    let (c1, c2, c3) = (
+        3424.0 / 4096.0,
+        2413.0 / 4096.0 * 32.0,
+        2392.0 / 4096.0 * 32.0,
+    );
     let p = e.powf(1.0 / m2);
     10000.0 * ((p - c1).max(0.0) / (c2 - c3 * p)).powf(1.0 / m1)
 }
@@ -352,14 +475,17 @@ fn hdr_messen(g: (u32, u32)) -> Ergebnis {
     let gpu = Gpu::neu();
     let bild = roehre_testbilder::farbbalken(320, 240);
     let eingang = gpu.eingang(&bild);
-    println!("| Voreinstellung | Transmission Weiß | 75-%-Weiß (scRGB) | 75-%-Weiß (HDR10) | 100-%-Weiß | hellster Punkt |");
+    println!(
+        "| Voreinstellung | Transmission Weiß | 75-%-Weiß (scRGB) | 75-%-Weiß (HDR10) | 100-%-Weiß | hellster Punkt |"
+    );
     println!("|---|---:|---:|---:|---:|---:|");
     for v in roehre_modell::voreinstellungen() {
         let e = Einstellungen::voreinstellung(v.schluessel)?;
         let mut werte = Vec::new();
         let mut transmission = 0.0;
         for ausgabe in [Ausgabe::scrgb(), Ausgabe::hdr10()] {
-            let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e.clone(), ausgabe)?;
+            let mut roehre =
+                Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e.clone(), ausgabe)?;
             let ziel = gpu.ziel_im_format(g.0, g.1, ausgabe.format);
             let ansicht = ziel.create_view(&Default::default());
             // Erstes Bild stößt die Eichung an, danach mit Messwert zeichnen
@@ -377,22 +503,46 @@ fn hdr_messen(g: (u32, u32)) -> Ergebnis {
                 eprintln!("{:?}", roehre.letzter_plan());
             }
             let r = roehre.flaeche(&eingang_von(&bild), g);
-            let roh = gpu.lies_roh(&ziel, if ausgabe.format == wgpu::TextureFormat::Rgba16Float { 8 } else { 4 });
+            let roh = gpu.lies_roh(
+                &ziel,
+                if ausgabe.format == wgpu::TextureFormat::Rgba16Float {
+                    8
+                } else {
+                    4
+                },
+            );
             // Nit je Pixel (Leuchtdichte nach BT.709 bzw. BT.2020)
             let nit = |x: u32, y: u32| -> f64 {
                 let i = (y * g.0 + x) as usize;
                 if ausgabe.format == wgpu::TextureFormat::Rgba16Float {
-                    let k = |j: usize| f16(u16::from_le_bytes([roh[i * 8 + 2 * j], roh[i * 8 + 2 * j + 1]])) as f64 * 80.0;
+                    let k = |j: usize| {
+                        f16(u16::from_le_bytes([
+                            roh[i * 8 + 2 * j],
+                            roh[i * 8 + 2 * j + 1],
+                        ])) as f64
+                            * 80.0
+                    };
                     0.2126 * k(0) + 0.7152 * k(1) + 0.0722 * k(2)
                 } else {
-                    let w = u32::from_le_bytes([roh[i * 4], roh[i * 4 + 1], roh[i * 4 + 2], roh[i * 4 + 3]]);
+                    let w = u32::from_le_bytes([
+                        roh[i * 4],
+                        roh[i * 4 + 1],
+                        roh[i * 4 + 2],
+                        roh[i * 4 + 3],
+                    ]);
                     let k = |j: u32| pq_zu_nit(((w >> (10 * j)) & 0x3ff) as f64 / 1023.0);
                     0.2627 * k(0) + 0.6780 * k(1) + 0.0593 * k(2)
                 }
             };
             let mittel = |fx0: f64, fx1: f64, fy0: f64, fy1: f64| -> f64 {
-                let (x0, x1) = (r.x + (r.breite as f64 * fx0) as u32, r.x + (r.breite as f64 * fx1) as u32);
-                let (y0, y1) = (r.y + (r.hoehe as f64 * fy0) as u32, r.y + (r.hoehe as f64 * fy1) as u32);
+                let (x0, x1) = (
+                    r.x + (r.breite as f64 * fx0) as u32,
+                    r.x + (r.breite as f64 * fx1) as u32,
+                );
+                let (y0, y1) = (
+                    r.y + (r.hoehe as f64 * fy0) as u32,
+                    r.y + (r.hoehe as f64 * fy1) as u32,
+                );
                 let mut s = 0.0;
                 for y in y0..y1 {
                     for x in x0..x1 {
@@ -425,7 +575,13 @@ fn flaeche_vorfuehren(v: &str, aus: &Path) -> Ergebnis {
     let gpu = Gpu::neu();
     let bild = roehre_testbilder::pixelszene();
     let eingang = gpu.eingang(&bild);
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        lade_einstellungen(v)?,
+        gpu::ZIELFORMAT,
+    )?;
     let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
     let mut werte = None;
     for _ in 0..3 {
@@ -439,19 +595,41 @@ fn flaeche_vorfuehren(v: &str, aus: &Path) -> Ergebnis {
     let (b, h) = (640u32, 360u32);
     let seite = werte.seitenverhaeltnis;
     let ansichten = [
-        ("nah", szene3d::kamera(b as f32 / h as f32, 0.22, 0.0, [0.12, -0.2])),
-        ("schräg", szene3d::kamera(b as f32 / h as f32, 1.9, 62.0, [0.0, 0.0])),
-        ("fern", szene3d::kamera(b as f32 / h as f32, 5.5, 0.0, [0.0, 0.0])),
+        (
+            "nah",
+            szene3d::kamera(b as f32 / h as f32, 0.22, 0.0, [0.12, -0.2]),
+        ),
+        (
+            "schräg",
+            szene3d::kamera(b as f32 / h as f32, 1.9, 62.0, [0.0, 0.0]),
+        ),
+        (
+            "fern",
+            szene3d::kamera(b as f32 / h as f32, 5.5, 0.0, [0.0, 0.0]),
+        ),
     ];
-    let mut bogen = image::RgbaImage::from_pixel(3 * b, 2 * (h + 24), image::Rgba([24, 24, 28, 255]));
+    let mut bogen =
+        image::RgbaImage::from_pixel(3 * b, 2 * (h + 24), image::Rgba([24, 24, 28, 255]));
     for (zeile, naiv) in [true, false].into_iter().enumerate() {
         for (spalte, (name, mvp)) in ansichten.iter().enumerate() {
             let ziel = gpu.ziel(b, h);
-            szene.zeichne(&gpu.device, &gpu.queue, &ziel.create_view(&Default::default()), &flaeche, &werte, mvp, naiv);
+            szene.zeichne(
+                &gpu.device,
+                &gpu.queue,
+                &ziel.create_view(&Default::default()),
+                &flaeche,
+                &werte,
+                mvp,
+                naiv,
+            );
             let foto = gpu.lies(&ziel);
             let (x0, y0) = (spalte as u32 * b, zeile as u32 * (h + 24));
             image::imageops::overlay(&mut bogen, &foto, x0 as i64, (y0 + 24) as i64);
-            let titel = format!("{} · {}", if naiv { "naive Maske" } else { "bandbegrenzt" }, name);
+            let titel = format!(
+                "{} · {}",
+                if naiv { "naive Maske" } else { "bandbegrenzt" },
+                name
+            );
             beschrifte(&mut bogen, x0 + 4, y0 + 6, &titel);
         }
     }
@@ -462,13 +640,28 @@ fn flaeche_vorfuehren(v: &str, aus: &Path) -> Ergebnis {
 }
 
 /// Lineare Leuchtdichte (BT.709) eines Bereichs der Röhrenfläche, Anteile 0…1.
-fn leuchtdichte(bild: &image::RgbaImage, r: &roehre_wgpu::Rechteck, fx: (f64, f64), fy: (f64, f64)) -> f64 {
+fn leuchtdichte(
+    bild: &image::RgbaImage,
+    r: &roehre_wgpu::Rechteck,
+    fx: (f64, f64),
+    fy: (f64, f64),
+) -> f64 {
     let lin = |v: u8| {
         let c = v as f64 / 255.0;
-        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
     };
-    let (x0, x1) = (r.x + (r.breite as f64 * fx.0) as u32, r.x + (r.breite as f64 * fx.1) as u32);
-    let (y0, y1) = (r.y + (r.hoehe as f64 * fy.0) as u32, r.y + (r.hoehe as f64 * fy.1) as u32);
+    let (x0, x1) = (
+        r.x + (r.breite as f64 * fx.0) as u32,
+        r.x + (r.breite as f64 * fx.1) as u32,
+    );
+    let (y0, y1) = (
+        r.y + (r.hoehe as f64 * fy.0) as u32,
+        r.y + (r.hoehe as f64 * fy.1) as u32,
+    );
     let mut s = 0.0;
     for y in y0..y1 {
         for x in x0..x1 {
@@ -486,7 +679,13 @@ fn helligkeit_messen() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let gpu = Gpu::neu();
     let bild = roehre_testbilder::farbbalken(320, 240);
     let g = (1920, 1080);
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        Einstellungen::standard(),
+        gpu::ZIELFORMAT,
+    )?;
     let mut bezug: Option<(f64, f64)> = None;
     println!("| Voreinstellung | 75-%-Weiß | Anteil | 40-%-Grau | Anteil |");
     println!("|---|---:|---:|---:|---:|");
@@ -500,9 +699,15 @@ fn helligkeit_messen() -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let grau = leuchtdichte(&voll, &r, (0.40, 0.46), (0.80, 0.92));
         let (bw, bg) = *bezug.get_or_insert((weiss, grau));
         let (aw, ag) = (100.0 * weiss / bw, 100.0 * grau / bg);
-        println!("| {} | {:.3} | {:.0} % | {:.3} | {:.0} % |", v.schluessel, weiss, aw, grau, ag);
+        println!(
+            "| {} | {:.3} | {:.0} % | {:.3} | {:.0} % |",
+            v.schluessel, weiss, aw, grau, ag
+        );
         if !(95.0..=105.0).contains(&aw) || ag < 85.0 {
-            verstoesse.push(format!("Helligkeit {}: Weiß {aw:.0} % (Soll 95–105), Grau {ag:.0} % (Soll ≥ 85)", v.schluessel));
+            verstoesse.push(format!(
+                "Helligkeit {}: Weiß {aw:.0} % (Soll 95–105), Grau {ag:.0} % (Soll ≥ 85)",
+                v.schluessel
+            ));
         }
     }
     Ok(verstoesse)
@@ -521,7 +726,13 @@ fn pruefe(neu: bool) -> Ergebnis {
     let gpu = Gpu::neu();
     eprintln!("Adapter: {}", gpu.adapter_name);
     let bild = roehre_testbilder::pixelszene();
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), Einstellungen::standard(), gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        Einstellungen::standard(),
+        gpu::ZIELFORMAT,
+    )?;
     for v in roehre_modell::voreinstellungen() {
         roehre.uebernehme(Einstellungen::voreinstellung(v.schluessel)?);
         roehre.warte_auf_kette()?;
@@ -529,8 +740,18 @@ fn pruefe(neu: bool) -> Ergebnis {
         // Gespeichert wird nebeneinander: 1:1-Ausschnitt der Mitte (Maske, Zeilen, Signal)
         // und die verkleinerte Gesamtansicht (Geometrie, Ränder, Helligkeit).
         let mut ist = image::RgbaImage::new(320 + 320, 180);
-        image::imageops::overlay(&mut ist, &image::imageops::crop_imm(&voll, 400, 230, 320, 180).to_image(), 0, 0);
-        image::imageops::overlay(&mut ist, &image::imageops::resize(&voll, 320, 180, image::imageops::FilterType::Triangle), 320, 0);
+        image::imageops::overlay(
+            &mut ist,
+            &image::imageops::crop_imm(&voll, 400, 230, 320, 180).to_image(),
+            0,
+            0,
+        );
+        image::imageops::overlay(
+            &mut ist,
+            &image::imageops::resize(&voll, 320, 180, image::imageops::FilterType::Triangle),
+            320,
+            0,
+        );
         let pfad = ordner.join(format!("{}.png", v.schluessel));
         if neu || !pfad.exists() {
             ist.save(&pfad)?;
@@ -542,7 +763,12 @@ fn pruefe(neu: bool) -> Ergebnis {
             verstoesse.push(format!("Referenz {}: andere Größe", v.schluessel));
             continue;
         }
-        let mut abw: Vec<u8> = soll.as_raw().iter().zip(ist.as_raw()).map(|(a, b)| a.abs_diff(*b)).collect();
+        let mut abw: Vec<u8> = soll
+            .as_raw()
+            .iter()
+            .zip(ist.as_raw())
+            .map(|(a, b)| a.abs_diff(*b))
+            .collect();
         let mittel = abw.iter().map(|&d| d as f64).sum::<f64>() / abw.len() as f64;
         let diff = image::RgbaImage::from_fn(ist.width(), ist.height(), |x, y| {
             let i = ((y * ist.width() + x) * 4) as usize;
@@ -551,12 +777,18 @@ fn pruefe(neu: bool) -> Ergebnis {
         });
         abw.sort_unstable();
         let p999 = abw[abw.len() * 999 / 1000];
-        eprintln!("Referenz {}: mittlere Abweichung {mittel:.3}, 99,9-%-Wert {p999}", v.schluessel);
+        eprintln!(
+            "Referenz {}: mittlere Abweichung {mittel:.3}, 99,9-%-Wert {p999}",
+            v.schluessel
+        );
         // Grenzen: lässt Rundungsunterschiede verschiedener Treiber zu, keine sichtbare Änderung
         if mittel > 1.0 || p999 > 24 {
             diff.save(diff_ordner.join(format!("{}_diff.png", v.schluessel)))?;
             ist.save(diff_ordner.join(format!("{}_ist.png", v.schluessel)))?;
-            verstoesse.push(format!("Referenz {}: mittlere Abweichung {mittel:.2}, 99,9 % {p999}", v.schluessel));
+            verstoesse.push(format!(
+                "Referenz {}: mittlere Abweichung {mittel:.2}, 99,9 % {p999}",
+                v.schluessel
+            ));
         }
     }
     drop(roehre);
@@ -569,7 +801,9 @@ fn pruefe(neu: bool) -> Ergebnis {
     for n in [2.0f32, 2.4, 4.0] {
         let abw = bewegung_messen(n, &diff_ordner.join(format!("bewegung_{n}.png")))?;
         if abw > 0.01 {
-            verstoesse.push(format!("Strahlsimulation n = {n}: Lichtsumme weicht um {abw:.3} ab (Soll ≤ 0,01)"));
+            verstoesse.push(format!(
+                "Strahlsimulation n = {n}: Lichtsumme weicht um {abw:.3} ab (Soll ≤ 0,01)"
+            ));
         }
     }
 
@@ -595,14 +829,27 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
     let g = (1280u32, 720u32);
     let lin = |v: u8| {
         let c = v as f64 / 255.0;
-        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
     };
     let mut e = Einstellungen::voreinstellung("scart-rgb")?;
     // Bezug: ohne Simulation
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e.clone(), gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        e.clone(),
+        gpu::ZIELFORMAT,
+    )?;
     let bezug = rendere(&gpu, &mut roehre, &bild, g, 3)?;
     let r = roehre.flaeche(&eingang_von(&bild), g);
-    e.setze("bewegung.modus", roehre_modell::Wert::Auswahl("strahl".into()));
+    e.setze(
+        "bewegung.modus",
+        roehre_modell::Wert::Auswahl("strahl".into()),
+    );
     e.setze("bewegung.lcd_schutz", roehre_modell::Wert::Schalter(false));
     let gewinn = e.zahl("bewegung.helligkeit");
     let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), e, gpu::ZIELFORMAT)?;
@@ -612,7 +859,9 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
     // wechseln sich lange und kurze Spielbilder ab (2,4: 3, 2, 3, 2, 2 …). Ausgewertet werden
     // so viele Auffrischungen, dass eine ganze Zahl von Spielbildern hineinpasst.
     let mut periode = 1usize;
-    while ((periode as f64 * n as f64).round() - periode as f64 * n as f64).abs() > 1e-6 && periode < 100 {
+    while ((periode as f64 * n as f64).round() - periode as f64 * n as f64).abs() > 1e-6
+        && periode < 100
+    {
         periode += 1;
     }
     let auswertung = (periode as f64 * n as f64).round() as usize;
@@ -621,14 +870,20 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
     for r in 0..vorlauf + auswertung {
         let neu = r == 0 || (r as f64 / n as f64).floor() != ((r - 1) as f64 / n as f64).floor();
         let mut enc = gpu.device.create_command_encoder(&Default::default());
-        let takt = Takt { neues_spielbild: neu, teilbilder_je_spielbild: n };
+        let takt = Takt {
+            neues_spielbild: neu,
+            teilbilder_je_spielbild: n,
+        };
         roehre.zeichne_im_takt(&mut enc, &eingang, &eingang_von(&bild), &ansicht, g, takt)?;
         gpu.queue.submit([enc.finish()]);
         if r >= vorlauf {
             fotos.push(gpu.lies(&ziel));
         }
     }
-    eprintln!("{} Auffrischungen ausgewertet ({} Spielbilder)", auswertung, periode);
+    eprintln!(
+        "{} Auffrischungen ausgewertet ({} Spielbilder)",
+        auswertung, periode
+    );
     // Lichtsumme je Graustufe (oberer Streifen: 16 Stufen), Mitte jeder Stufe
     println!("| Stufe | ohne Simulation | Mittel der Teilbilder | Verhältnis | Soll |");
     println!("|---:|---:|---:|---:|---:|");
@@ -653,7 +908,14 @@ fn bewegung_messen(n: f32, aus: &Path) -> Result<f64, Box<dyn std::error::Error>
         if ohne > 0.01 {
             groesste_abweichung = groesste_abweichung.max((verh - gewinn).abs());
         }
-        println!("| {} | {:.4} | {:.4} | {:.3} | {:.3} |", stufe * 17, ohne, mit, verh, gewinn);
+        println!(
+            "| {} | {:.4} | {:.4} | {:.3} | {:.3} |",
+            stufe * 17,
+            ohne,
+            mit,
+            verh,
+            gewinn
+        );
     }
     eprintln!("größte Abweichung vom Soll (ab 1 % Helligkeit): {groesste_abweichung:.3}");
     // Foto: Teilbilder nebeneinander, verkleinert
@@ -675,7 +937,13 @@ fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
     let gpu = Gpu::neu();
     let bild = roehre_testbilder::pixelszene();
     let eingang = gpu.eingang(&bild);
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        lade_einstellungen(v)?,
+        gpu::ZIELFORMAT,
+    )?;
     let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
     let mut raum = Raum::neu(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT)?;
     let mut werte = None;
@@ -687,23 +955,51 @@ fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
     let werte = werte.expect("gezeichnet");
     let h = 270u32;
     let formate = [(4u32, 3u32), (16, 9), (32, 9)];
-    let zeilen = [(0.0, 0.0, 0.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 0.0, -1.0), (1.0, 0.0, 1.0), (0.5, -0.5, 1.0)];
+    let zeilen = [
+        (0.0, 0.0, 0.0),
+        (0.5, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (1.0, 0.0, -1.0),
+        (1.0, 0.0, 1.0),
+        (0.5, -0.5, 1.0),
+    ];
     let breiten: Vec<u32> = formate.iter().map(|(a, b)| h * a / b).collect();
     let rand = 12u32;
     let gesamt_b = breiten.iter().sum::<u32>() + rand * (formate.len() as u32 + 1);
     let gesamt_h = zeilen.len() as u32 * (h + rand) + rand;
-    let mut bogen = image::RgbaImage::from_pixel(gesamt_b, gesamt_h, image::Rgba([40, 40, 44, 255]));
+    let mut bogen =
+        image::RgbaImage::from_pixel(gesamt_b, gesamt_h, image::Rgba([40, 40, 44, 255]));
     for (zi, (naehe, blick, lage)) in zeilen.iter().enumerate() {
         let mut x = rand;
         for (fi, b) in breiten.iter().enumerate() {
-            let k = Kamera { naehe: *naehe, blickwinkel: *blick, lage: *lage, schwenk: false, ..Kamera::default() };
+            let k = Kamera {
+                naehe: *naehe,
+                blickwinkel: *blick,
+                lage: *lage,
+                schwenk: false,
+                ..Kamera::default()
+            };
             let a = Ansicht::aus_kamera(&k, 0.0, *b as f32 / h as f32);
             let ziel = gpu.ziel(*b, h);
             let mut enc = gpu.device.create_command_encoder(&Default::default());
-            raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), (*b, h), &flaeche, &werte, &a);
+            raum.zeichne(
+                &gpu.device,
+                &gpu.queue,
+                &mut enc,
+                &ziel.create_view(&Default::default()),
+                (*b, h),
+                &flaeche,
+                &werte,
+                &a,
+            );
             gpu.queue.submit([enc.finish()]);
             let foto = gpu.lies(&ziel);
-            image::imageops::overlay(&mut bogen, &foto, x as i64, (rand + zi as u32 * (h + rand)) as i64);
+            image::imageops::overlay(
+                &mut bogen,
+                &foto,
+                x as i64,
+                (rand + zi as u32 * (h + rand)) as i64,
+            );
             x += b + rand;
             let _ = fi;
         }
@@ -784,11 +1080,21 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     let gpu = Gpu::neu();
     let bild = roehre_testbilder::pixelszene();
     let eingang = gpu.eingang(&bild);
-    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    let mut roehre = Roehre::neu(
+        &gpu.device,
+        &gpu.queue,
+        shader_ordner(),
+        lade_einstellungen(v)?,
+        gpu::ZIELFORMAT,
+    )?;
     let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, 1440, 1080);
     let t = Instant::now();
     let mut raum = Raum::neu(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT)?;
-    eprintln!("Raum aufgebaut: {} Dreiecke, {:.1} s", raum.dreiecke(), t.elapsed().as_secs_f64());
+    eprintln!(
+        "Raum aufgebaut: {} Dreiecke, {:.1} s",
+        raum.dreiecke(),
+        t.elapsed().as_secs_f64()
+    );
     if let Some(pfad) = wandbild {
         let b = image::open(&pfad)?.to_rgba8();
         raum.wandbild_setzen(&gpu.queue, b.as_raw(), b.width(), b.height());
@@ -835,7 +1141,15 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
     // mitten in der Fahrt des Autos (Scheinwerferlicht im Zimmer)
     let mut auto = Ansicht::sitzplatz(15.0, 0.0, 0.0);
     auto.zeit = 15.0;
-    let ganznah = Ansicht::aus_kamera(&roehre_raum::Kamera { naehe: 1.0, schwenk: false, ..Default::default() }, 0.0, g.0 as f32 / g.1 as f32);
+    let ganznah = Ansicht::aus_kamera(
+        &roehre_raum::Kamera {
+            naehe: 1.0,
+            schwenk: false,
+            ..Default::default()
+        },
+        0.0,
+        g.0 as f32 / g.1 as f32,
+    );
     let ansichten = [
         ("nah", Ansicht::sitzplatz(4.0, 0.85, 1.0)),
         ("mittel", Ansicht::sitzplatz(2.0, 0.5, 1.0)),
@@ -869,7 +1183,16 @@ fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path:
         let t = Instant::now();
         let ziel = gpu.ziel(g.0, g.1);
         let mut enc = gpu.device.create_command_encoder(&Default::default());
-        raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), g, &flaeche, &werte, &a);
+        raum.zeichne(
+            &gpu.device,
+            &gpu.queue,
+            &mut enc,
+            &ziel.create_view(&Default::default()),
+            g,
+            &flaeche,
+            &werte,
+            &a,
+        );
         gpu.queue.submit([enc.finish()]);
         let foto = gpu.lies(&ziel);
         let pfad = ordner.join(format!("raum_{name}_{}x{}.png", g.0, g.1));

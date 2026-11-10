@@ -46,7 +46,9 @@ pub fn schwebung(profil: &[f64], periode: f64) -> f64 {
         return f64::NAN;
     }
     let mittel: f64 = geglaettet[rand..n - rand].iter().sum::<f64>() / (n - 2 * rand) as f64;
-    let max = (rand..n - rand).map(|i| (geglaettet[i] - verlauf[i]).abs()).fold(0.0, f64::max);
+    let max = (rand..n - rand)
+        .map(|i| (geglaettet[i] - verlauf[i]).abs())
+        .fold(0.0, f64::max);
     100.0 * max / mittel.max(1e-9)
 }
 
@@ -54,16 +56,31 @@ pub fn schwebung(profil: &[f64], periode: f64) -> f64 {
 pub fn profile(bild: &image::RgbaImage, x: u32, y: u32, b: u32, h: u32) -> (Vec<f64>, Vec<f64>) {
     let lin = |v: u8| {
         let c = v as f64 / 255.0;
-        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
     };
-    let leuchte = |px: &image::Rgba<u8>| 0.2126 * lin(px[0]) + 0.7152 * lin(px[1]) + 0.0722 * lin(px[2]);
+    let leuchte =
+        |px: &image::Rgba<u8>| 0.2126 * lin(px[0]) + 0.7152 * lin(px[1]) + 0.0722 * lin(px[2]);
     let (sx0, sx1) = (x + b * 2 / 5, x + b * 3 / 5);
     let (sy0, sy1) = (y + h * 2 / 5, y + h * 3 / 5);
     let zeilen = (y..y + h)
-        .map(|yy| (sx0..sx1).map(|xx| leuchte(bild.get_pixel(xx, yy))).sum::<f64>() / (sx1 - sx0) as f64)
+        .map(|yy| {
+            (sx0..sx1)
+                .map(|xx| leuchte(bild.get_pixel(xx, yy)))
+                .sum::<f64>()
+                / (sx1 - sx0) as f64
+        })
         .collect();
     let spalten = (x..x + b)
-        .map(|xx| (sy0..sy1).map(|yy| leuchte(bild.get_pixel(xx, yy))).sum::<f64>() / (sy1 - sy0) as f64)
+        .map(|xx| {
+            (sy0..sy1)
+                .map(|yy| leuchte(bild.get_pixel(xx, yy)))
+                .sum::<f64>()
+                / (sy1 - sy0) as f64
+        })
         .collect();
     (zeilen, spalten)
 }
@@ -75,14 +92,18 @@ mod tests {
     #[test]
     fn gleichmaessiges_muster_hat_keine_schwebung() {
         // Zeilen mit genau 4 px Periode
-        let p: Vec<f64> = (0..400).map(|i| if i % 4 < 2 { 1.0 } else { 0.2 }).collect();
+        let p: Vec<f64> = (0..400)
+            .map(|i| if i % 4 < 2 { 1.0 } else { 0.2 })
+            .collect();
         assert!(schwebung(&p, 4.0) < 0.01);
     }
 
     #[test]
     fn schwebendes_muster_wird_erkannt() {
         // Zeilen mit 2,25 px Periode, je Pixel abgetastet: deutliche Schwebung
-        let p: Vec<f64> = (0..900).map(|i| (0.5 + 0.5 * (std::f64::consts::TAU * (i as f64 + 0.5) / 2.25).cos()).powi(4)).collect();
+        let p: Vec<f64> = (0..900)
+            .map(|i| (0.5 + 0.5 * (std::f64::consts::TAU * (i as f64 + 0.5) / 2.25).cos()).powi(4))
+            .collect();
         assert!(schwebung(&p, 2.25) > 1.0, "{}", schwebung(&p, 2.25));
     }
 }

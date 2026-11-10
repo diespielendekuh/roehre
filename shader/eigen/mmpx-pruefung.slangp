@@ -1,0 +1,10 @@
+# roehre – Prüf-Preset: MMPX der Autoren (slang, hunterk) als Prüfstein für
+# crates/roehre-wgsl/wgsl/mmpx.wgsl. Ein Pass, doppelte Größe, Rand wie die
+# eigene Stufe (der nächste Randpunkt).
+# SPDX-License-Identifier: MIT OR Apache-2.0
+shaders = 1
+shader0 = ../fremd/mit/mmpx/mmpx.slang
+filter_linear0 = false
+wrap_mode0 = clamp_to_edge
+scale_type0 = source
+scale0 = 2.0

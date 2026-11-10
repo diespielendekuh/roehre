@@ -2556,12 +2556,14 @@ name = "roehre-pruefstand"
 version = "0.1.0"
 dependencies = [
  "image",
+ "librashader",
  "pollster 0.4.0",
  "roehre-kette",
  "roehre-modell",
  "roehre-raum",
  "roehre-testbilder",
  "roehre-wgpu",
+ "roehre-wgsl",
  "wgpu",
 ]
 
@@ -2604,6 +2606,13 @@ dependencies = [
  "roehre-modell",
  "thiserror 2.0.21",
  "wgpu",
+]
+
+[[package]]
+name = "roehre-wgsl"
+version = "0.1.0"
+dependencies = [
+ "naga",
 ]
 
 [[package]]

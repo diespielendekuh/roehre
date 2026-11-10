@@ -8,5 +8,11 @@ rust-version.workspace = true
 
 [dependencies]
 roehre-modell.workspace = true
-librashader = { workspace = true, features = ["presets"] }
+# Optional (Standard an): ohne librashader bleiben Kettenwahl und Reglerplanung
+# (`plane`) übrig — für Spiele, die die Ketten über roehre-wgsl selbst ausführen (W-009).
+librashader = { workspace = true, features = ["presets"], optional = true }
 thiserror.workspace = true
+
+[features]
+default = ["librashader"]
+librashader = ["dep:librashader"]
