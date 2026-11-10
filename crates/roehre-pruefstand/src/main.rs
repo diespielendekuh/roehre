@@ -56,6 +56,11 @@ fn main() {
             &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
             Path::new(&opt("-o").unwrap_or("kamera.png".into())),
         ),
+        "formate" => raum_formate(
+            &opt("-v").unwrap_or("scart-rgb".into()),
+            groesse(&opt("-g").unwrap_or("1920x1080".into())),
+            Path::new(&opt("-o").unwrap_or("formate".into())),
+        ),
         "raum" => raum_fotos(
             &opt("-v").unwrap_or("wohnzimmer-90er-composite".into()),
             groesse(&opt("-g").unwrap_or("1920x1080".into())),
@@ -84,7 +89,7 @@ fn main() {
                 "roehre-pruefstand <befehl>\n\n\
                  leistung [-o leistung.md] [-n 120] [--nur-1080p]   Leistung messen (Filter, 3D-Raum, Kosten je Regler)\n\
                  pruefe [--neu]                                    Referenzbilder, Moiré, Helligkeit, Strahl\n\
-                 foto, bogen, raum, kamera, testbilder            Fotos\n\
+                 foto, bogen, raum, formate, kamera, testbilder   Fotos\n\
                  moire, helligkeit, hdr, bewegung, umschalten      Einzelmessungen"
             );
             Ok(())
@@ -710,6 +715,40 @@ fn kamera_bogen(v: &str, pfad: &Path) -> Ergebnis {
 
 /// 3D-Vorführraum: Fotos aus mehreren Blickwinkeln und Abständen.
 #[allow(clippy::too_many_arguments)]
+/// Der Raum mit dem Fernseher in den drei üblichen Bildformaten (8:7 für SNES pixelgenau, 4:3,
+/// 16:9), je einmal mittel und nah: zum Ansehen, ob Gerät, Tisch und Gegenstände zueinander passen.
+fn raum_formate(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
+    std::fs::create_dir_all(ordner)?;
+    let gpu = Gpu::neu();
+    let bild = roehre_testbilder::pixelszene();
+    let eingang = gpu.eingang(&bild);
+    let mut roehre = Roehre::neu(&gpu.device, &gpu.queue, shader_ordner(), lade_einstellungen(v)?, gpu::ZIELFORMAT)?;
+    for (name, format) in [("8-7", 8.0f32 / 7.0), ("4-3", 4.0 / 3.0), ("16-9", 16.0 / 9.0)] {
+        let breite = ((1080.0 * format / 2.0).round() as u32) * 2;
+        let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, breite, 1080);
+        let mut raum = roehre_raum::Raum::neu_fuer(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT, format)?;
+        let mut werte = None;
+        for _ in 0..3 {
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            werte = Some(roehre.zeichne_flaeche(&mut enc, &eingang, &eingang_von(&bild), &flaeche)?);
+            gpu.queue.submit([enc.finish()]);
+        }
+        let werte = werte.expect("gezeichnet");
+        for (stufe, naehe) in [("weit", 0.0f32), ("mittel", 0.5), ("nah", 0.85)] {
+            let k = roehre_raum::Kamera { naehe, schwenk: false, bildformat: format, ..Default::default() };
+            let a = roehre_raum::Ansicht::aus_kamera(&k, 2.0, g.0 as f32 / g.1 as f32);
+            let ziel = gpu.ziel(g.0, g.1);
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), g, &flaeche, &werte, &a);
+            gpu.queue.submit([enc.finish()]);
+            let pfad = ordner.join(format!("raum_{name}_{stufe}.png"));
+            gpu.lies(&ziel).save(&pfad)?;
+            eprintln!("{}", pfad.display());
+        }
+    }
+    Ok(())
+}
+
 fn raum_fotos(v: &str, g: (u32, u32), ordner: &Path, wandbild: Option<std::path::PathBuf>, ohne_rohpixel: bool, ohne_korn: bool, nur_unschaerfe: bool, zeit: Option<f32>) -> Ergebnis {
     use roehre_raum::{Ansicht, Raum};
     std::fs::create_dir_all(ordner)?;

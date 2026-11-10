@@ -854,6 +854,18 @@ static KATALOG: &[OptionBeschreibung] = &[
         wirkt_wenn: None,
     },
     OptionBeschreibung {
+        schluessel: "raum.bildhelligkeit",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Helligkeit des Bildes", "Picture brightness"),
+        beschreibung: Texte::de_en(
+            "Wie hell das Bild auf dem Fernseher leuchtet. 1 entspricht dem Röhrenbild ohne Raum: helle Szenen sind hell, behalten aber ihre Zeichnung. Höher wird greller (Weiß frisst langsam aus), niedriger gedämpfter wie ein heruntergeregelter Fernseher.",
+            "How bright the picture on the TV glows. 1 matches the CRT picture without the room: bright scenes are bright but keep their detail. Higher is harsher (white slowly burns out), lower is dimmer like a TV turned down.",
+        ),
+        art: zahl(0.5, 1.5, 0.05, 1.0),
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
         schluessel: "raum.flackern",
         gruppe: Gruppe::Raum,
         name: Texte::de_en("Flackern der Lampe", "Lamp flicker"),

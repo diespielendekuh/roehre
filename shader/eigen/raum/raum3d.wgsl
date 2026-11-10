@@ -296,6 +296,32 @@ fn lampe_farbe() -> vec3<f32> {
     return vec3<f32>(1.0, 0.70, 0.42) * szene.lampe.w * flackern;
 }
 
+// Helligkeit des Bildes auf der Röhre. Der Raum wird mit hoher Belichtung (nachbild.w, 2,6) und
+// einem filmischen Tonwert abgebildet, weil er dunkel ist. Ginge das Röhrenbild ungeschützt
+// denselben Weg, läge mittleres Grau (0,5) nach dem Tonwert bei 0,85 und Weiß bei 0,94: das Bild
+// fräße aus, helle Szenen wären nur noch weiß (Rückmeldung des Anwenders, 2026-11-10).
+// Deshalb wird hier festgelegt, welcher Wert am Ende auf dem Bildschirm des Spielers stehen soll,
+// und die Strahldichte dazu aus der Umkehrung von Tonwert und Belichtung berechnet:
+//   Sollwert = Röhrenbild × raum.bildhelligkeit, bis 0,8 unverändert, darüber eine weiche
+//   Schulter gegen 1 (Weiß bei Helligkeit 1 landet bei 0,93: hell, aber mit Zeichnung).
+fn bild_schulter(v: vec3<f32>) -> vec3<f32> {
+    let knie = vec3<f32>(0.8);
+    let oben = knie + 0.2 * (vec3<f32>(1.0) - exp(-(max(v, knie) - knie) / 0.2));
+    return select(v, oben, v > knie);
+}
+
+// Umkehrung des filmischen Tonwerts aus `nach_*` (c·(2,51c+0,03)/(c·(2,43c+0,59)+0,14)).
+fn tonwert_umkehr(y_roh: vec3<f32>) -> vec3<f32> {
+    let y = clamp(y_roh, vec3<f32>(0.0), vec3<f32>(0.985));
+    let a = vec3<f32>(2.51) - 2.43 * y;
+    let b = vec3<f32>(0.03) - 0.59 * y;
+    return (-b + sqrt(b * b + 4.0 * a * 0.14 * y)) / (2.0 * a);
+}
+
+fn bild_strahldichte(soll: vec3<f32>) -> vec3<f32> {
+    return tonwert_umkehr(bild_schulter(soll)) / max(szene.nachbild.w, 0.01);
+}
+
 fn bildlicht() -> vec3<f32> {
     // mittlere Farbe des Bildes (kleinste Mip-Stufe) als Leuchtdichte des Bildschirms
     return textureSampleLevel(bildschirm, rand, vec2<f32>(0.5), szene.bild_halb.z).rgb * szene.bild_mitte.w;
@@ -338,7 +364,8 @@ fn haupt_farbe(e: Zwischen) -> @location(0) vec4<f32> {
         // Bildröhre: abgerundete Ecken, Bild mit bandbegrenzter Maske, Glas mit Spiegelung
         let a = szene.bild_halb.x / szene.bild_halb.y;
         if (sd_rund((e.uv - 0.5) * vec2<f32>(a, 1.0) * 2.0, vec2<f32>(a, 1.0), 0.12) > 0.0) { discard; }
-        let bild = textureSample(bildschirm, rand, e.uv).rgb * roehre_maske(e.uv, maske) * szene.bild_mitte.w;
+        let soll = textureSample(bildschirm, rand, e.uv).rgb * roehre_maske(e.uv, maske) * szene.bild_mitte.w;
+        let bild = bild_strahldichte(soll);
         let rand_dunkel = smoothstep(0.0, 0.06, min(min(e.uv.x, 1.0 - e.uv.x) * a, min(e.uv.y, 1.0 - e.uv.y)));
         let cos_t = clamp(dot(-blick, n), 0.0, 1.0);
         let fresnel = 0.04 + 0.96 * pow(1.0 - cos_t, 5.0);

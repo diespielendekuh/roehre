@@ -13,6 +13,27 @@ pub const TISCH_HOEHE: f32 = 0.70;
 /// Mitte des Bildschirms (Weltkoordinaten) und halbe Größe der Bildröhre.
 pub const BILD_MITTE: V3 = [-0.06, TISCH_HOEHE + 0.035 + 0.245, -0.18];
 pub const BILD_HALB: [f32; 2] = [0.20, 0.15];
+
+/// Seitenverhältnis des Bildes, für das der Raum bisher gebaut war (4:3).
+pub const FORMAT_4_3: f32 = 4.0 / 3.0;
+
+/// Halbe Breite und Höhe der Bildröhre für ein Bild mit Seitenverhältnis `format`
+/// (Breite/Höhe). Die Höhe bleibt, die Breite folgt dem Bild: 8:7 (SNES pixelgenau) wird
+/// schmaler, 16:9 breiter als das 4:3-Gerät. Grenzen 1:1 bis 2,4:1.
+pub fn bild_halb(format: f32) -> [f32; 2] {
+    [BILD_HALB[1] * format.clamp(1.0, 2.4), BILD_HALB[1]]
+}
+
+/// Um wie viel das Gerät je Seite breiter (oder schmaler) ist als das 4:3-Gerät.
+pub fn mehrbreite(format: f32) -> f32 {
+    bild_halb(format)[0] - BILD_HALB[0]
+}
+
+/// Halbe Breite des Gehäuses (4:3: 0,34 m). Bildblende, Bediensäule und Ränder behalten ihre
+/// Maße; nur die Bildröhre und mit ihr der Mantel wachsen oder schrumpfen.
+pub fn gehaeuse_halb(format: f32) -> f32 {
+    0.34 + mehrbreite(format)
+}
 /// Lage des Pflanztopfs: rechts neben dem Tisch, im Licht der Lampe.
 pub const PFLANZE: V3 = [1.12, 0.0, 0.08];
 /// Lage der Glühbirne der Stehlampe (Lichtquelle), in der hinteren rechten Zimmerecke.
@@ -51,12 +72,21 @@ pub fn parklaternen() -> [[f32; 2]; 3] {
 
 /// Baut die ganze Szene.
 pub fn bauen() -> Netz {
+    bauen_fuer(FORMAT_4_3)
+}
+
+/// Der Raum mit einem Fernseher für ein Bild mit Seitenverhältnis `format` (Breite/Höhe):
+/// 8:7, 4:3, 16:9 oder etwas dazwischen. Ein breiteres Gerät bekommt einen längeren Tisch,
+/// und was neben ihm liegt (Videorekorder, Kassetten, Tasse), rückt entsprechend nach außen.
+pub fn bauen_fuer(format: f32) -> Netz {
     let mut n = Netz::default();
+    // Platz, den ein breiteres Gerät je Seite zusätzlich braucht (schmalere lassen alles stehen)
+    let platz = mehrbreite(format).max(0.0);
     zimmer(&mut n);
-    tisch(&mut n);
-    fernseher(&mut n);
-    videorekorder(&mut n);
-    kleinkram(&mut n);
+    tisch(&mut n, platz);
+    fernseher(&mut n, format);
+    videorekorder(&mut n, platz);
+    kleinkram(&mut n, platz);
     gummibaum(&mut n);
     kabel(&mut n);
     stehlampe(&mut n);
@@ -349,24 +379,24 @@ fn bilderrahmen(n: &mut Netz, mitte: V3, aussen: [f32; 2], b: f32) {
 /// Tisch aus massiver Eiche: Platte mit gerundeter Oberkante und abgesetzter Unterkante
 /// (Stufenprofil), an den Enden Kopfleisten mit quer laufender Faser, Zarge, gedrechselte
 /// Beine mit Wulst.
-fn tisch(n: &mut Netz) {
+fn tisch(n: &mut Netz, platz: f32) {
     let (z0, uvm) = (-0.05f32, 1.1);
     let dicke = 0.016;
     // Mittelteil der Platte (Faser entlang der Tischlänge)
-    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - dicke, z0]), [0.735, dicke, 0.42], 0.011, Tischholz, uvm);
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - dicke, z0]), [0.735 + platz, dicke, 0.42], 0.011, Tischholz, uvm);
     // Kopfleisten an beiden Enden (Faser quer, sichtbare Fuge zur Platte)
     for sx in [-1.0f32, 1.0] {
-        let t = Trafo::bei([sx * 0.772, TISCH_HOEHE - dicke, z0]).nach(&Trafo::dreh_y(std::f32::consts::FRAC_PI_2));
+        let t = Trafo::bei([sx * (0.772 + platz), TISCH_HOEHE - dicke, z0]).nach(&Trafo::dreh_y(std::f32::consts::FRAC_PI_2));
         n.quader(&t, [0.42, dicke, 0.036], 0.011, Tischholz, uvm);
     }
     // Abgesetzte Unterkante: etwas schmaler, bildet mit der Platte eine Stufe
-    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 2.0 * dicke - 0.007, z0]), [0.79, 0.007, 0.405], 0.003, Tischholz, uvm);
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 2.0 * dicke - 0.007, z0]), [0.79 + platz, 0.007, 0.405], 0.003, Tischholz, uvm);
     // Zarge
-    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 0.085, z0]), [0.70, 0.04, 0.345], 0.004, Tischholz, uvm);
+    n.quader(&Trafo::bei([0.0, TISCH_HOEHE - 0.085, z0]), [0.70 + platz, 0.04, 0.345], 0.004, Tischholz, uvm);
     // Gedrechselte Beine: Fuß, Wulst unter der Zarge, leicht verjüngt
     let h = TISCH_HOEHE - 0.04;
     for (sx, sz) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-        let p = [0.70 * sx, 0.0, z0 + 0.335 * sz];
+        let p = [(0.70 + platz) * sx, 0.0, z0 + 0.335 * sz];
         n.drehkoerper(
             &Trafo::bei(p),
             &[(0.0, 0.0), (0.022, 0.0), (0.026, 0.012), (0.024, 0.03), (0.028, 0.32), (0.034, h - 0.16), (0.038, h - 0.15), (0.034, h - 0.14), (0.032, h), (0.0, h)],
@@ -430,10 +460,12 @@ fn rund_ring(n: &mut Netz, mitte: [f32; 2], aussen: ([f32; 2], f32, f32), innen:
 /// gerundeten Ecken, rechts eine eigene Bediensäule (Netz/Lautstärke, Feinregler hinter
 /// einer schwarzen Leiste, VHF- und UHF-Wähler, Lautsprecherlamellen), darunter ein
 /// zurückgesetzter Sockel. Ohne Marke.
-fn fernseher(n: &mut Netz) {
+fn fernseher(n: &mut Netz, format: f32) {
     let y0 = TISCH_HOEHE + 0.035;           // Unterkante Gehäuse (auf dem Sockel)
     let mitte = [0.0, y0 + 0.245, 0.0];
-    let (hb, hh, ht) = (0.34, 0.245, 0.205);
+    // Breite des Geräts folgt dem Bildformat (4:3: 0,34), Höhe und Tiefe bleiben
+    let mehr = mehrbreite(format);
+    let (hb, hh, ht) = (gehaeuse_halb(format), 0.245, 0.205);
     let w = 0.026;                                      // Stärke des Holzmantels
     n.quader(&Trafo::bei([0.0, mitte[1] + hh - w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.006, Furnier, 2.5);
     n.quader(&Trafo::bei([0.0, mitte[1] - hh + w / 2.0, 0.0]), [hb, w / 2.0, ht], 0.006, Furnier, 2.5);
@@ -443,9 +475,11 @@ fn fernseher(n: &mut Netz) {
     let ein = w / 2.0;
     n.quader(&Trafo::bei([0.0, mitte[1], ht - 0.01]), [hb - w + ein, hh - w + ein, 0.01], 0.0, KunststoffSchwarz, 4.0);
     // Rückteil (Röhrenhals), verjüngt, mit Lüftungsschlitzen
-    n.quader(&Trafo::bei([0.0, mitte[1] + 0.01, 0.28]), [0.24, 0.19, 0.09], 0.03, KunststoffSchwarz, 4.0);
-    for i in 0..9 {
-        n.quader(&Trafo::bei([-0.16 + i as f32 * 0.04, mitte[1] + 0.205, 0.26]), [0.012, 0.002, 0.05], 0.001, Gummi, 8.0);
+    n.quader(&Trafo::bei([0.0, mitte[1] + 0.01, 0.28]), [0.24 + mehr, 0.19, 0.09], 0.03, KunststoffSchwarz, 4.0);
+    // Lüftungsschlitze im Abstand von 4 cm über die Breite des Rückteils
+    let schlitze = (((0.16 + mehr) * 2.0 / 0.04).round() as i32).max(4);
+    for i in 0..=schlitze {
+        n.quader(&Trafo::bei([-0.02 * schlitze as f32 + i as f32 * 0.04, mitte[1] + 0.205, 0.26]), [0.012, 0.002, 0.05], 0.001, Gummi, 8.0);
     }
     // Sockel: schwarz, ringsum zurückgesetzt, mit vier Gummifüßen
     let sockel_h = (y0 - TISCH_HOEHE - 0.004) / 2.0;
@@ -459,7 +493,7 @@ fn fernseher(n: &mut Netz) {
     let (ix0, ix1) = (-hb + w, hb - w);
     let (iy0, iy1) = (mitte[1] - hh + w, mitte[1] + hh - w);
     let (bx, by) = (BILD_MITTE[0], BILD_MITTE[1]);
-    let (hx, hy) = (BILD_HALB[0], BILD_HALB[1]);
+    let [hx, hy] = bild_halb(format);
 
     // Bildblende, mittig um das Bild: außen fast rechteckig, innen ein tiefer Tunnel mit weit
     // gerundeten Ecken; rechts daneben (nach einer Fuge) die Bediensäule
@@ -573,9 +607,9 @@ fn bediensaeule(n: &mut Netz, x0: f32, x1: f32, y0: f32, y1: f32, fz: f32) {
 
 /// Videorekorder der 80er links neben dem Fernseher (ohne Marke): flaches schwarzes Gehäuse,
 /// die Front mit Kassettenklappe, Leuchtanzeige („12:00“), Tasten und Netzschalter als Textur.
-fn videorekorder(n: &mut Netz) {
+fn videorekorder(n: &mut Netz, platz: f32) {
     let (halb, fuss) = ([0.212f32, 0.044, 0.16], 0.006);
-    let m = [-0.555, TISCH_HOEHE + fuss + halb[1], -0.06];
+    let m = [-0.555 - platz, TISCH_HOEHE + fuss + halb[1], -0.06];
     n.quader(&Trafo::bei(m), halb, 0.004, KunststoffSchwarz, 6.0);
     // Front: Textur maßstäblich (256 Texel über die Breite, oberste 54 Zeilen)
     let front = Trafo::bei([m[0], m[1], m[2] - halb[2] - 0.0006]);
@@ -596,20 +630,20 @@ fn videohuelle(n: &mut Netz, t: &Trafo, zeile: u32) {
     n.flaeche(&t.nach(&Trafo::bei([0.0, 0.0, -halb[2] - 0.0004])), [halb[0] - 0.001, halb[1] - 0.0008], Kassette, [0.0, zeile as f32 / 8.0, 1.0, 1.0 / 8.0]);
 }
 
-fn kleinkram(n: &mut Netz) {
+fn kleinkram(n: &mut Netz, platz: f32) {
     // Videokassetten in Hüllen, gestapelt, leicht verdreht; die Rücken zeigen zur Kamera.
     // Rechts hinten drei, links vorn in der Tischecke vier (oben die selbst bespielte); die
     // Anzeige des Videorekorders bleibt frei.
     for (i, zeile) in [4u32, 5, 6].into_iter().enumerate() {
-        let t = Trafo::bei([0.52, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.08]).nach(&Trafo::dreh_y(0.08 * (i as f32 - 1.0) + 0.1));
+        let t = Trafo::bei([0.52 + platz, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.08]).nach(&Trafo::dreh_y(0.08 * (i as f32 - 1.0) + 0.1));
         videohuelle(n, &t, zeile);
     }
     for (i, (zeile, dreh, dx)) in [(0u32, -0.04f32, 0.0f32), (1, 0.05, 0.006), (2, -0.02, -0.004), (7, 0.16, 0.01)].into_iter().enumerate() {
-        let t = Trafo::bei([-0.685 + dx, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.345]).nach(&Trafo::dreh_y(dreh));
+        let t = Trafo::bei([-0.685 - platz + dx, TISCH_HOEHE + 0.0135 + i as f32 * 0.027, -0.345]).nach(&Trafo::dreh_y(dreh));
         videohuelle(n, &t, zeile);
     }
     // Tasse mit Henkel
-    let tasse = [0.40, TISCH_HOEHE, -0.30];
+    let tasse = [0.40 + platz, TISCH_HOEHE, -0.30];
     n.drehkoerper(&Trafo::bei(tasse), &[(0.0, 0.002), (0.034, 0.0), (0.038, 0.01), (0.04, 0.09), (0.037, 0.092), (0.034, 0.085), (0.032, 0.015), (0.0, 0.016)], 24, Keramik, 3.0);
     let henkel: Vec<V3> = (0..=10).map(|i| {
         let w = -std::f32::consts::FRAC_PI_2 + i as f32 / 10.0 * std::f32::consts::PI;

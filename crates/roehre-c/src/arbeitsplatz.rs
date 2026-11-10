@@ -25,8 +25,21 @@ impl Modus {
     }
 }
 
-/// Größe der Bildschirmfläche im 3D-Raum (das Röhrenbild als Material).
-const FLAECHE: (u32, u32) = (1440, 1080);
+/// Höhe der Bildschirmfläche im 3D-Raum (das Röhrenbild als Material); die Breite folgt dem
+/// Seitenverhältnis des Bildes (4:3: 1440).
+const FLAECHE_HOEHE: u32 = 1080;
+
+/// Seitenverhältnis des Bildes auf der Röhre (Breite/Höhe), wie es `bildformat.seitenverhaeltnis`
+/// festlegt: danach wird im Raum der Fernseher gebaut (8:7, 4:3, 16:9 oder dazwischen).
+fn bildformat(e: &Einstellungen, eingang: &Eingang, ziel: (u32, u32)) -> f32 {
+    let f = match e.auswahl("bildformat.seitenverhaeltnis") {
+        "pixelgenau" => eingang.breite as f64 * eingang.pixel_seitenverhaeltnis / eingang.hoehe.max(1) as f64,
+        "16:9" => 16.0 / 9.0,
+        "fenster" => ziel.0 as f64 / ziel.1.max(1) as f64,
+        _ => 4.0 / 3.0,
+    };
+    (f as f32).clamp(1.0, 2.4)
+}
 
 pub(crate) struct Arbeitsplatz {
     pub device: wgpu::Device,
@@ -74,14 +87,18 @@ impl Arbeitsplatz {
         match modus {
             Modus::Flach => self.roehre.zeichne_im_takt(enc, eingang_textur, eingang, ziel, groesse, takt).map(|_| ()).map_err(|f| f.to_string()),
             Modus::Raum => {
-                if self.raum.is_none() {
-                    let raum = Raum::neu(&self.device, &self.queue, &self.shader, self.format).map_err(|f| f.to_string())?;
-                    let flaeche = FlaechenZiel::neu(&self.device, FLAECHE.0, FLAECHE.1);
+                // Der Fernseher hat das Format des Bildes. Ändert es sich (anderes Seitenverhältnis
+                // im Spiel, andere Einstellung), wird der Raum neu gebaut (einige Zehntelsekunden).
+                let format = bildformat(&self.einstellungen, eingang, groesse);
+                if self.raum.as_ref().is_none_or(|(r, _)| (r.bildformat() - format).abs() > 0.004) {
+                    let raum = Raum::neu_fuer(&self.device, &self.queue, &self.shader, self.format, format).map_err(|f| f.to_string())?;
+                    let breite = ((FLAECHE_HOEHE as f32 * format / 2.0).round() as u32 * 2).max(2);
+                    let flaeche = FlaechenZiel::neu(&self.device, breite, FLAECHE_HOEHE);
                     self.raum = Some((raum, flaeche));
                 }
                 let (raum, flaeche) = self.raum.as_mut().expect("angelegt");
                 let werte = self.roehre.zeichne_flaeche(enc, eingang_textur, eingang, flaeche).map_err(|f| f.to_string())?;
-                let a = Ansicht::aus_einstellungen(&self.einstellungen, zeit, groesse.0 as f32 / groesse.1.max(1) as f32);
+                let a = Ansicht::aus_einstellungen_fuer(&self.einstellungen, zeit, groesse.0 as f32 / groesse.1.max(1) as f32, raum.bildformat());
                 raum.zeichne(&self.device, &self.queue, enc, ziel, groesse, flaeche, &werte, &a);
                 Ok(())
             }

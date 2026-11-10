@@ -34,7 +34,8 @@ pub struct Ansicht {
     pub verschiebung: [f32; 2],
     /// Zeit in Sekunden (Vorhang, Flackern, Korn, Schwenk)
     pub zeit: f32,
-    /// Helligkeit des Bildschirms (1 = Röhrenbild unverändert)
+    /// Helligkeit des Bildes auf der Röhre (1 = wie das Röhrenbild im flachen Modus; der Shader
+    /// rechnet Belichtung und Tonwert des Raums heraus, siehe `bild_strahldichte`)
     pub bildschirm: f32,
     /// Helligkeit der Lampe
     pub lampe: f32,
@@ -71,11 +72,15 @@ pub struct Kamera {
     pub schwenk_staerke: f32,
     /// Lage des Geräts im Fenster: −1 am linken Rand, 0 Mitte, 1 am rechten Rand
     pub lage: f32,
+    /// Seitenverhältnis des Bildes (Breite/Höhe), für das der Fernseher gebaut ist: 8:7, 4:3,
+    /// 16:9 … Die Kamera richtet sich am Gerät aus, das mit dem Format breiter oder schmaler
+    /// wird. Muss zum `Raum` passen (`Raum::neu_fuer`).
+    pub bildformat: f32,
 }
 
 impl Default for Kamera {
     fn default() -> Self {
-        Self { naehe: 0.75, blickwinkel: 0.0, schwenk: true, schwenk_staerke: 0.35, lage: 0.0 }
+        Self { naehe: 0.75, blickwinkel: 0.0, schwenk: true, schwenk_staerke: 0.35, lage: 0.0, bildformat: szene::FORMAT_4_3 }
     }
 }
 
@@ -88,6 +93,7 @@ impl Kamera {
             schwenk: e.auswahl("raum.schwenk") == "an",
             schwenk_staerke: e.zahl("raum.schwenk_staerke") as f32,
             lage: e.zahl("raum.lage") as f32,
+            bildformat: szene::FORMAT_4_3,
         }
     }
 }
@@ -140,14 +146,15 @@ fn bild_licht() -> Mat {
 }
 
 /// Hüllquader des Fernsehers samt Füßen (Mitte, halbe Größe) – daran richtet sich die Kamera.
-fn geraet() -> ([f32; 3], [f32; 3]) {
+fn geraet(format: f32) -> ([f32; 3], [f32; 3]) {
     let h = 0.2625;
-    ([0.0, szene::TISCH_HOEHE + h, 0.0], [0.34, h, 0.205])
+    ([0.0, szene::TISCH_HOEHE + h, 0.0], [szene::gehaeuse_halb(format), h, 0.205])
 }
 
 /// Hüllquader der Bildröhre mit einem schmalen Streifen Rahmen – Bezug der Stufe „ganz nah“.
-fn bildkasten() -> ([f32; 3], [f32; 3]) {
-    (szene::BILD_MITTE, [szene::BILD_HALB[0] + 0.02, szene::BILD_HALB[1] + 0.02, 0.03])
+fn bildkasten(format: f32) -> ([f32; 3], [f32; 3]) {
+    let halb = szene::bild_halb(format);
+    (szene::BILD_MITTE, [halb[0] + 0.02, halb[1] + 0.02, 0.03])
 }
 
 /// Ab dieser Nähe wechselt der Bezug der Kamera vom ganzen Gerät zum Bildschirm.
@@ -157,14 +164,14 @@ const NAH: f32 = 0.75;
 /// weit (0) 24 %, mittel (0,5) 45 %, nah (0,75) 80 % des Geräts; darüber gleitet der Bezug
 /// zum Bildschirm, bis bei „ganz nah“ (1) Bildschirm samt schmalem Rahmen 84 % der Höhe
 /// einnimmt – oben und unten ist dann nur noch Gehäuse zu sehen.
-fn bezug(naehe: f32) -> ([f32; 3], [f32; 3], f32) {
-    let (gm, gh) = geraet();
+fn bezug(naehe: f32, format: f32) -> ([f32; 3], [f32; 3], f32) {
+    let (gm, gh) = geraet(format);
     if naehe <= NAH {
         let anteil = if naehe < 0.5 { 0.24 + (0.45 - 0.24) * naehe * 2.0 } else { 0.45 + (0.80 - 0.45) * (naehe - 0.5) / (NAH - 0.5) };
         return (gm, gh, anteil);
     }
     let t = (naehe - NAH) / (1.0 - NAH);
-    let (bm, bh) = bildkasten();
+    let (bm, bh) = bildkasten(format);
     let l = |a: [f32; 3], b: [f32; 3]| [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     (l(gm, bm), l(gh, bh), 0.80 + (0.84 - 0.80) * t)
 }
@@ -206,7 +213,7 @@ impl Ansicht {
     pub fn aus_kamera(k: &Kamera, zeit: f32, seite: f32) -> Self {
         let seite = seite.max(0.1);
         let naehe = k.naehe.clamp(0.0, 1.0);
-        let (mitte, halb, anteil) = bezug(naehe);
+        let (mitte, halb, anteil) = bezug(naehe, k.bildformat);
         let kasten = (mitte, halb);
         let gier = k.blickwinkel.clamp(-1.0, 1.0) * 30f32.to_radians();
         let hoehe = if naehe <= NAH { 14.0 + (5.0 - 14.0) * naehe / NAH } else { 5.0 - 2.0 * (naehe - NAH) / (1.0 - NAH) }.to_radians();
@@ -257,8 +264,16 @@ impl Ansicht {
 
     /// Ansicht aus allen Optionen der Gruppe `raum` (Kamera, Licht, Flackern, Korn).
     pub fn aus_einstellungen(e: &roehre_wgpu::Einstellungen, zeit: f32, seite: f32) -> Self {
-        let mut a = Self::aus_kamera(&Kamera::aus_einstellungen(e), zeit, seite);
+        Self::aus_einstellungen_fuer(e, zeit, seite, szene::FORMAT_4_3)
+    }
+
+    /// Wie `aus_einstellungen`, für einen Raum mit einem Fernseher im Format `bildformat`
+    /// (`Raum::neu_fuer`).
+    pub fn aus_einstellungen_fuer(e: &roehre_wgpu::Einstellungen, zeit: f32, seite: f32, bildformat: f32) -> Self {
+        let kamera = Kamera { bildformat: bildformat.clamp(1.0, 2.4), ..Kamera::aus_einstellungen(e) };
+        let mut a = Self::aus_kamera(&kamera, zeit, seite);
         a.lampe *= e.zahl("raum.licht") as f32;
+        a.bildschirm = e.zahl("raum.bildhelligkeit") as f32;
         a.flackern = e.zahl("raum.flackern") as f32;
         a.korn = e.zahl("raum.korn") as f32;
         a.unschaerfe = e.zahl("raum.unschaerfe") as f32;
@@ -329,6 +344,8 @@ struct Ziele {
 
 /// Der Raum.
 pub struct Raum {
+    /// Seitenverhältnis des Bildes, für das Fernseher, Tisch und Gegenstände gebaut sind
+    bildformat: f32,
     ecken: wgpu::Buffer,
     indizes: wgpu::Buffer,
     anzahl: u32,
@@ -444,6 +461,21 @@ fn textur(dim: wgpu::TextureViewDimension, filterbar: bool) -> wgpu::BindingType
 
 impl Raum {
     pub fn neu(device: &wgpu::Device, queue: &wgpu::Queue, shader_ordner: &std::path::Path, format: wgpu::TextureFormat) -> std::io::Result<Self> {
+        Self::neu_fuer(device, queue, shader_ordner, format, szene::FORMAT_4_3)
+    }
+
+    /// Seitenverhältnis des Bildes, für das dieser Raum gebaut ist.
+    pub fn bildformat(&self) -> f32 {
+        self.bildformat
+    }
+
+    /// Der Raum mit einem Fernseher für ein Bild mit Seitenverhältnis `bildformat`
+    /// (Breite/Höhe): 8:7 (SNES pixelgenau), 4:3, 16:9 oder dazwischen. Das Gerät behält seine
+    /// Bauart (Holzmantel, Bediensäule), nur die Röhre und der Mantel sind breiter oder
+    /// schmaler; der Tisch und die Gegenstände darauf passen sich an. Die Kamera bekommt
+    /// dasselbe Format (`Kamera::bildformat`, `Ansicht::aus_einstellungen_fuer`).
+    pub fn neu_fuer(device: &wgpu::Device, queue: &wgpu::Queue, shader_ordner: &std::path::Path, format: wgpu::TextureFormat, bildformat: f32) -> std::io::Result<Self> {
+        let bildformat = bildformat.clamp(1.0, 2.4);
         // Materialien
         let ebenen = texturen::erzeugen();
         let farben: Vec<Vec<u8>> = ebenen.iter().map(|e| e.0.clone()).collect();
@@ -452,7 +484,7 @@ impl Raum {
         let (_, eigenschaften) = texturfeld(device, queue, &eig, wgpu::TextureFormat::Rgba8Unorm, false);
 
         // Geometrie
-        let netz = szene::bauen();
+        let netz = szene::bauen_fuer(bildformat);
         let bytes = |d: &[u8], usage| {
             let b = device.create_buffer(&wgpu::BufferDescriptor { label: Some("roehre-raum"), size: d.len() as u64, usage: usage | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
             queue.write_buffer(&b, 0, d);
@@ -651,6 +683,7 @@ impl Raum {
             cache: None,
         });
         Ok(Self {
+            bildformat,
             ecken,
             indizes,
             anzahl: netz.indizes.len() as u32,
@@ -774,7 +807,8 @@ impl Raum {
         w.extend([a.auge[0], a.auge[1], a.auge[2], a.zeit]);
         w.extend([szene::LAMPE[0], szene::LAMPE[1], szene::LAMPE[2], a.lampe]);
         w.extend([szene::BILD_MITTE[0], szene::BILD_MITTE[1], szene::BILD_MITTE[2], a.bildschirm]);
-        w.extend([szene::BILD_HALB[0], szene::BILD_HALB[1], stufen, a.flackern]);
+        let bild_halb = szene::bild_halb(self.bildformat);
+        w.extend([bild_halb[0], bild_halb[1], stufen, a.flackern]);
         w.extend([a.nebel, a.korn, if self.srgb { 1.0 } else { 0.0 }, a.belichtung]);
         let fokus = geometrie::sub(szene::BILD_MITTE, a.auge);
         w.extend([geometrie::dot(fokus, fokus).sqrt(), a.unschaerfe, a.gluehen, 0.0]);
@@ -784,7 +818,7 @@ impl Raum {
         let bytes: Vec<u8> = w.iter().flat_map(|f| f.to_le_bytes()).collect();
         queue.write_buffer(&self.uniform, 0, &bytes);
         let mut mw = *material;
-        mw.seitenverhaeltnis = szene::BILD_HALB[0] / szene::BILD_HALB[1];
+        mw.seitenverhaeltnis = bild_halb[0] / bild_halb[1];
         queue.write_buffer(&self.material_puffer, 0, &mw.als_bytes());
 
         // 1. Schattenkarte
@@ -940,7 +974,7 @@ mod tests {
 
     /// Grenzen des Geräts im fertigen Bild (mit Verschiebung).
     fn im_bild(a: &Ansicht, seite: f32) -> [f32; 4] {
-        im_bild_von(a, seite, geraet())
+        im_bild_von(a, seite, geraet(szene::FORMAT_4_3))
     }
 
     fn im_bild_von(a: &Ansicht, seite: f32, kasten: ([f32; 3], [f32; 3])) -> [f32; 4] {
@@ -958,7 +992,7 @@ mod tests {
                     for lage in [-1.0, -0.5, 0.0, 0.5, 1.0] {
                         let k = Kamera { naehe, blickwinkel: blick, lage, schwenk: false, ..Kamera::default() };
                         // bis „nah“ das ganze Gerät, darüber mindestens der Bildschirm
-                        let kasten = if naehe <= NAH { geraet() } else { bildkasten() };
+                        let kasten = if naehe <= NAH { geraet(szene::FORMAT_4_3) } else { bildkasten(szene::FORMAT_4_3) };
                         let g = im_bild_von(&Ansicht::aus_kamera(&k, 0.0, seite), seite, kasten);
                         assert!(g[0] >= -1.0 + 1e-3 && g[1] <= 1.0 - 1e-3 && g[2] >= -1.0 && g[3] <= 1.0, "{seite} {naehe} {blick} {lage}: {g:?}");
                     }
@@ -979,7 +1013,7 @@ mod tests {
         }
         // ganz nah: Bildschirm mit schmalem Rahmen 84 % der Höhe, das Gehäuse ragt hinaus
         let a = Ansicht::aus_kamera(&Kamera { naehe: 1.0, schwenk: false, ..Kamera::default() }, 0.0, 16.0 / 9.0);
-        let b = im_bild_von(&a, 16.0 / 9.0, bildkasten());
+        let b = im_bild_von(&a, 16.0 / 9.0, bildkasten(szene::FORMAT_4_3));
         assert!(((b[3] - b[2]) / 2.0 - 0.84).abs() < 0.01, "{b:?}");
         let g = im_bild(&a, 16.0 / 9.0);
         assert!(g[3] > 1.0 && g[2] < -1.0, "Gehäuse oben und unten angeschnitten: {g:?}");

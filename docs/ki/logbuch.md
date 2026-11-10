@@ -1,7 +1,34 @@
 # Logbuch: wer hat was an roehre geändert
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
-
+
+## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Bild überstrahlt nicht mehr; Fernseher in jedem Bildformat
+- **Rückmeldung des Anwenders:** Das Bild auf dem Fernseher war zu grell („man sieht nur weiß“),
+  früher musste man es auf die niedrigste Stufe stellen. Es soll etwas grell sein, aber mit
+  realen Werten und einstellbar.
+- **Ursache:** Der Raum wird mit Belichtung 2,6 und filmischem Tonwert abgebildet. Das Röhrenbild
+  ging ungeschützt denselben Weg: mittleres Grau (0,5) landete bei 0,85, Weiß bei 0,94.
+- **Lösung** (`raum3d.wgsl`, `bild_strahldichte`): Für die Bildröhre wird der Sollwert auf dem
+  Bildschirm des Spielers festgelegt (Röhrenbild × `raum.bildhelligkeit`, bis 0,8 unverändert,
+  darüber weiche Schulter gegen 1) und die Strahldichte aus der Umkehrung von Tonwert und
+  Belichtung berechnet. Bei Helligkeit 1 entspricht das Bild dem flachen Modus; Weiß liegt bei
+  0,93. Neue Option **`raum.bildhelligkeit`** (0,5 … 1,5, Standard 1,0 in der Mitte).
+  Vorher/Nachher: `docs/bilder/formate/helligkeit_vorher_nachher.png`.
+- **Fernseher in jedem Bildformat** (Wunsch des Anwenders: 8:7 für SNES pixelgenau, 4:3, 16:9 für
+  Breitbild aus Recompilations; Gerät im alten Analog-Design, aber im Format des Bildes):
+  `szene::bauen_fuer(format)`, `Raum::neu_fuer(…, bildformat)`, `Kamera::bildformat`,
+  `Ansicht::aus_einstellungen_fuer`. Die Röhre und der Holzmantel werden breiter oder schmaler
+  (Höhe, Tiefe, Bildblende, Bediensäule bleiben), der Tisch wird für breite Geräte länger,
+  Videorekorder, Kassetten und Tasse rücken nach außen. Stufenlos von 1:1 bis 2,4:1.
+  Die C-API baut den Raum im Format des Bildes (`bildformat.seitenverhaeltnis`; bei „pixelgenau“
+  aus EINGANG) und baut ihn neu, wenn es sich ändert. Bilder: `docs/bilder/formate/formate.png`,
+  neuer Befehl `roehre-pruefstand formate`.
+- Geprüft: `cargo test` (roehre-raum, roehre-modell), `roehre-pruefstand pruefe` bestanden; die
+  drei Formate und Vorher/Nachher als Bild angesehen; im Spiel (Ghost Return) helle und dunkle
+  Szenen im Raum gesehen.
+- Ungeprüft: Leistung des Neubaus beim Formatwechsel im Spiel; `roehre-vorschau` (Fenster) nutzt
+  weiter 4:3; die Referenzbilder des Prüflaufs enthalten den Raum nicht.
+
 ## 2026-11-10 · Ghost Return (KI des Projekts) · C-API: BGRA-Bilder, FXC statt DXC unter D3D12
 - Anlass: Einbau in Ghost Return (Goemon's Great Adventure, RT64 unter D3D12), siehe
   `docs/integration/ghost-return.md`.
