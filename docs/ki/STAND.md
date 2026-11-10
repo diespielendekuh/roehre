@@ -23,7 +23,7 @@ Spielbild → [Vorstufe: virtuelle Zeilen] → [Röhre: guest-advanced] → [Zus
 
 | Bereich | Stand | Wo |
 |---|---|---|
-| Einstellungsmodell (75 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
+| Einstellungsmodell (76 Optionen, 13 Gruppen, Grenzen, deutsche Texte, TOML/JSON, Versionierung) | fertig | `crates/roehre-modell` |
 | Voreinstellungen `aus`, `scart-rgb`, `wohnzimmer-90er-composite`, `wohnzimmer-90er-pal`, `svideo`, `pvm`, `bvm`, `arcade`, `pc-vga`, `breitbild-roehre` | fertig, auf Helligkeit und Moiré abgestimmt | `crates/roehre-modell/voreinstellungen/*.toml` |
 | Breitbild-Röhre (16:9-Glas, 4:3-Inhalt) | fertig (`bildformat.roehrenformat`) | `gehaeuse.rs` |
 | GPL-freie Variante (crt-beans, MIT): Option `allgemein.lizenz`, Voreinstellungen `mit-rgb` und `mit-composite`, automatischer Rückfall ohne GPL-Ordner, eigener Helligkeitspass | fertig, Prüflauf (Referenzen, Moiré, Helligkeit) bestanden; Grenzen siehe Abschnitt 5 | `roehre-kette` (`plane_beans`), `shader/eigen/beans/` |
@@ -183,6 +183,7 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-10 | Neue Option `raum.konsole` (`keine`, `n64`): Spielkonsole mit Controller auf dem Tisch, nur nach echten Vorbildern. Neu: `szene::Konsole`, `Raum::neu_mit(…, bildformat, konsole)`, `Raum::konsole()`. Fünf Materialien am Ende von `texturen::Material` ergänzt (Reihenfolge der bisherigen unverändert). |
 | 2026-11-10 | Neue Option `raum.bildhelligkeit` (0,5 … 1,5, Standard 1,0): Das Bild auf dem Fernseher überstrahlt nicht mehr; bei 1,0 entspricht es dem flachen Modus (vorher lag mittleres Grau bei 0,85). Wer die alte, grelle Wirkung will, stellt höher. Neu: `Raum::neu_fuer(…, bildformat)`, `Raum::bildformat()`, `szene::bauen_fuer`, `Kamera::bildformat`, `Ansicht::aus_einstellungen_fuer`; die bisherigen Funktionen bauen weiter das 4:3-Gerät. Die C-API wählt das Format selbst aus dem Bild. |
 | 2026-11-10 | `RoehreAustauschParameter` hat am Ende das neue Feld `kanalfolge` (0 RGBA, 1 BGRA; BGRA nur mit Ausgabe SDR). Ältere Aufrufer mit kleinerer `struktur_groesse` laufen unverändert. Der D3D12-Weg übersetzt Shader jetzt mit FXC statt mit einer im Prozess gefundenen `dxcompiler.dll` (überschreibbar mit `WGPU_DX12_COMPILER`). |
 | 2026-11-02 | Etappe 7: neue Kiste `roehre-c` mit `include/roehre.h`. Etappe 6: Gruppe `raum` (10 Optionen), `roehre_modell::festwerte`, `roehre_raum::Kamera`, `Ansicht::aus_einstellungen`; `Ansicht::sitzplatz` bleibt als Kurzform. |

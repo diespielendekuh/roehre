@@ -59,6 +59,7 @@ pub struct Ansicht {
     pub leben: f32,
 }
 
+pub use szene::Konsole;
 /// Kamera des Raums, wie sie die Optionen der Gruppe `raum` beschreiben (W-005).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Kamera {
@@ -346,6 +347,8 @@ struct Ziele {
 pub struct Raum {
     /// Seitenverhältnis des Bildes, für das Fernseher, Tisch und Gegenstände gebaut sind
     bildformat: f32,
+    /// Spielkonsole auf dem Tisch
+    konsole: szene::Konsole,
     ecken: wgpu::Buffer,
     indizes: wgpu::Buffer,
     anzahl: u32,
@@ -475,6 +478,17 @@ impl Raum {
     /// schmaler; der Tisch und die Gegenstände darauf passen sich an. Die Kamera bekommt
     /// dasselbe Format (`Kamera::bildformat`, `Ansicht::aus_einstellungen_fuer`).
     pub fn neu_fuer(device: &wgpu::Device, queue: &wgpu::Queue, shader_ordner: &std::path::Path, format: wgpu::TextureFormat, bildformat: f32) -> std::io::Result<Self> {
+        Self::neu_mit(device, queue, shader_ordner, format, bildformat, szene::Konsole::Keine)
+    }
+
+    /// Die Konsole, mit der dieser Raum gebaut ist.
+    pub fn konsole(&self) -> szene::Konsole {
+        self.konsole
+    }
+
+    /// Wie `neu_fuer`, dazu eine Spielkonsole mit Controller auf dem Tisch (Option
+    /// `raum.konsole`; nur Geräte, die es wirklich gab).
+    pub fn neu_mit(device: &wgpu::Device, queue: &wgpu::Queue, shader_ordner: &std::path::Path, format: wgpu::TextureFormat, bildformat: f32, konsole: szene::Konsole) -> std::io::Result<Self> {
         let bildformat = bildformat.clamp(1.0, 2.4);
         // Materialien
         let ebenen = texturen::erzeugen();
@@ -484,7 +498,7 @@ impl Raum {
         let (_, eigenschaften) = texturfeld(device, queue, &eig, wgpu::TextureFormat::Rgba8Unorm, false);
 
         // Geometrie
-        let netz = szene::bauen_fuer(bildformat);
+        let netz = szene::bauen_mit(bildformat, konsole);
         let bytes = |d: &[u8], usage| {
             let b = device.create_buffer(&wgpu::BufferDescriptor { label: Some("roehre-raum"), size: d.len() as u64, usage: usage | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
             queue.write_buffer(&b, 0, d);
@@ -684,6 +698,7 @@ impl Raum {
         });
         Ok(Self {
             bildformat,
+            konsole,
             ecken,
             indizes,
             anzahl: netz.indizes.len() as u32,

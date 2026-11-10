@@ -90,8 +90,9 @@ impl Arbeitsplatz {
                 // Der Fernseher hat das Format des Bildes. Ändert es sich (anderes Seitenverhältnis
                 // im Spiel, andere Einstellung), wird der Raum neu gebaut (einige Zehntelsekunden).
                 let format = bildformat(&self.einstellungen, eingang, groesse);
-                if self.raum.as_ref().is_none_or(|(r, _)| (r.bildformat() - format).abs() > 0.004) {
-                    let raum = Raum::neu_fuer(&self.device, &self.queue, &self.shader, self.format, format).map_err(|f| f.to_string())?;
+                let konsole = roehre_raum::Konsole::aus(self.einstellungen.auswahl("raum.konsole"));
+                if self.raum.as_ref().is_none_or(|(r, _)| (r.bildformat() - format).abs() > 0.004 || r.konsole() != konsole) {
+                    let raum = Raum::neu_mit(&self.device, &self.queue, &self.shader, self.format, format, konsole).map_err(|f| f.to_string())?;
                     let breite = ((FLAECHE_HOEHE as f32 * format / 2.0).round() as u32 * 2).max(2);
                     let flaeche = FlaechenZiel::neu(&self.device, breite, FLAECHE_HOEHE);
                     self.raum = Some((raum, flaeche));

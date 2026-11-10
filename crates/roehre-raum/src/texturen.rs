@@ -69,9 +69,16 @@ pub enum Material {
     Taste,
     Parkholz,
     Parkeisen,
+    /// Gehäuse der Spielkonsole (N64: anthrazit, fein genarbt)
+    KonsoleAnthrazit,
+    /// Knöpfe des Controllers (N64: A blau, B grün, C gelb, Start rot)
+    KnopfBlau,
+    KnopfGruen,
+    KnopfGelb,
+    KnopfRot,
 }
 
-pub const ANZAHL: u32 = Material::Parkeisen as u32 + 1;
+pub const ANZAHL: u32 = Material::KnopfRot as u32 + 1;
 
 /// Alle Materialien in Ebenen-Reihenfolge.
 pub const ALLE: [Material; ANZAHL as usize] = {
@@ -82,6 +89,7 @@ pub const ALLE: [Material; ANZAHL as usize] = {
         LedRot, Decke, RahmenHolz, Zeitschrift, Glas, Bildroehre, Goldrahmen, Passepartout, Fernbedienung,
         Triebhuelle, Rinde, Buecher, Videorekorder, Blende, Beschriftung, Skala, Knopf, Kanalskala, LedGruen,
         Wolken, Parkboden, Baumkulisse, Ferne, Laterne, Auto, Heizlack, Taste, Parkholz, Parkeisen,
+        KonsoleAnthrazit, KnopfBlau, KnopfGruen, KnopfGelb, KnopfRot,
     ]
 };
 
@@ -826,6 +834,16 @@ fn texel(m: Material, u: f32, v: f32) -> ([f32; 4], [f32; 4]) {
             let c = mal([0.025, 0.040, 0.030], 0.8 + 0.4 * n);
             ([c[0], c[1], c[2], 1.0], [0.5, 0.45, 0.3, 0.0])
         }
+        KonsoleAnthrazit => {
+            // genarbter Kunststoff, dunkler als das Grau des Controllers, heller als Schwarz
+            let fein = wert(u * 500.0, v * 500.0, 500, 501);
+            let g = 0.085 + 0.012 * fein + 0.015 * staub * staub;
+            ([g, g, g * 1.04, 1.0], [0.5 + 0.25 * fein, 0.55, 0.0, 0.0])
+        }
+        KnopfBlau => ([0.02, 0.09, 0.42, 1.0], [0.5, 0.3, 0.0, 0.0]),
+        KnopfGruen => ([0.03, 0.30, 0.07, 1.0], [0.5, 0.3, 0.0, 0.0]),
+        KnopfGelb => ([0.55, 0.40, 0.03, 1.0], [0.5, 0.3, 0.0, 0.0]),
+        KnopfRot => ([0.45, 0.03, 0.02, 1.0], [0.5, 0.3, 0.0, 0.0]),
         Bildroehre => ([0.0, 0.0, 0.0, 1.0], [0.5, 0.05, 0.0, 0.0]),
     }
 }

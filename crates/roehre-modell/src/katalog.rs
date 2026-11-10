@@ -866,6 +866,21 @@ static KATALOG: &[OptionBeschreibung] = &[
         wirkt_wenn: None,
     },
     OptionBeschreibung {
+        schluessel: "raum.konsole",
+        gruppe: Gruppe::Raum,
+        name: Texte::de_en("Spielkonsole", "Game console"),
+        beschreibung: Texte::de_en(
+            "Stellt eine Spielkonsole mit Controller vor den Fernseher. Es gibt nur Geräte, die es wirklich gab, in ihren echten Maßen, ohne Schriftzüge. Das Spiel wählt die passende vor.",
+            "Puts a game console with a controller in front of the TV. Only consoles that really existed, in their real dimensions, without lettering. The game preselects the matching one.",
+        ),
+        art: OptionsArt::Auswahl {
+            werte: &[("keine", Texte::de_en("Keine", "None")), ("n64", Texte::de_en("Nintendo 64", "Nintendo 64"))],
+            standard: "keine",
+        },
+        kosten: Kosten::Keine,
+        wirkt_wenn: None,
+    },
+    OptionBeschreibung {
         schluessel: "raum.flackern",
         gruppe: Gruppe::Raum,
         name: Texte::de_en("Flackern der Lampe", "Lamp flicker"),

@@ -726,7 +726,9 @@ fn raum_formate(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
     for (name, format) in [("8-7", 8.0f32 / 7.0), ("4-3", 4.0 / 3.0), ("16-9", 16.0 / 9.0)] {
         let breite = ((1080.0 * format / 2.0).round() as u32) * 2;
         let flaeche = roehre_wgpu::FlaechenZiel::neu(&gpu.device, breite, 1080);
-        let mut raum = roehre_raum::Raum::neu_fuer(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT, format)?;
+        // ROEHRE_KONSOLE=n64 stellt die Konsole dazu (zum Ansehen)
+        let konsole = roehre_raum::Konsole::aus(&std::env::var("ROEHRE_KONSOLE").unwrap_or_default());
+        let mut raum = roehre_raum::Raum::neu_mit(&gpu.device, &gpu.queue, &shader_ordner(), gpu::ZIELFORMAT, format, konsole)?;
         let mut werte = None;
         for _ in 0..3 {
             let mut enc = gpu.device.create_command_encoder(&Default::default());

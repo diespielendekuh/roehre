@@ -1,7 +1,24 @@
 # Logbuch: wer hat was an roehre geändert
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
-
+
+## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Spielkonsole auf dem Tisch (Nintendo 64)
+- Wunsch des Anwenders: Es soll zu sehen sein, dass hier gespielt wird; eine Konsole aber nur,
+  **wenn sie einem Original folgt, keine ausgedachte**.
+- Neue Option **`raum.konsole`** (`keine` | `n64`, Standard `keine`; das Spiel wählt die passende
+  vor). `szene::Konsole`, `szene::bauen_mit`, `Raum::neu_mit`, `Raum::konsole()`; die C-API baut
+  den Raum neu, wenn sich die Option ändert.
+- Nintendo 64 in den Maßen des Originals (Konsole 260 × 190 × 73 mm mit gewölbter Front, vier
+  Anschlüssen, den beiden Höckern vorn, Modulschacht, Netz- und Reset-Schalter, roter Leuchte;
+  graues Modul mit leerem Etikett; Controller mit drei Griffen, Steuerkreuz, Stick, A blau,
+  B grün, vier gelben C-Knöpfen, rotem Start; Kabel zum ersten Anschluss). Ohne Schriftzüge,
+  ohne Etikettenbild. Fünf neue Materialien am Ende der Liste (`KonsoleAnthrazit`, `Knopf…`).
+  Mit Konsole rücken Tasse und Fernbedienung zur Seite. Bild: `docs/bilder/formate/konsole_n64.png`.
+- Geprüft: Tests und Prüflauf bestanden; in 4:3 und 16:9 als Bild angesehen.
+- Ehrlich: Die Konsole ist grob (späte PS2-Optik wie der Rest); der Controller ist gut zu
+  erkennen, das Gehäuse der Konsole weniger. Weitere Konsolen (SNES, PlayStation …) fehlen; wer
+  ein Spiel eines anderen Systems einbaut, modelliert dessen Konsole nach dem Original dazu.
+
 ## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Bild überstrahlt nicht mehr; Fernseher in jedem Bildformat
 - **Rückmeldung des Anwenders:** Das Bild auf dem Fernseher war zu grell („man sieht nur weiß“),
   früher musste man es auf die niedrigste Stufe stellen. Es soll etwas grell sein, aber mit
