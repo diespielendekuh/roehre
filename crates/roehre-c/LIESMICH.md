@@ -46,6 +46,19 @@ Voraussetzungen am Gerät des Spiels:
   `VK_KHR_external_semaphore_fd` (Windows: `…_win32`). Ohne geteilte Semaphoren (Mesa lavapipe)
   gibt es einen Notweg mit Ordnung über die CPU – nur zum Prüfen.
 
+## Hinweise aus dem ersten Einbau in ein Spiel (Ghost Return, RT64 unter D3D12)
+
+* **BGRA-Swapchain:** `kanalfolge = ROEHRE_KANALFOLGE_BGRA` setzen, dann sind EINGANG und ZIEL
+  BGRA8 und lassen sich mit `CopyResource`/`CopyTextureRegion` aus der und in die Swapchain
+  kopieren. Mit RGBA-Bildern verbietet D3D12 diese Kopien (andere Formatfamilie).
+* **Fremde `dxcompiler.dll` im Prozess:** egal, der D3D12-Weg übersetzt mit FXC.
+* **Ohne Eingriff in den Renderer:** Bietet der Renderer nur eine Stelle „nach dem Spielbild, in
+  der offenen Befehlsliste“ (bei RT64 der Zeichen-Hook), geht es mit einem Bild Verzögerung:
+  „bereit“/Zeichnen/„fertig“ für das vorige Bild am Anfang des Hooks, die Kopien für das
+  aktuelle Bild in die Liste. Ausgeführt in `docs/integration/ghost-return.md`.
+* **Nie warten, wenn das Zeichnen fehlschlug:** Gibt `roehre_austausch_zeichnen` einen Fehler
+  zurück, kommt „fertig“ nicht; ein `queue->Wait` darauf hielte die Warteschlange für immer an.
+
 ## Beispiele und Prüfläufe
 
 | Datei | Was | Geprüft |

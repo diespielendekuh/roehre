@@ -1,6 +1,6 @@
 # Stand von roehre (für KIs und Menschen)
 
-**Zuletzt aktualisiert:** 2026-11-02, nach Etappe 8 (alle geplanten Etappen abgeschlossen) · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
+**Zuletzt aktualisiert:** 2026-11-10 (C-API: BGRA-Bilder, FXC unter D3D12; Einbau in Ghost Return) · **Standardbranch:** `claude/exciting-brahmagupta-5fyjr0`
 
 Diese Datei ist die eine Stelle, an der der aktuelle Stand steht. Wer roehre ändert,
 aktualisiert sie (Regeln: [AGENTS.md](../../AGENTS.md)).
@@ -138,7 +138,10 @@ Lizenzmerkmal).
 einem eigenen Gerät derselben Grafikkarte; das Spiel kopiert sein Bild in ein geteiltes Bild
 EINGANG, meldet „bereit“, ruft `roehre_austausch_zeichnen` auf, wartet auf „fertig“ und kopiert
 ZIEL in seine Swapchain. D3D12 braucht am Gerät des Spiels keine Änderung, Vulkan zwei
-Erweiterungen. Für Mission: Impossible (RT64) steht die Einstiegsstelle in
+Erweiterungen. Ist die Swapchain des Spiels BGRA8 (RT64/plume unter D3D12), `kanalfolge =
+ROEHRE_KANALFOLGE_BGRA` setzen: dann genügen Kopien. **Ghost Return** (RT64, D3D12) zeigt den
+Einbau ganz ohne Eingriff in RT64 über dessen Zeichen-Hook, mit einem Bild Verzögerung:
+`docs/integration/ghost-return.md`. Für Mission: Impossible (RT64) steht die Einstiegsstelle in
 `docs/integration/mission-impossible.md`.
 
 ## 4. Wichtige Optionen (Auszug)
@@ -179,6 +182,7 @@ Vollständig: `crates/roehre-modell/src/katalog.rs`.
 
 | Datum | Änderung |
 |---|---|
+| 2026-11-10 | `RoehreAustauschParameter` hat am Ende das neue Feld `kanalfolge` (0 RGBA, 1 BGRA; BGRA nur mit Ausgabe SDR). Ältere Aufrufer mit kleinerer `struktur_groesse` laufen unverändert. Der D3D12-Weg übersetzt Shader jetzt mit FXC statt mit einer im Prozess gefundenen `dxcompiler.dll` (überschreibbar mit `WGPU_DX12_COMPILER`). |
 | 2026-11-02 | Etappe 7: neue Kiste `roehre-c` mit `include/roehre.h`. Etappe 6: Gruppe `raum` (10 Optionen), `roehre_modell::festwerte`, `roehre_raum::Kamera`, `Ansicht::aus_einstellungen`; `Ansicht::sitzplatz` bleibt als Kurzform. |
 | 2026-11-02 | Etappe 5: `Roehre::zeichne_im_takt`, `Takt`; Optionen `bewegung.*`. |
 | 2026-11-02 | Etappe 4: Optionen `gehaeuse.*`, `bildformat.roehrenformat`; `Roehre::anordnung`; automatisches Einrasten unter 4 px je Zeile (Bildgröße bei kleinen Fenstern etwas kleiner als vorher). |

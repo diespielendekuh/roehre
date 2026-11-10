@@ -78,7 +78,16 @@ fn win(was: &'static str) -> impl Fn(windows::core::Error) -> String {
 }
 
 fn adapter_suchen(kennung: &[u8; 16]) -> Result<wgpu::Adapter, String> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor { backends: wgpu::Backends::DX12, ..wgpu::InstanceDescriptor::new_without_display_handle_from_env() });
+    let mut beschreibung = wgpu::InstanceDescriptor { backends: wgpu::Backends::DX12, ..wgpu::InstanceDescriptor::new_without_display_handle_from_env() };
+    // Shader mit FXC übersetzen, nicht mit DXC: wgpu nimmt sonst („Auto“) jede dxcompiler.dll, die es
+    // findet, verlangt aber mindestens v1.8.2502. Spiele bringen oft eine ältere mit (RT64 lädt
+    // seine eigene in den Prozess); damit scheitert jede Pipeline mit „DXC compile error: error
+    // reading …“ (gesehen in Ghost Return, 2026-11-10). FXC braucht keine Datei und genügt den
+    // Shadern von roehre. Wer DXC will, setzt WGPU_DX12_COMPILER.
+    if std::env::var_os("WGPU_DX12_COMPILER").is_none() {
+        beschreibung.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::Fxc;
+    }
+    let instance = wgpu::Instance::new(beschreibung);
     let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::DX12));
     if adapter.is_empty() {
         return Err("kein D3D12-Adapter gefunden".into());

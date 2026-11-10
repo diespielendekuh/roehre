@@ -1,6 +1,24 @@
 # Logbuch: wer hat was an roehre geändert
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
+
+## 2026-11-10 · Ghost Return (KI des Projekts) · C-API: BGRA-Bilder, FXC statt DXC unter D3D12
+- Anlass: Einbau in Ghost Return (Goemon's Great Adventure, RT64 unter D3D12), siehe
+  `docs/integration/ghost-return.md`.
+- **Kanalfolge BGRA:** neues Feld `kanalfolge` am Ende von `RoehreAustauschParameter`
+  (`ROEHRE_KANALFOLGE_RGBA` = 0, `ROEHRE_KANALFOLGE_BGRA` = 1). Mit BGRA ist EINGANG BGRA8 UNORM
+  und ZIEL BGRA8 sRGB. Grund: Die Swapchain von RT64/plume ist `B8G8R8A8_UNORM`; zwischen ihr und
+  RGBA8 ist `CopyResource` nicht erlaubt, das Spiel hätte je Richtung einen eigenen Zeichen-Pass
+  gebraucht. Nur mit Ausgabe SDR. Ältere Aufrufer (kleinere `struktur_groesse`) bekommen weiter
+  RGBA; `lies_parameter` nimmt beide Größen an.
+- **FXC statt DXC** im D3D12-Weg (`adapter_suchen`): wgpu wählt im Modus „Auto“ jede
+  `dxcompiler.dll` im Prozess, verlangt aber mindestens v1.8.2502. RT64 bringt eine ältere mit;
+  damit scheiterte das Anlegen jeder Pipeline („DXC compile error: error reading 'roehre:
+  zusammensetzen'“). Jetzt fest FXC, außer `WGPU_DX12_COMPILER` ist gesetzt.
+- Geprüft: `roehre-pruefstand pruefe` bestanden (RTX 5070 Ti, vor der FXC-Änderung, die den
+  Prüfstand nicht berührt); im Spiel flacher Modus und 3D-Raum gesehen (2826×1696, D3D12).
+- Ungeprüft: BGRA unter Vulkan (nur Formatzuordnung ergänzt, nie gelaufen); ob FXC bei allen
+  Voreinstellungen alle Shader übersetzt (gesehen: `scart-rgb`, flach und Raum); Leistung im Spiel.
 
 ## 2026-11-03 · roehre-Hauptsitzung · 3D-Raum: Schattenwurf draußen und drinnen
 - Rückmeldung: Bank mitten auf dem Weg ohne Schatten, quer zum Weg; insgesamt zu künstlich,
