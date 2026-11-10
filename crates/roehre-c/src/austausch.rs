@@ -35,7 +35,13 @@ pub struct RoehreAustauschParameter {
     pub ziel_hoehe: u32,
     pub ausgabe: i32,
     pub einstellungen: *const RoehreEinstellungen,
+    /// Kanalfolge der geteilten Bilder (seit 0.1.1, am Ende ergänzt): 0 = RGBA, 1 = BGRA.
+    /// Wird nur gelesen, wenn `struktur_groesse` das Feld einschließt; sonst gilt RGBA.
+    pub kanalfolge: u32,
 }
+
+/// Größe der Struktur vor der Ergänzung um `kanalfolge` (ältere Aufrufer).
+const GROESSE_OHNE_KANALFOLGE: usize = std::mem::offset_of!(RoehreAustauschParameter, kanalfolge);
 
 pub(crate) struct Gelesen {
     pub shader: PathBuf,
@@ -44,23 +50,40 @@ pub(crate) struct Gelesen {
     pub ziel: (u32, u32),
     pub ausgabe: Ausgabe,
     pub einstellungen: Einstellungen,
+    /// Format von EINGANG (RGBA8 oder BGRA8, je nach `kanalfolge`)
+    pub eingang_format: wgpu::TextureFormat,
 }
 
 pub(crate) unsafe fn lies_parameter(p: *const RoehreAustauschParameter) -> Result<Gelesen, String> {
     let p = unsafe { p.as_ref() }.ok_or("Parameter fehlen (NULL)")?;
-    if (p.struktur_groesse as usize) < std::mem::size_of::<RoehreAustauschParameter>() {
+    if (p.struktur_groesse as usize) < GROESSE_OHNE_KANALFOLGE {
         return Err("struktur_groesse zu klein (sizeof(RoehreAustauschParameter) eintragen)".into());
     }
+    // Das Feld liegt nur im Speicher des Aufrufers, wenn seine Struktur es schon hat.
+    let bgra = if (p.struktur_groesse as usize) >= std::mem::size_of::<RoehreAustauschParameter>() {
+        match p.kanalfolge {
+            0 => false,
+            1 => true,
+            k => return Err(format!("unbekannte Kanalfolge {k} (0 RGBA, 1 BGRA)")),
+        }
+    } else {
+        false
+    };
     let ok = |b: u32, h: u32| (1..=16384).contains(&b) && (1..=16384).contains(&h);
     if !ok(p.eingang_breite, p.eingang_hoehe) || !ok(p.ziel_breite, p.ziel_hoehe) {
         return Err("Bildgrößen ungültig (1 … 16384)".into());
     }
     let ausgabe = match p.ausgabe {
-        0 => Ausgabe::sdr(wgpu::TextureFormat::Rgba8UnormSrgb),
+        0 => Ausgabe::sdr(if bgra { wgpu::TextureFormat::Bgra8UnormSrgb } else { wgpu::TextureFormat::Rgba8UnormSrgb }),
         1 => Ausgabe::scrgb(),
         2 => Ausgabe::hdr10(),
         a => return Err(format!("unbekannte Ausgabe {a} (0 SDR, 1 scRGB, 2 HDR10)")),
     };
+    if bgra && p.ausgabe != 0 {
+        // RGBA16F und RGB10A2 haben keine BGRA-Fassung; EINGANG allein in BGRA wäre möglich,
+        // aber bisher braucht es niemand (Swapchains in HDR sind nicht BGRA8).
+        return Err("Kanalfolge BGRA gibt es nur mit der Ausgabe SDR".into());
+    }
     let einstellungen = if p.einstellungen.is_null() { Einstellungen::standard() } else { unsafe { innen(p.einstellungen) }?.clone() };
     Ok(Gelesen {
         shader: PathBuf::from(unsafe { text(p.shader_ordner, "Shader-Ordner") }?),
@@ -73,6 +96,7 @@ pub(crate) unsafe fn lies_parameter(p: *const RoehreAustauschParameter) -> Resul
         ziel: (p.ziel_breite, p.ziel_hoehe),
         ausgabe,
         einstellungen,
+        eingang_format: if bgra { wgpu::TextureFormat::Bgra8Unorm } else { EINGANG_FORMAT },
     })
 }
 
@@ -96,7 +120,9 @@ pub struct RoehreAustausch {
     pub(crate) teile: Box<dyn std::any::Any + Send>,
 }
 
-/// Format des Eingangsbilds: 8 Bit je Kanal, Werte wie im Spiel (sRGB-kodiert).
+/// Format des Eingangsbilds: 8 Bit je Kanal, Werte wie im Spiel (sRGB-kodiert). Mit
+/// `kanalfolge` = 1 stattdessen BGRA8 (`Gelesen::eingang_format`), damit ein Spiel mit
+/// BGRA-Swapchain (RT64/plume unter D3D12) ohne eigenen Zeichen-Pass kopieren kann.
 pub(crate) const EINGANG_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 pub(crate) const BILD_NUTZUNG: wgpu::TextureUsages = wgpu::TextureUsages::TEXTURE_BINDING

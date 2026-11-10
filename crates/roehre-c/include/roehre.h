@@ -157,6 +157,14 @@ enum {
     ROEHRE_AUSGABE_HDR10 = 2  /**< ZIEL in RGB10A2, PQ, BT.2020 */
 };
 
+/** Kanalfolge der geteilten Bilder. BGRA ist für Spiele gedacht, deren Swapchain BGRA8 ist
+ *  (z. B. RT64/plume unter D3D12): EINGANG ist dann BGRA8 UNORM und ZIEL BGRA8 sRGB, und das
+ *  Spiel kann mit CopyResource/CopyTextureRegion direkt aus der und in die Swapchain kopieren
+ *  (gleiche Formatfamilie), ohne eigenen Zeichen-Pass. Nur mit ROEHRE_AUSGABE_SDR. */
+enum {
+    ROEHRE_KANALFOLGE_RGBA = 0, /**< EINGANG RGBA8 UNORM, ZIEL RGBA8 sRGB (Standard) */
+    ROEHRE_KANALFOLGE_BGRA = 1  /**< EINGANG BGRA8 UNORM, ZIEL BGRA8 sRGB */
+};
 typedef struct RoehreAustauschParameter {
     uint32_t struktur_groesse;          /**< sizeof(RoehreAustauschParameter) */
     const char *shader_ordner;          /**< der mitgelieferte Ordner shader/ */
@@ -168,6 +176,8 @@ typedef struct RoehreAustauschParameter {
     uint32_t ziel_breite, ziel_hoehe;   /**< Größe von ZIEL, meist die Fenstergröße */
     int32_t ausgabe;                    /**< ROEHRE_AUSGABE_* */
     const RoehreEinstellungen *einstellungen; /**< NULL = Standard */
+    uint32_t kanalfolge;                /**< ROEHRE_KANALFOLGE_* (seit 0.1.1; ältere Aufrufer mit kleinerer
+                                             struktur_groesse bekommen RGBA) */
 } RoehreAustauschParameter;
 
 /** Neue Einstellungen. Blockiert, bis eine neu nötige Shaderkette gebaut ist (beim Wechsel der

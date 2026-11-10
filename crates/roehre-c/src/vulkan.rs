@@ -10,7 +10,7 @@ use wgpu::hal::api::Vulkan;
 use wgpu::hal::vulkan as hv;
 
 use crate::arbeitsplatz::Arbeitsplatz;
-use crate::austausch::{lies_parameter, RoehreAustausch, RoehreAustauschParameter, Weg, BILD_NUTZUNG, EINGANG_FORMAT};
+use crate::austausch::{lies_parameter, RoehreAustausch, RoehreAustauschParameter, Weg, BILD_NUTZUNG};
 use crate::fehler::geschuetzt;
 
 #[cfg(not(windows))]
@@ -80,6 +80,8 @@ fn vk_format(f: wgpu::TextureFormat) -> vk::Format {
     match f {
         wgpu::TextureFormat::Rgba8Unorm => vk::Format::R8G8B8A8_UNORM,
         wgpu::TextureFormat::Rgba8UnormSrgb => vk::Format::R8G8B8A8_SRGB,
+        wgpu::TextureFormat::Bgra8Unorm => vk::Format::B8G8R8A8_UNORM,
+        wgpu::TextureFormat::Bgra8UnormSrgb => vk::Format::B8G8R8A8_SRGB,
         wgpu::TextureFormat::Rgba16Float => vk::Format::R16G16B16A16_SFLOAT,
         wgpu::TextureFormat::Rgb10a2Unorm => vk::Format::A2B10G10R10_UNORM_PACK32,
         _ => unreachable!("nur die Formate des Austauschs"),
@@ -300,7 +302,7 @@ pub unsafe extern "C" fn roehre_vulkan_erstellen(p: *const RoehreAustauschParame
         let (device, queue, mit_semaphoren) = geraet_anlegen(&adapter)?;
         let ziel_format = p.ausgabe.format;
         // Eingang: das Spiel übergibt ihn im Layout SHADER_READ_ONLY_OPTIMAL
-        let (eingang, g_ein) = geteiltes_bild(&device, EINGANG_FORMAT, p.eingang.breite, p.eingang.hoehe, wgpu::TextureUses::RESOURCE)?;
+        let (eingang, g_ein) = geteiltes_bild(&device, p.eingang_format, p.eingang.breite, p.eingang.hoehe, wgpu::TextureUses::RESOURCE)?;
         let (ziel, g_ziel) = geteiltes_bild(&device, ziel_format, p.ziel.0, p.ziel.1, wgpu::TextureUses::UNINITIALIZED)?;
         let (instanz, geraet) = {
             let hal = unsafe { device.as_hal::<Vulkan>() }.ok_or("Gerät ist nicht Vulkan")?;

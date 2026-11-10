@@ -17,7 +17,7 @@ use windows::Win32::Graphics::Direct3D12::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 
 use crate::arbeitsplatz::Arbeitsplatz;
-use crate::austausch::{lies_parameter, RoehreAustausch, RoehreAustauschParameter, Weg, BILD_NUTZUNG, EINGANG_FORMAT};
+use crate::austausch::{lies_parameter, RoehreAustausch, RoehreAustauschParameter, Weg, BILD_NUTZUNG};
 use crate::fehler::geschuetzt;
 
 /// Beschreibung eines geteilten Bilds für das Spiel (siehe roehre.h).
@@ -33,6 +33,8 @@ fn dxgi_format(f: wgpu::TextureFormat) -> DXGI_FORMAT {
     match f {
         wgpu::TextureFormat::Rgba8Unorm => DXGI_FORMAT_R8G8B8A8_UNORM,
         wgpu::TextureFormat::Rgba8UnormSrgb => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        wgpu::TextureFormat::Bgra8Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
+        wgpu::TextureFormat::Bgra8UnormSrgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
         wgpu::TextureFormat::Rgba16Float => DXGI_FORMAT_R16G16B16A16_FLOAT,
         wgpu::TextureFormat::Rgb10a2Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
         _ => unreachable!("nur die Formate des Austauschs"),
@@ -160,7 +162,7 @@ pub unsafe extern "C" fn roehre_d3d12_erstellen(p: *const RoehreAustauschParamet
         .map_err(|e| format!("Gerät nicht angelegt: {e}"))?;
         let ziel_format = p.ausgabe.format;
         // Eingang: das Spiel übergibt ihn im Zustand PIXEL_SHADER_RESOURCE | NON_PIXEL_SHADER_RESOURCE
-        let (eingang, r_ein) = geteiltes_bild(&device, EINGANG_FORMAT, p.eingang.breite, p.eingang.hoehe, wgpu::TextureUses::RESOURCE)?;
+        let (eingang, r_ein) = geteiltes_bild(&device, p.eingang_format, p.eingang.breite, p.eingang.hoehe, wgpu::TextureUses::RESOURCE)?;
         let (ziel, r_ziel) = geteiltes_bild(&device, ziel_format, p.ziel.0, p.ziel.1, wgpu::TextureUses::UNINITIALIZED)?;
         let (geraet, zaun) = {
             let hal = unsafe { device.as_hal::<Dx12>() }.ok_or("Gerät ist nicht D3D12")?;
@@ -171,7 +173,7 @@ pub unsafe extern "C" fn roehre_d3d12_erstellen(p: *const RoehreAustauschParamet
         let zaehler = Arc::new(AtomicU64::new(0));
         let teile = D3d12Teile {
             geraet,
-            bilder: [(r_ein, EINGANG_FORMAT, p.eingang.breite, p.eingang.hoehe), (r_ziel, ziel_format, p.ziel.0, p.ziel.1)],
+            bilder: [(r_ein, p.eingang_format, p.eingang.breite, p.eingang.hoehe), (r_ziel, ziel_format, p.ziel.0, p.ziel.1)],
             zaun: zaun.clone(),
             zaehler: zaehler.clone(),
         };
