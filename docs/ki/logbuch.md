@@ -1,7 +1,26 @@
 # Logbuch: wer hat was an roehre geändert
 
 Neue Einträge **oben**. Je Eintrag: Datum, wer (Projekt bzw. KI), was, warum, was ungeprüft ist.
-
+
+## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Nintendo 64 und Controller neu modelliert
+- Rückmeldung des Anwenders zur ersten Fassung: „Konsole und vor allem Controller sehen überhaupt
+  nicht original aus.“ Sie bestand aus Quadern mit runden Kanten; das trägt die Form nicht.
+- Neuer Baustein **`Netz::platte`** (`geometrie.rs`): Körper mit frei geformtem, konvexem Umriss,
+  gerundeter Oberkante und aufgewölbter Deckfläche; gedreht auch stehende Scheiben mit geformtem
+  Umriss. Dazu `dreieck_nach_normale` und ein Prüflauf (`pruefe_platte`).
+- **Controller:** zwei runde Schalen (Steuerkreuz links; B grün, A blau und die vier gelben
+  C-Knöpfe rechts), Steg mit Bogen hinten und rotem Start, drei runde, sich verjüngende Griffe
+  (außen leicht nach außen gestellt, der mittlere länger) bündig mit der Oberseite, achteckiger
+  Kranz mit Stick auf dem Mittelgriff, Schultertasten.
+- **Konsole:** Umriss mit weit gebogener Front, in der die vier Anschlüsse dem Bogen folgen,
+  aufgewölbte Schultern vorn, gerippte Klappe, rote Leuchte, erhöhter Mittelteil mit Schacht,
+  ovale Schalter, Modul mit Bogenkante und leerem Etikett.
+- Stolperstein: `sin(π)` ist in f32 knapp negativ, `powf(0.9)` davon NaN; ein einziger solcher
+  Punkt im Umriss ließ Deckfläche und eine Wand verschwinden (jetzt `max(0.0)`, der Prüflauf
+  fängt es).
+- Geprüft: Nahaufnahmen (neuer Teil von `roehre-pruefstand formate` mit `ROEHRE_KONSOLE=n64`),
+  Tests und `pruefe` bestanden. Bild: `docs/bilder/formate/konsole_n64.png`.
+
 ## 2026-11-10 · Ghost Return (KI des Projekts) · 3D-Raum: Spielkonsole auf dem Tisch (Nintendo 64)
 - Wunsch des Anwenders: Es soll zu sehen sein, dass hier gespielt wird; eine Konsole aber nur,
   **wenn sie einem Original folgt, keine ausgedachte**.

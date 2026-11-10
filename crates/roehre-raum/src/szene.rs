@@ -683,57 +683,112 @@ fn kleinkram(n: &mut Netz, platz: f32, konsole: Konsole) {
     fernbedienung(n, konsole);
 }
 
-/// Nintendo 64 mit eingestecktem Modul und einem Controller, in den Maßen des Originals
-/// (Konsole 260 × 190 × 73 mm, Modul 116 × 75 × 18 mm, Controller etwa 160 mm breit). Ohne
-/// Schriftzüge und ohne Etikettenbild: das Etikett des Moduls ist leer.
-/// Die Konsole steht vorn rechts neben dem Fernseher, die Anschlüsse zum Spieler; der
-/// Controller liegt vor dem Fernseher, sein Kabel steckt im ersten Anschluss.
-fn konsole_n64(n: &mut Netz, platz: f32) {
-    use std::f32::consts::FRAC_PI_2;
-    let k = Trafo::bei([0.47 + platz, TISCH_HOEHE, -0.335]).nach(&Trafo::dreh_y(-0.10));
-    // Vier Gummifüße, darauf der flache Körper
-    for (sx, sz) in [(-1.0f32, -1.0f32), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-        n.zylinder(&k.nach(&Trafo::bei([0.10 * sx, 0.0, 0.06 * sz])), 0.009, 0.006, 10, Gummi);
-    }
-    let boden = 0.006;
-    // Körper: hinten flach, die Oberseite fällt nach vorn leicht ab (zwei Stufen statt einer Schräge)
-    n.quader(&k.nach(&Trafo::bei([0.0, boden + 0.027, 0.012])), [0.130, 0.027, 0.083], 0.014, KonsoleAnthrazit, 6.0);
-    // Vorderteil mit den vier Anschlüssen: nach vorn gewölbt
-    n.quader(&k.nach(&Trafo::bei([0.0, boden + 0.022, -0.068])), [0.118, 0.022, 0.030], 0.021, KonsoleAnthrazit, 6.0);
-    // Die beiden Höcker vorn links und rechts (Füße der Front), typisch für das Gerät
-    for sx in [-1.0f32, 1.0] {
-        n.quader(&k.nach(&Trafo::bei([0.104 * sx, boden + 0.027, -0.052])), [0.027, 0.027, 0.046], 0.022, KonsoleAnthrazit, 6.0);
-    }
-    // Erhöhter Mittelteil mit dem Modulschacht
-    let oben = boden + 0.054;
-    n.quader(&k.nach(&Trafo::bei([0.0, oben + 0.006, 0.022])), [0.074, 0.008, 0.060], 0.007, KonsoleAnthrazit, 6.0);
-    let deck = oben + 0.014;
-    // Schacht (dunkel) und Modul darin: grau, oben abgerundet, mit leerem Etikett zur Front
-    n.quader(&k.nach(&Trafo::bei([0.0, deck - 0.001, 0.030])), [0.062, 0.002, 0.013], 0.0, Gummi, 8.0);
-    n.quader(&k.nach(&Trafo::bei([0.0, deck + 0.028, 0.030])), [0.058, 0.030, 0.009], 0.006, KunststoffGrau, 6.0);
-    n.flaeche(&k.nach(&Trafo::bei([0.0, deck + 0.031, 0.0207])), [0.046, 0.019], Passepartout, [0.1, 0.1, 0.3, 0.2]);
-    // Griffmulde des Moduls hinten und die Rillen an seinen Seiten
-    for sx in [-1.0f32, 1.0] {
-        for i in 0..3 {
-            n.quader(&k.nach(&Trafo::bei([0.0585 * sx, deck + 0.012 + i as f32 * 0.008, 0.030])), [0.0008, 0.0022, 0.008], 0.0, Gummi, 8.0);
+/// Ellipse als Umriss (für `Netz::platte`): Mitte, Halbachsen, Zahl der Punkte.
+fn oval(mx: f32, mz: f32, rx: f32, rz: f32, punkte: usize) -> Vec<[f32; 2]> {
+    (0..punkte).map(|i| {
+        let w = i as f32 / punkte as f32 * std::f32::consts::TAU;
+        [mx + rx * w.cos(), mz + rz * w.sin()]
+    }).collect()
+}
+
+/// Rechteck mit runden Ecken als Umriss: Mitte, halbe Größe, Eckradius.
+fn rundrechteck(mx: f32, mz: f32, hx: f32, hz: f32, r: f32) -> Vec<[f32; 2]> {
+    let mut u = Vec::new();
+    for (ecke, (sx, sz)) in [(1.0f32, 1.0f32), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)].into_iter().enumerate() {
+        for k in 0..=5 {
+            let w = (ecke as f32 + k as f32 / 5.0) * std::f32::consts::FRAC_PI_2;
+            u.push([mx + sx * (hx - r) + r * w.cos(), mz + sz * (hz - r) + r * w.sin()]);
         }
     }
-    // Schalter: Netz links (Schieber), Reset rechts (Taste), dazwischen vorn die rote Leuchte
-    n.quader(&k.nach(&Trafo::bei([-0.098, oben + 0.003, 0.030])), [0.016, 0.004, 0.010], 0.003, KunststoffSchwarz, 8.0);
-    n.quader(&k.nach(&Trafo::bei([-0.104, oben + 0.0075, 0.030])), [0.007, 0.002, 0.008], 0.0015, Gummi, 8.0);
-    n.quader(&k.nach(&Trafo::bei([0.098, oben + 0.003, 0.030])), [0.016, 0.004, 0.010], 0.003, KunststoffSchwarz, 8.0);
-    n.quader(&k.nach(&Trafo::bei([0.098, oben + 0.0075, 0.030])), [0.011, 0.002, 0.007], 0.0015, Gummi, 8.0);
-    n.quader(&k.nach(&Trafo::bei([0.0, oben + 0.0008, -0.046])), [0.005, 0.001, 0.0022], 0.0008, LedRot, 1.0);
-    // Klappe der Speichererweiterung vorn auf der Oberseite: feine Fuge ringsum
-    n.quader(&k.nach(&Trafo::bei([0.0, oben + 0.0004, -0.066])), [0.036, 0.0006, 0.014], 0.0, KunststoffSchwarz, 8.0);
-    // Vier Controller-Anschlüsse in der gewölbten Front
-    let front_z = -0.068 - 0.030;
-    for i in 0..4 {
-        let x = -0.075 + i as f32 * 0.050;
-        n.quader(&k.nach(&Trafo::bei([x, boden + 0.023, front_z - 0.0002])), [0.0125, 0.0085, 0.0012], 0.001, Gummi, 8.0);
+    u
+}
+
+/// Vorderkante des N64 in der Draufsicht: z (zum Spieler negativ) über x. Die Front ist ein
+/// weiter, flacher Bogen, der an den Seiten in die Flanken übergeht.
+fn n64_front(x: f32) -> f32 {
+    let a = (x / 0.130).clamp(-1.0, 1.0).acos();
+    -0.030 - 0.065 * a.sin().max(0.0).powf(0.9) // sin(π) ist in f32 knapp negativ: ohne max wäre das NaN
+}
+
+/// Nintendo 64 mit eingestecktem Modul und einem Controller, in den Maßen des Originals
+/// (Konsole 260 × 190 × 73 mm, Modul 116 × 75 × 18 mm, Controller 160 mm breit, 130 mm tief).
+/// Ohne Schriftzüge und ohne Etikettenbild: das Etikett des Moduls ist leer.
+///
+/// Formen nach dem Gerät: die Konsole mit weit gebogener Front, in der die vier Anschlüsse dem
+/// Bogen folgen, den beiden aufgewölbten Schultern vorn links und rechts, der gerippten Klappe
+/// dazwischen, dem erhöhten Mittelteil mit dem Modulschacht und den ovalen Schaltern beiderseits.
+/// Der Controller mit seinen drei Griffen: zwei runde Schalen (links das Steuerkreuz, rechts
+/// A, B und die vier C-Knöpfe), dazwischen der Steg mit dem roten Start-Knopf, von den Schalen
+/// laufen die äußeren Griffe leicht nach außen, vom Steg der längere Mittelgriff mit dem Stick.
+fn konsole_n64(n: &mut Netz, platz: f32) {
+    use std::f32::consts::FRAC_PI_2;
+    let k = Trafo::bei([0.47 + platz, TISCH_HOEHE, -0.300]).nach(&Trafo::dreh_y(-0.16));
+    // ---- Gehäuse: Umriss mit gebogener Front, hinten gerade mit runden Ecken ----
+    let mut umriss: Vec<[f32; 2]> = Vec::new();
+    for i in 0..=28 {
+        let x = 0.130 * (i as f32 / 28.0 * std::f32::consts::PI).cos();
+        umriss.push([x, n64_front(x)]);
+    }
+    for k2 in 0..=5 {
+        let w = std::f32::consts::PI + k2 as f32 / 5.0 * FRAC_PI_2;
+        umriss.push([-0.112 + 0.018 * w.cos(), 0.077 - 0.018 * w.sin()]);
+    }
+    for k2 in 0..=5 {
+        let w = 1.5 * std::f32::consts::PI + k2 as f32 / 5.0 * FRAC_PI_2;
+        umriss.push([0.112 + 0.018 * w.cos(), 0.077 - 0.018 * w.sin()]);
+    }
+    let h = 0.046;
+    n.platte(&k, &umriss, h, 0.013, 0.003, KonsoleAnthrazit, 6.0);
+    // Schultern vorn links und rechts: hoch aufgewölbt, zur Front hin abfallend
+    for sx in [-1.0f32, 1.0] {
+        n.platte(&k, &oval(0.094 * sx, -0.046, 0.035, 0.045, 28), 0.0525, 0.022, 0.004, KonsoleAnthrazit, 6.0);
+    }
+    // Erhöhter Mittelteil mit dem Modulschacht
+    let mh = 0.056;
+    n.platte(&k, &rundrechteck(0.0, 0.040, 0.079, 0.050, 0.018), mh, 0.010, 0.002, KonsoleAnthrazit, 6.0);
+    n.quader(&k.nach(&Trafo::bei([0.0, mh + 0.0015, 0.044])), [0.063, 0.0012, 0.0125], 0.0, Gummi, 8.0);
+    // Modul: graue Scheibe mit Bogenkante oben, steht im Schacht; leeres Etikett zur Front
+    let modul_z = 0.044;
+    let mut modul: Vec<[f32; 2]> = vec![[-0.058, 0.0], [0.058, 0.0], [0.058, 0.040]];
+    for i in 0..=12 {
+        let x = 0.058 - 0.116 * i as f32 / 12.0;
+        modul.push([x, 0.040 + 0.012 * (1.0 - (x / 0.058) * (x / 0.058))]);
+    }
+    modul.push([-0.058, 0.040]);
+    let stehend = k.nach(&Trafo::bei([0.0, mh, modul_z + 0.009])).nach(&Trafo::dreh_x(-FRAC_PI_2));
+    n.platte(&stehend, &modul, 0.018, 0.004, 0.0, KunststoffGrau, 6.0);
+    n.flaeche(&k.nach(&Trafo::bei([0.0, mh + 0.024, modul_z - 0.0094])), [0.045, 0.017], Passepartout, [0.1, 0.1, 0.3, 0.2]);
+    // Rillen an den Seiten des Moduls
+    for sx in [-1.0f32, 1.0] {
+        for i in 0..4 {
+            n.quader(&k.nach(&Trafo::bei([0.0585 * sx, mh + 0.010 + i as f32 * 0.007, modul_z])), [0.0007, 0.002, 0.007], 0.0, Gummi, 8.0);
+        }
+    }
+    // Ovale Schalter beiderseits des Schachts: links Netz (Schieber), rechts Reset (Taste)
+    for (sx, nase) in [(-1.0f32, 0.006f32), (1.0, 0.0)] {
+        n.platte(&k, &oval(0.104 * sx, 0.040, 0.015, 0.022, 20), h + 0.006, 0.003, 0.001, KunststoffSchwarz, 8.0);
+        n.platte(&k, &oval(0.104 * sx, 0.040 + nase, 0.009, 0.010, 14), h + 0.0095, 0.002, 0.001, KonsoleAnthrazit, 8.0);
+    }
+    // Gerippte Klappe der Speichererweiterung zwischen den Schultern, davor die rote Leuchte
+    n.platte(&k, &rundrechteck(0.0, -0.048, 0.042, 0.027, 0.006), h + 0.0045, 0.002, 0.0005, KonsoleAnthrazit, 8.0);
+    for i in 0..6 {
+        n.quader(&k.nach(&Trafo::bei([0.0, h + 0.0052, -0.066 + i as f32 * 0.0072])), [0.032, 0.0007, 0.0011], 0.0, KunststoffSchwarz, 8.0);
+    }
+    n.quader(&k.nach(&Trafo::bei([0.0, h + 0.0022, -0.084])), [0.006, 0.0012, 0.0022], 0.0008, LedRot, 1.0);
+    // Vier Anschlüsse, dem Bogen der Front folgend: dunkle Mulde mit hellem Rahmen
+    let port = |x: f32| {
+        let steigung = (n64_front(x + 0.002) - n64_front(x - 0.002)) / 0.004;
+        let l = (steigung * steigung + 1.0).sqrt();
+        let aussen = [steigung / l, -1.0 / l];
+        (Trafo::bei([x + aussen[0] * 0.0006, 0.022, n64_front(x) + aussen[1] * 0.0006]).nach(&Trafo::dreh_y(-steigung.atan())), aussen)
+    };
+    for x in [-0.078f32, -0.027, 0.027, 0.078] {
+        let (t, _) = port(x);
+        n.quader(&k.nach(&t), [0.0150, 0.0105, 0.0010], 0.0008, KunststoffSchwarz, 8.0);
+        n.quader(&k.nach(&t).nach(&Trafo::bei([0.0, 0.0, -0.0006])), [0.0118, 0.0075, 0.0010], 0.0008, Gummi, 8.0);
     }
     // Kabel hinten (Strom und Bild) hinter den Fernseher
-    let hinten = k.punkt([0.05, boden + 0.03, 0.095]);
+    let hinten = k.punkt([0.05, 0.03, 0.097]);
     let ziel = [0.20 + platz * 0.5, TISCH_HOEHE + 0.10, 0.30];
     let kabel: Vec<V3> = (0..=14)
         .map(|i| {
@@ -744,47 +799,81 @@ fn konsole_n64(n: &mut Netz, platz: f32) {
         .collect();
     n.rohr(&kabel, 0.003, 6, Gummi);
 
-    // ---- Controller: drei Griffe, Steuerkreuz links, Stick in der Mitte, Knöpfe rechts ----
-    let c = Trafo::bei([-0.04, TISCH_HOEHE, -0.385]).nach(&Trafo::dreh_y(0.22));
-    let (mh, oben_c) = (0.015, 0.030);
-    // Mittelstück
-    n.quader(&c.nach(&Trafo::bei([0.0, mh, 0.012])), [0.078, mh, 0.026], 0.013, KunststoffGrau, 6.0);
-    // Äußere Griffe, leicht nach außen gestellt, und der mittlere Griff mit dem Stick
+    // ---- Controller ----
+    let c = Trafo::bei([-0.03, TISCH_HOEHE, -0.345]).nach(&Trafo::dreh_y(0.20));
+    let schale = 0.031;   // Radius der runden Schalen
+    let sx0 = 0.052;      // ihr Abstand von der Mitte
+    let oben = 0.036;     // Höhe ihrer Oberseite (der Körper ist gut 3,5 cm dick)
+    // Steg zwischen den Schalen: hinten gebogen (die Schultertasten sitzen auf dem Bogen), vorn flach
+    let mut steg: Vec<[f32; 2]> = Vec::new();
+    for i in 0..=16 {
+        let w = i as f32 / 16.0 * std::f32::consts::PI;
+        steg.push([0.070 * w.cos(), 0.006 + 0.030 * w.sin()]);
+    }
+    steg.push([-0.060, -0.014]);
+    steg.push([-0.020, -0.020]);
+    steg.push([0.020, -0.020]);
+    steg.push([0.060, -0.014]);
+    n.platte(&c, &steg, 0.032, 0.012, 0.002, KunststoffGrau, 6.0);
+    // Die beiden Schalen und die kleinere Kuppe in der Mitte, aus der der Mittelgriff wächst
     for sx in [-1.0f32, 1.0] {
-        n.quader(&c.nach(&Trafo::bei([0.060 * sx, mh, -0.030])).nach(&Trafo::dreh_y(-0.16 * sx)), [0.019, mh, 0.046], 0.014, KunststoffGrau, 6.0);
-        // Schultertasten hinten oben
-        n.quader(&c.nach(&Trafo::bei([0.056 * sx, 0.020, 0.039])), [0.020, 0.008, 0.006], 0.005, KunststoffGrau, 6.0);
+        n.platte(&c, &oval(sx0 * sx, 0.0, schale, schale, 30), oben, 0.013, 0.0015, KunststoffGrau, 6.0);
     }
-    n.quader(&c.nach(&Trafo::bei([0.0, mh, -0.042])), [0.017, mh, 0.052], 0.014, KunststoffGrau, 6.0);
-    // Steuerkreuz (dunkelgrau) links
-    n.quader(&c.nach(&Trafo::bei([-0.052, oben_c + 0.0015, 0.010])), [0.0125, 0.0022, 0.0042], 0.0012, Gummi, 8.0);
-    n.quader(&c.nach(&Trafo::bei([-0.052, oben_c + 0.0015, 0.010])), [0.0042, 0.0022, 0.0125], 0.0012, Gummi, 8.0);
-    // Analogstick auf dem mittleren Griff: Ring, Schaft, geriffelter Teller
-    n.zylinder(&c.nach(&Trafo::bei([0.0, oben_c - 0.0005, -0.018])), 0.0125, 0.002, 16, Gummi);
-    n.zylinder(&c.nach(&Trafo::bei([0.0, oben_c, -0.018])), 0.0038, 0.011, 10, KunststoffGrau);
-    n.drehkoerper(&c.nach(&Trafo::bei([0.0, oben_c + 0.010, -0.018])), &[(0.0, 0.0), (0.0085, 0.0005), (0.009, 0.002), (0.0075, 0.0035), (0.0, 0.003)], 16, KunststoffGrau, 1.0);
-    // Start (rot) in der Mitte, B (grün) und A (blau) rechts, darüber die vier gelben C-Knöpfe
-    n.zylinder(&c.nach(&Trafo::bei([0.0, oben_c, 0.014])), 0.005, 0.0025, 12, KnopfRot);
-    n.zylinder(&c.nach(&Trafo::bei([0.036, oben_c, 0.006])), 0.0065, 0.003, 14, KnopfGruen);
-    n.zylinder(&c.nach(&Trafo::bei([0.049, oben_c, -0.006])), 0.0065, 0.003, 14, KnopfBlau);
-    for (dx, dz) in [(0.0f32, 0.0095f32), (0.0, -0.0095), (0.0095, 0.0), (-0.0095, 0.0)] {
-        n.zylinder(&c.nach(&Trafo::bei([0.064 + dx, oben_c, 0.018 + dz])), 0.0042, 0.0028, 12, KnopfGelb);
+    n.platte(&c, &oval(0.0, -0.014, 0.022, 0.024, 24), 0.037, 0.012, 0.0015, KunststoffGrau, 6.0);
+    // Griffe: runde, sich verjüngende Keulen mit runder Kuppe, zum Spieler (−z) gerichtet
+    let griff = |n: &mut Netz, fuss: V3, gier: f32, neigung: f32, profil: &[(f32, f32)]| {
+        let t = c.nach(&Trafo::bei(fuss)).nach(&Trafo::dreh_y(gier)).nach(&Trafo::dreh_x(-FRAC_PI_2 + neigung));
+        n.drehkoerper(&t, profil, 18, KunststoffGrau, 2.0);
+    };
+    let aussen_profil = [(0.0145, 0.0), (0.0170, 0.018), (0.0172, 0.045), (0.0160, 0.066), (0.0135, 0.080), (0.0090, 0.089), (0.0040, 0.093), (0.0, 0.094)];
+    for sx in [-1.0f32, 1.0] {
+        griff(n, [(sx0 + 0.006) * sx, 0.0192, -0.012], -0.20 * sx, 0.015, &aussen_profil);
     }
-    // Kabel des Controllers: aus der Mitte hinten in einem Bogen über den Tisch zum ersten Anschluss
-    let a = c.punkt([0.0, 0.012, 0.040]);
-    let b = k.punkt([-0.075, boden + 0.023, front_z - 0.004]);
-    let _ = FRAC_PI_2;
-    let schnur: Vec<V3> = (0..=20)
+    let mitte_profil = [(0.0165, 0.0), (0.0185, 0.022), (0.0185, 0.060), (0.0175, 0.084), (0.0150, 0.100), (0.0100, 0.110), (0.0045, 0.114), (0.0, 0.115)];
+    griff(n, [0.0, 0.0200, -0.014], 0.0, 0.010, &mitte_profil);
+    // Schultertasten L und R auf dem Bogen hinten
+    for sx in [-1.0f32, 1.0] {
+        n.quader(&c.nach(&Trafo::bei([0.040 * sx, 0.0262, 0.0305])).nach(&Trafo::dreh_y(-0.27 * sx)), [0.0170, 0.0062, 0.0048], 0.0045, KunststoffGrau, 6.0);
+    }
+    // Steuerkreuz (dunkelgrau) auf der linken Schale, in einer flachen runden Mulde
+    n.zylinder(&c.nach(&Trafo::bei([-sx0, oben + 0.0008, 0.0])), 0.0155, 0.0008, 20, KonsoleAnthrazit);
+    for (hx, hz) in [(0.0125f32, 0.0043f32), (0.0043, 0.0125)] {
+        n.quader(&c.nach(&Trafo::bei([-sx0, oben + 0.0032, 0.0])), [hx, 0.0024, hz], 0.0012, KonsoleAnthrazit, 8.0);
+    }
+    // Start (rot) mitten auf dem Steg
+    n.drehkoerper(&c.nach(&Trafo::bei([0.0, 0.0335, 0.014])), &[(0.0055, 0.0), (0.0055, 0.002), (0.0042, 0.0032), (0.0, 0.0034)], 14, KnopfRot, 1.0);
+    // Rechte Schale: B (grün) links oben, A (blau) rechts unten davon, die vier gelben C-Knöpfe im Kreuz oben rechts
+    let knopf = |n: &mut Netz, x: f32, z: f32, r: f32, m: crate::texturen::Material| {
+        n.drehkoerper(&c.nach(&Trafo::bei([x, oben + 0.0010, z])), &[(r, 0.0), (r, 0.0022), (r * 0.8, 0.0036), (0.0, 0.0040)], 16, m, 1.0);
+    };
+    knopf(n, sx0 - 0.013, -0.001, 0.0070, KnopfGruen);
+    knopf(n, sx0 - 0.001, -0.014, 0.0070, KnopfBlau);
+    for (dx, dz) in [(0.0f32, 0.0085f32), (0.0, -0.0085), (0.0085, 0.0), (-0.0085, 0.0)] {
+        knopf(n, sx0 + 0.012 + dx, 0.011 + dz, 0.0042, KnopfGelb);
+    }
+    // Analogstick auf dem Mittelgriff: achteckiger Kranz, dunkle Mulde, Schaft, Teller mit Rand
+    let stick = c.nach(&Trafo::bei([0.0, 0.0390, -0.040]));
+    n.drehkoerper(&stick, &[(0.0155, -0.004), (0.0155, 0.0), (0.0135, 0.0018), (0.0118, 0.0018)], 8, KunststoffGrau, 1.0);
+    n.zylinder(&stick.nach(&Trafo::bei([0.0, -0.002, 0.0])), 0.0118, 0.0030, 16, Gummi);
+    n.zylinder(&stick.nach(&Trafo::bei([0.0, 0.0, 0.0])), 0.0036, 0.0100, 10, KunststoffGrau);
+    n.drehkoerper(&stick.nach(&Trafo::bei([0.0, 0.0095, 0.0])), &[(0.0, 0.0), (0.0080, 0.0006), (0.0090, 0.0020), (0.0086, 0.0034), (0.0070, 0.0038), (0.0060, 0.0030), (0.0, 0.0026)], 18, KunststoffGrau, 1.0);
+    // Kabel: aus der Mitte hinten in einem Bogen über den Tisch zum ersten Anschluss
+    let a = c.punkt([0.0, 0.016, 0.037]);
+    let (pt, aussen) = port(-0.078);
+    let b = k.nach(&pt).punkt([0.0, 0.0, -0.006]);
+    let _ = aussen;
+    let schnur: Vec<V3> = (0..=24)
         .map(|i| {
-            let s = i as f32 / 20.0;
+            let s = i as f32 / 24.0;
             let bogen = (s * std::f32::consts::PI).sin();
-            let y = if s < 0.85 { TISCH_HOEHE + 0.0035 + (a[1] - TISCH_HOEHE - 0.0035) * (1.0 - s / 0.2).max(0.0) } else { TISCH_HOEHE + 0.0035 + (b[1] - TISCH_HOEHE - 0.0035) * (s - 0.85) / 0.15 };
-            [a[0] + (b[0] - a[0]) * s + 0.02 * bogen, y, a[2] + (b[2] - a[2]) * s - 0.035 * bogen * (1.0 - s)]
+            let liegt = TISCH_HOEHE + 0.0030;
+            let y = if s < 0.15 { liegt + (a[1] - liegt) * (1.0 - s / 0.15) } else if s > 0.86 { liegt + (b[1] - liegt) * (s - 0.86) / 0.14 } else { liegt };
+            [a[0] + (b[0] - a[0]) * s + 0.015 * bogen, y, a[2] + (b[2] - a[2]) * s + 0.045 * bogen * (1.0 - s)]
         })
         .collect();
     n.rohr(&schnur, 0.0022, 6, KunststoffGrau);
     // Stecker im Anschluss
-    n.quader(&Trafo::bei(b).nach(&Trafo::dreh_y(-0.10)), [0.010, 0.0065, 0.008], 0.003, KunststoffGrau, 6.0);
+    n.quader(&k.nach(&pt).nach(&Trafo::bei([0.0, 0.0, -0.006])), [0.0105, 0.0068, 0.007], 0.003, KunststoffGrau, 6.0);
 }
 
 /// Fernbedienung der späten 80er: schlankes schwarzes Gehäuse mit Deckplatte aus dunklem

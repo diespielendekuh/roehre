@@ -747,6 +747,33 @@ fn raum_formate(v: &str, g: (u32, u32), ordner: &Path) -> Ergebnis {
             gpu.lies(&ziel).save(&pfad)?;
             eprintln!("{}", pfad.display());
         }
+        // Mit Konsole: Nahaufnahmen von Controller und Konsole (zum Vergleich mit dem Original)
+        if konsole != roehre_raum::Konsole::Keine && name == "4-3" {
+            let tisch = 0.70f32;
+            for (stufe, auge, blick, winkel) in [
+                ("controller", [-0.03f32, tisch + 0.30, -0.72], [-0.03f32, tisch + 0.01, -0.36], 24.0f32),
+                ("controller_oben", [-0.03, tisch + 0.55, -0.42], [-0.03, tisch, -0.37], 26.0),
+                ("konsole", [0.47, tisch + 0.33, -0.80], [0.47, tisch + 0.02, -0.30], 28.0),
+                ("konsole_oben", [0.47, tisch + 0.70, -0.38], [0.47, tisch, -0.30], 28.0),
+                ("beide", [0.20, tisch + 0.42, -1.05], [0.22, tisch + 0.02, -0.32], 30.0),
+            ] {
+                let mut a = roehre_raum::Ansicht::sitzplatz(2.0, 1.0, 0.0);
+                a.auge = auge;
+                a.ziel = blick;
+                a.blickwinkel = winkel;
+                a.verschiebung = [0.0, 0.0];
+                a.unschaerfe = 0.0;
+                a.korn = 0.0;
+                a.vignette = 0.0;
+                let ziel = gpu.ziel(g.0, g.1);
+                let mut enc = gpu.device.create_command_encoder(&Default::default());
+                raum.zeichne(&gpu.device, &gpu.queue, &mut enc, &ziel.create_view(&Default::default()), g, &flaeche, &werte, &a);
+                gpu.queue.submit([enc.finish()]);
+                let pfad = ordner.join(format!("nah_{stufe}.png"));
+                gpu.lies(&ziel).save(&pfad)?;
+                eprintln!("{}", pfad.display());
+            }
+        }
     }
     Ok(())
 }

@@ -154,6 +154,109 @@ impl Netz {
         }
     }
 
+    /// Dreieck mit der Vorderseite in Richtung der Normale seiner ersten Ecke (dreht die
+    /// Reihenfolge, wenn nötig) – für Körper, deren Umlaufsinn nicht von vornherein feststeht.
+    fn dreieck_nach_normale(&mut self, a: u32, b: u32, c: u32) {
+        let (pa, pb, pc) = (self.ecken[a as usize].lage, self.ecken[b as usize].lage, self.ecken[c as usize].lage);
+        let n = add(add(self.ecken[a as usize].normale, self.ecken[b as usize].normale), self.ecken[c as usize].normale);
+        if dot(cross(sub(pb, pa), sub(pc, pa)), n) >= 0.0 {
+            self.dreieck(a, b, c);
+        } else {
+            self.dreieck(a, c, b);
+        }
+    }
+
+    /// Körper mit frei geformtem, konvexem Umriss: der Umriss (Punkte x, z in der Grundfläche,
+    /// beliebiger Umlaufsinn) wird um `hoehe` nach oben (+y) gezogen, die Oberkante mit Radius
+    /// `r` gerundet, die Deckfläche zur Mitte hin um `woelbung` aufgewölbt. Ohne Boden.
+    /// Damit entstehen Gehäuse, die kein Quader und kein Drehkörper sind (Konsolen, Griffschalen,
+    /// Module mit Bogenkante); gedreht mit `Trafo` auch stehende Scheiben mit geformtem Umriss.
+    pub fn platte(&mut self, t: &Trafo, umriss: &[[f32; 2]], hoehe: f32, r: f32, woelbung: f32, m: Material, uvm: f32) {
+        let n = umriss.len();
+        if n < 3 {
+            return;
+        }
+        let mitte = {
+            let mut c = [0.0f32; 2];
+            for p in umriss {
+                c[0] += p[0];
+                c[1] += p[1];
+            }
+            [c[0] / n as f32, c[1] / n as f32]
+        };
+        // nach außen zeigende Normale je Punkt (aus den Nachbarn, von der Mitte weg)
+        let aussen: Vec<[f32; 2]> = (0..n)
+            .map(|i| {
+                let (a, b) = (umriss[(i + n - 1) % n], umriss[(i + 1) % n]);
+                let (tx, tz) = (b[0] - a[0], b[1] - a[1]);
+                let l = (tx * tx + tz * tz).sqrt().max(1e-9);
+                let mut nn = [tz / l, -tx / l];
+                if nn[0] * (umriss[i][0] - mitte[0]) + nn[1] * (umriss[i][1] - mitte[1]) < 0.0 {
+                    nn = [-nn[0], -nn[1]];
+                }
+                nn
+            })
+            .collect();
+        let r = r.clamp(0.0, hoehe);
+        const STUFEN: usize = 5;
+        // Ringe: Fuß, Beginn der Rundung, Rundung in STUFEN Schritten bis zur Deckfläche
+        let mut ringe: Vec<(f32, f32, f32)> = vec![(0.0, 0.0, 0.0), (0.0, hoehe - r, 0.0)]; // (Einzug, Höhe, Winkel)
+        if r > 0.0 {
+            for k in 1..=STUFEN {
+                let w = k as f32 / STUFEN as f32 * std::f32::consts::FRAC_PI_2;
+                ringe.push((r * (1.0 - w.cos()), hoehe - r + r * w.sin(), w));
+            }
+        }
+        // zwei Ringe der Deckfläche zur Mitte hin (für die Wölbung), dann die Mitte
+        let start = self.ecken.len() as u32;
+        let mut weg = 0.0;
+        let mut laengen = vec![0.0f32; n + 1];
+        for i in 0..n {
+            let (a, b) = (umriss[i], umriss[(i + 1) % n]);
+            weg += ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+            laengen[i + 1] = weg;
+        }
+        for &(einzug, y, w) in &ringe {
+            for i in 0..=n {
+                let j = i % n;
+                let p = [umriss[j][0] - aussen[j][0] * einzug, y, umriss[j][1] - aussen[j][1] * einzug];
+                let nn = norm([aussen[j][0] * w.cos(), w.sin(), aussen[j][1] * w.cos()]);
+                self.ecke(t, p, nn, [laengen[i] * uvm, y * uvm], m, 0.0);
+            }
+        }
+        let zeile = (n + 1) as u32;
+        for k in 0..ringe.len() as u32 - 1 {
+            for i in 0..n as u32 {
+                let a = start + k * zeile + i;
+                self.dreieck_nach_normale(a, a + 1, a + zeile + 1);
+                self.dreieck_nach_normale(a, a + zeile + 1, a + zeile);
+            }
+        }
+        // Deckfläche: vom innersten Ring über einen Zwischenring zur Mitte, Normale nach oben
+        let innen = ringe.last().expect("Ringe").0;
+        let oben = [0.0, 1.0, 0.0];
+        let deck = self.ecken.len() as u32;
+        for anteil in [0.0f32, 0.55] {
+            for j in 0..n {
+                let q = [umriss[j][0] - aussen[j][0] * innen, umriss[j][1] - aussen[j][1] * innen];
+                let x = q[0] + (mitte[0] - q[0]) * anteil;
+                let z = q[1] + (mitte[1] - q[1]) * anteil;
+                // Kuppel: am Rand 0, in der Mitte `woelbung`
+                let h = hoehe + woelbung * (1.0 - (1.0 - anteil) * (1.0 - anteil));
+                self.ecke(t, [x, h, z], oben, [x * uvm, z * uvm], m, 0.0);
+            }
+        }
+        let zentrum = self.ecke(t, [mitte[0], hoehe + woelbung, mitte[1]], oben, [mitte[0] * uvm, mitte[1] * uvm], m, 0.0);
+        let nn = n as u32;
+        for i in 0..nn {
+            let (a, b) = (deck + i, deck + (i + 1) % nn);
+            let (c, d) = (deck + nn + i, deck + nn + (i + 1) % nn);
+            self.dreieck_nach_normale(a, b, d);
+            self.dreieck_nach_normale(a, d, c);
+            self.dreieck_nach_normale(c, d, zentrum);
+        }
+    }
+
     /// Drehkörper um die y-Achse aus einem Profil (Radius, Höhe), `segmente` rundherum.
     pub fn drehkoerper(&mut self, t: &Trafo, profil: &[(f32, f32)], segmente: u32, m: Material, uv_u: f32) {
         let start = self.ecken.len() as u32;
@@ -246,5 +349,43 @@ impl Netz {
             let n = norm(sub([x, y, z], mitte));
             ([x, y, z], n, [s, q])
         });
+    }
+}
+
+#[cfg(test)]
+mod pruefe_platte {
+    use super::*;
+    use crate::texturen::Material;
+
+    #[test]
+    fn deckflaeche_ist_da() {
+        // Umriss wie das Gehäuse des N64: Bogen vorn, gerade Seiten, runde Ecken hinten
+        let mut u: Vec<[f32; 2]> = Vec::new();
+        for i in 0..=28 {
+            let x = 0.130 * (i as f32 / 28.0 * std::f32::consts::PI).cos();
+            let a = (x / 0.130f32).clamp(-1.0, 1.0).acos();
+            u.push([x, -0.030 - 0.065 * a.sin().max(0.0).powf(0.9)]);
+        }
+        u.push([-0.13, 0.077]);
+        u.push([-0.112, 0.095]);
+        u.push([0.112, 0.095]);
+        u.push([0.13, 0.077]);
+        let mut n = Netz::default();
+        n.platte(&Trafo::EINS, &u, 0.046, 0.013, 0.003, Material::KunststoffGrau, 1.0);
+        let mut oben = 0;
+        let mut kaputt = 0;
+        for d in n.indizes.chunks(3) {
+            let (a, b, c) = (n.ecken[d[0] as usize].lage, n.ecken[d[1] as usize].lage, n.ecken[d[2] as usize].lage);
+            if !(a[0].is_finite() && b[0].is_finite() && c[0].is_finite() && a[1].is_finite() && a[2].is_finite()) {
+                kaputt += 1;
+            }
+            let nn = cross(sub(b, a), sub(c, a));
+            if nn[1] > 1e-7 && a[1] > 0.045 {
+                oben += 1;
+            }
+        }
+        eprintln!("Dreiecke {}, nach oben {}, kaputt {}", n.indizes.len() / 3, oben, kaputt);
+        assert_eq!(kaputt, 0);
+        assert!(oben > 60);
     }
 }
